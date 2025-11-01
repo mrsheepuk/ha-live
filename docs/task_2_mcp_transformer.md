@@ -1,19 +1,64 @@
-# Task 1: MCP Discovery & Transformation
+# Task 2: MCP Client (Connection, Discovery & Execution)
 
 ## 1. Objective
 
-This task defines "Glue Task #1." Its purpose is to fetch the "menu" of available tools from the Home Assistant MCP Server and transform that "menu" into a format the Gemini API can understand.
+This task implements the complete MCP client that establishes a persistent SSE (Server-Sent Events) connection to Home Assistant's MCP server. It handles:
 
-This task is **not** responsible for *executing* tools, only *discovering* them.
+1. **Connection Lifecycle**: Opening the SSE connection, performing the MCP initialization handshake, and graceful shutdown
+2. **Tool Discovery**: Fetching the "menu" of available tools via JSON-RPC `tools/list` method
+3. **Tool Transformation**: Converting MCP tool definitions into Gemini API format
+4. **Tool Execution**: Calling tools via JSON-RPC `tools/call` method and returning results
+
+This task delivers the complete MCP client. Task 1 (Gemini Live) will use this client to provide tools to Gemini and execute them when requested.
 
 ## 2. Core Components
 
-1.  **`HomeAssistantRepository`:** Will be expanded to include a new function:
-    * `suspend fun getTools(): List<Tool>`
-2.  **`HAApiService` (Retrofit/Ktor Interface):** Will be expanded to include the GET request for the MCP endpoint.
-3.  **Data Models (Data Classes):** We need to create Kotlin data classes that match the JSON structure of the MCP server's output and the Gemini API's input.
+1.  **`McpClientManager`:** NEW class that manages the SSE connection and MCP protocol lifecycle
+    * `suspend fun initialize()`: Opens SSE connection and performs MCP handshake
+    * `suspend fun getTools()`: Fetches tools via JSON-RPC `tools/list` method
+    * `suspend fun callTool()`: Executes a tool via JSON-RPC `tools/call` method
+    * `fun shutdown()`: Gracefully closes the connection
+2.  **`HomeAssistantRepository`:** Wraps `McpClientManager` and provides high-level interface
+    * `suspend fun getTools(): List<Tool>`: Fetches tools and transforms them for Gemini
+    * `suspend fun executeTool()`: Executes a tool and returns the result to Gemini
+3.  **Data Models (Data Classes):** Kotlin data classes for MCP JSON-RPC messages and tool definitions
 
-## 3. Step 1: Define the Data Structures
+## 3. MCP Connection Lifecycle
+
+Before we can fetch tools, we must establish and initialize the MCP connection following the protocol specification.
+
+### Phase 1: Initialize
+
+The MCP spec requires a handshake before any operations:
+
+```
+Client                                    Server
+  |                                         |
+  |--- initialize request ---------------->|
+  |    (protocolVersion, capabilities)     |
+  |                                         |
+  |<-- initialize response ----------------|
+  |    (protocolVersion, capabilities)     |
+  |                                         |
+  |--- initialized notification ---------->|
+  |                                         |
+  |    [NOW READY FOR OPERATIONS]          |
+```
+
+### Phase 2: Operation
+
+Once initialized, we can:
+- Request tools via `tools/list`
+- Call tools via `tools/call`
+- Receive server notifications (e.g., `tools/listChanged`)
+
+### Phase 3: Shutdown
+
+When the app closes or user disconnects:
+- Close the SSE connection
+- Clean up resources
+
+## 4. Step 1: Define the Data Structures
 
 We need to model the *source* (MCP JSON) and the *destination* (Gemini `Tool`).
 
@@ -113,41 +158,453 @@ Tool(
 */
 ```
 
-## 4. Step 2: Implement the Network Call
+## 5. Step 2: Implement the SSE Connection
 
-We'll make a JSON-RPC call to the HA MCP server. Note that this is not a simple REST GET - it's a JSON-RPC POST request.
+We'll use OkHttp's SSE support to establish a persistent connection to `/api/mcp`.
+
+### Dependencies (build.gradle.kts)
 
 ```kotlin
-// In services/HomeAssistantRepository.kt
+dependencies {
+    // OkHttp for SSE
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
 
-// This interface will be built out more in Task 3
-interface HAApiService {
-    @POST("/api/mcp") // JSON-RPC endpoint
-    @Headers("Content-Type: application/json")
-    suspend fun getMcpTools(
-        @Header("Authorization") token: String,
-        @Body request: JsonRpcRequest
-    ): McpJsonRpcResponse
+    // JSON serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
+```
 
-// JSON-RPC request structure
+### JSON-RPC Message Types
+
+```kotlin
+// In services/mcp/McpMessages.kt
+
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+
+// Base JSON-RPC message types
+@Serializable
 data class JsonRpcRequest(
     val jsonrpc: String = "2.0",
-    val id: Int = 1,
-    val method: String, // e.g., "tools/list"
-    val params: Map<String, Any>? = null
+    val id: Int,
+    val method: String,
+    val params: JsonElement? = null
+)
+
+@Serializable
+data class JsonRpcNotification(
+    val jsonrpc: String = "2.0",
+    val method: String,
+    val params: JsonElement? = null
+)
+
+@Serializable
+data class JsonRpcResponse(
+    val jsonrpc: String,
+    val id: Int,
+    val result: JsonElement? = null,
+    val error: JsonRpcError? = null
+)
+
+@Serializable
+data class JsonRpcError(
+    val code: Int,
+    val message: String,
+    val data: JsonElement? = null
+)
+
+// MCP-specific message types
+@Serializable
+data class InitializeParams(
+    val protocolVersion: String = "2024-11-05",
+    val capabilities: ClientCapabilities,
+    val clientInfo: ClientInfo
+)
+
+@Serializable
+data class ClientCapabilities(
+    val sampling: Map<String, String> = emptyMap(),
+    val elicitation: Map<String, String> = emptyMap()
+)
+
+@Serializable
+data class ClientInfo(
+    val name: String,
+    val version: String
+)
+
+@Serializable
+data class InitializeResult(
+    val protocolVersion: String,
+    val capabilities: ServerCapabilities,
+    val serverInfo: ServerInfo,
+    val instructions: String? = null
+)
+
+@Serializable
+data class ServerCapabilities(
+    val tools: ToolsCapability? = null,
+    val resources: ResourcesCapability? = null,
+    val logging: Map<String, String>? = null
+)
+
+@Serializable
+data class ToolsCapability(
+    val listChanged: Boolean? = null
+)
+
+@Serializable
+data class ResourcesCapability(
+    val subscribe: Boolean? = null,
+    val listChanged: Boolean? = null
+)
+
+@Serializable
+data class ServerInfo(
+    val name: String,
+    val version: String
+)
+
+// Tool execution types
+@Serializable
+data class ToolCallParams(
+    val name: String,
+    val arguments: Map<String, JsonElement>? = null
+)
+
+@Serializable
+data class ToolCallResult(
+    val content: List<ToolContent>,
+    val isError: Boolean? = null
+)
+
+@Serializable
+data class ToolContent(
+    val type: String, // "text", "image", "resource"
+    val text: String? = null,
+    val data: String? = null,
+    val mimeType: String? = null
 )
 ```
 
-**Usage:**
+### McpClientManager Implementation
+
 ```kotlin
-val request = JsonRpcRequest(
-    method = "tools/list"
-)
-val response = haApiService.getMcpTools(userBearerToken, request)
+// In services/McpClientManager.kt
+
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import okhttp3.*
+import okhttp3.sse.EventSource
+import okhttp3.sse.EventSourceListener
+import okhttp3.sse.EventSources
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.ConcurrentHashMap
+
+class McpClientManager(
+    private val haBaseUrl: String,
+    private val haToken: String
+) {
+    private val json = Json {
+        ignoreUnknownKeys = true
+        prettyPrint = false
+    }
+
+    private val client = OkHttpClient.Builder()
+        .readTimeout(0, java.util.concurrent.TimeUnit.SECONDS) // Infinite for SSE
+        .build()
+
+    private var eventSource: EventSource? = null
+    private var isInitialized = false
+    private val nextRequestId = AtomicInteger(1)
+    private val pendingRequests = ConcurrentHashMap<Int, CompletableDeferred<JsonRpcResponse>>()
+
+    // Coroutine scope for background processing
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /**
+     * Phase 1: Initialize the MCP connection.
+     * Opens SSE connection and performs the handshake.
+     */
+    suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            // 1. Open SSE connection
+            val request = Request.Builder()
+                .url("$haBaseUrl/api/mcp")
+                .header("Authorization", haToken)
+                .header("Accept", "text/event-stream")
+                .build()
+
+            val sseListener = McpEventSourceListener()
+            eventSource = EventSources.createFactory(client)
+                .newEventSource(request, sseListener)
+
+            // Wait for connection to open
+            sseListener.waitForConnection()
+
+            // 2. Send initialize request
+            val initParams = InitializeParams(
+                capabilities = ClientCapabilities(),
+                clientInfo = ClientInfo(
+                    name = "HALiveAndroid",
+                    version = "1.0.0"
+                )
+            )
+
+            val initRequest = JsonRpcRequest(
+                id = nextRequestId.getAndIncrement(),
+                method = "initialize",
+                params = json.encodeToJsonElement(InitializeParams.serializer(), initParams)
+            )
+
+            val initResponse = sendAndAwaitResponse(initRequest)
+
+            // Parse and validate response
+            if (initResponse.error != null) {
+                throw McpException("Initialize failed: ${initResponse.error.message}")
+            }
+
+            val initResult = json.decodeFromJsonElement(
+                InitializeResult.serializer(),
+                initResponse.result!!
+            )
+
+            // 3. Send initialized notification
+            val initializedNotification = JsonRpcNotification(
+                method = "notifications/initialized"
+            )
+            sendNotification(initializedNotification)
+
+            isInitialized = true
+            true
+        } catch (e: Exception) {
+            shutdown()
+            throw McpException("Failed to initialize MCP connection", e)
+        }
+    }
+
+    /**
+     * Fetch tools from the MCP server.
+     */
+    suspend fun getTools(): McpToolsListResult = withContext(Dispatchers.IO) {
+        require(isInitialized) { "Must call initialize() first" }
+
+        val request = JsonRpcRequest(
+            id = nextRequestId.getAndIncrement(),
+            method = "tools/list",
+            params = null
+        )
+
+        val response = sendAndAwaitResponse(request)
+
+        if (response.error != null) {
+            throw McpException("tools/list failed: ${response.error.message}")
+        }
+
+        json.decodeFromJsonElement(
+            McpToolsListResult.serializer(),
+            response.result!!
+        )
+    }
+
+    /**
+     * Execute a tool on the MCP server.
+     */
+    suspend fun callTool(
+        name: String,
+        arguments: Map<String, Any>
+    ): ToolCallResult = withContext(Dispatchers.IO) {
+        require(isInitialized) { "Must call initialize() first" }
+
+        // Convert arguments to JsonElement
+        val jsonArguments = arguments.mapValues { (_, value) ->
+            json.encodeToJsonElement(value)
+        }
+
+        val toolCallParams = ToolCallParams(
+            name = name,
+            arguments = jsonArguments
+        )
+
+        val request = JsonRpcRequest(
+            id = nextRequestId.getAndIncrement(),
+            method = "tools/call",
+            params = json.encodeToJsonElement(ToolCallParams.serializer(), toolCallParams)
+        )
+
+        val response = sendAndAwaitResponse(request, timeout = 60_000) // Longer timeout for tool execution
+
+        if (response.error != null) {
+            throw McpException("tools/call failed: ${response.error.message}")
+        }
+
+        json.decodeFromJsonElement(
+            ToolCallResult.serializer(),
+            response.result!!
+        )
+    }
+
+    /**
+     * Send a JSON-RPC request and suspend until response arrives.
+     */
+    private suspend fun sendAndAwaitResponse(
+        request: JsonRpcRequest,
+        timeout: Long = 30_000
+    ): JsonRpcResponse = withTimeout(timeout) {
+        val deferred = CompletableDeferred<JsonRpcResponse>()
+        pendingRequests[request.id] = deferred
+
+        val message = json.encodeToString(request)
+        sendMessage(message)
+
+        try {
+            deferred.await()
+        } finally {
+            pendingRequests.remove(request.id)
+        }
+    }
+
+    /**
+     * Send a fire-and-forget notification.
+     */
+    private fun sendNotification(notification: JsonRpcNotification) {
+        val message = json.encodeToString(notification)
+        sendMessage(message)
+    }
+
+    /**
+     * Send a raw message over the SSE connection.
+     * Note: SSE is unidirectional (server -> client), but MCP uses
+     * a technique where we POST each request as a separate HTTP call
+     * to the same endpoint, and responses come back via SSE.
+     */
+    private fun sendMessage(message: String) {
+        scope.launch {
+            try {
+                val request = Request.Builder()
+                    .url("$haBaseUrl/api/mcp")
+                    .header("Authorization", haToken)
+                    .header("Content-Type", "application/json")
+                    .post(message.toRequestBody("application/json".toMediaType()))
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw McpException("Failed to send message: ${response.code}")
+                    }
+                }
+            } catch (e: Exception) {
+                // Handle send errors
+                android.util.Log.e("McpClient", "Failed to send message", e)
+            }
+        }
+    }
+
+    /**
+     * Phase 3: Gracefully shut down the connection.
+     */
+    fun shutdown() {
+        isInitialized = false
+        eventSource?.cancel()
+        eventSource = null
+        pendingRequests.clear()
+        scope.cancel()
+    }
+
+    /**
+     * EventSource listener that processes incoming SSE messages.
+     */
+    private inner class McpEventSourceListener : EventSourceListener() {
+        private val connectionEstablished = CompletableDeferred<Unit>()
+
+        suspend fun waitForConnection() {
+            connectionEstablished.await()
+        }
+
+        override fun onOpen(eventSource: EventSource, response: Response) {
+            android.util.Log.d("McpClient", "SSE connection opened")
+            connectionEstablished.complete(Unit)
+        }
+
+        override fun onEvent(
+            eventSource: EventSource,
+            id: String?,
+            type: String?,
+            data: String
+        ) {
+            scope.launch {
+                try {
+                    // Parse incoming JSON-RPC message
+                    val jsonObject = json.parseToJsonElement(data).jsonObject
+
+                    if (jsonObject.containsKey("id") && jsonObject.containsKey("result")) {
+                        // It's a response
+                        val response = json.decodeFromString<JsonRpcResponse>(data)
+                        pendingRequests.remove(response.id)?.complete(response)
+                    } else if (jsonObject.containsKey("method")) {
+                        // It's a request or notification from server
+                        handleServerMessage(data)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("McpClient", "Failed to parse message", e)
+                }
+            }
+        }
+
+        override fun onFailure(
+            eventSource: EventSource,
+            t: Throwable?,
+            response: Response?
+        ) {
+            android.util.Log.e("McpClient", "SSE connection failed", t)
+            connectionEstablished.completeExceptionally(
+                t ?: McpException("SSE connection failed")
+            )
+
+            // Fail all pending requests
+            pendingRequests.values.forEach {
+                it.completeExceptionally(McpException("Connection lost"))
+            }
+            pendingRequests.clear()
+        }
+
+        override fun onClosed(eventSource: EventSource) {
+            android.util.Log.d("McpClient", "SSE connection closed")
+        }
+    }
+
+    /**
+     * Handle incoming requests/notifications from server.
+     */
+    private fun handleServerMessage(data: String) {
+        // TODO: Handle server-initiated requests (e.g., sampling)
+        // TODO: Handle notifications (e.g., tools/listChanged)
+        android.util.Log.d("McpClient", "Received server message: $data")
+    }
+}
+
+class McpException(message: String, cause: Throwable? = null) : Exception(message, cause)
 ```
 
-## 5. Step 3: Build the Transformer
+**Key Implementation Details:**
+
+1. **SSE Connection**: Uses OkHttp's EventSource to maintain persistent SSE connection
+2. **Request/Response Correlation**: Uses request ID to match responses to pending requests
+3. **Bidirectional Communication**: Posts JSON-RPC requests as separate HTTP calls, receives responses via SSE
+4. **Timeout Handling**: Uses `withTimeout` for all requests (default 30 seconds)
+5. **Graceful Shutdown**: Cancels event source and clears pending requests
+
+## 6. Step 3: Build the Transformer
 
 This is the core "glue" logic for this task. It lives inside the `HomeAssistantRepository`.
 
@@ -160,25 +617,18 @@ import com.google.firebase.vertexai.type.Schema
 import com.google.firebase.vertexai.type.Type
 
 class HomeAssistantRepository(
-    private val haApiService: HAApiService,
-    private val userBearerToken: String // e.g., "Bearer <LONG_LIVED_TOKEN>"
+    private val mcpClient: McpClientManager
 ) {
 
     /**
      * Fetches tools from HA MCP Server and transforms them for Gemini.
      */
     suspend fun getTools(): List<Tool> {
-        // Build JSON-RPC request
-        val request = JsonRpcRequest(method = "tools/list")
-
-        // Make the call
-        val mcpResponse = haApiService.getMcpTools(userBearerToken, request)
-
-        // Extract tools from the result wrapper
-        val tools = mcpResponse.result.tools
+        // Fetch tools via MCP
+        val mcpToolsResult = mcpClient.getTools()
 
         // Transform each McpTool into a Gemini FunctionDeclaration
-        val functionDeclarations = tools.map { mcpTool ->
+        val functionDeclarations = mcpToolsResult.tools.map { mcpTool ->
             transformMcpToGeminiFunctionDeclaration(mcpTool)
         }
 
@@ -257,7 +707,68 @@ class HomeAssistantRepository(
         }
     }
 
-    // ... executeTool function will be added in Task 3 ...
+    /**
+     * Executes a tool via MCP and returns the result to Gemini.
+     */
+    suspend fun executeTool(functionCall: FunctionCallPart): FunctionResponsePart {
+        return try {
+            // Call the tool via MCP
+            val result = mcpClient.callTool(
+                name = functionCall.name,
+                arguments = functionCall.args
+            )
+
+            // Check if it was an error
+            if (result.isError == true) {
+                createErrorResponse(functionCall.name, result)
+            } else {
+                createSuccessResponse(functionCall.name, result)
+            }
+        } catch (e: Exception) {
+            // Handle exceptions (network errors, timeouts, etc.)
+            FunctionResponsePart(
+                name = functionCall.name,
+                response = mapOf(
+                    "error" to "Exception: ${e.message}"
+                )
+            )
+        }
+    }
+
+    private fun createSuccessResponse(
+        name: String,
+        result: ToolCallResult
+    ): FunctionResponsePart {
+        // Extract text content from MCP result
+        val textContent = result.content
+            .filter { it.type == "text" }
+            .mapNotNull { it.text }
+            .joinToString("\n")
+
+        return FunctionResponsePart(
+            name = name,
+            response = mapOf(
+                "result" to textContent.ifEmpty { "Success" }
+            )
+        )
+    }
+
+    private fun createErrorResponse(
+        name: String,
+        result: ToolCallResult
+    ): FunctionResponsePart {
+        val errorMessage = result.content
+            .filter { it.type == "text" }
+            .mapNotNull { it.text }
+            .joinToString("\n")
+
+        return FunctionResponsePart(
+            name = name,
+            response = mapOf(
+                "error" to errorMessage.ifEmpty { "Unknown error" }
+            )
+        )
+    }
 }
 ```
 
@@ -292,24 +803,65 @@ Now that we have the actual MCP response format, here are the known complexities
       * **Mitigation:** Monitor token usage and consider filtering or chunking if needed
 
 6.  **Tool Naming Convention:** HA uses PascalCase names (e.g., `HassTurnOn`, `HassLightSet`) rather than domain.service format
-      * **Impact:** This affects Task 3 (execution) - we can't simply split on `.` to get domain/service
-      * **Solution:** Task 3 will need a different strategy (likely a mapping table or parsing the tool's semantic meaning)
+      * **Impact:** RESOLVED - Since tool execution goes through MCP `tools/call`, we just pass the name as-is
+      * **Solution:** No parsing needed! MCP handles the mapping internally
+
+7.  **SSE Connection Management:**
+      * **Challenge:** Must maintain persistent connection throughout app lifecycle
+      * **Handled:** Connection opens in `HAGeminiApp.initializeHomeAssistant()`, closes in `shutdown()`
+      * **Future:** Add reconnection logic for network interruptions (not in MVP)
+
+8.  **Request/Response Correlation:**
+      * **Challenge:** SSE is unidirectional, but we need bidirectional JSON-RPC
+      * **Solution:** POST requests to `/api/mcp`, receive responses via SSE using request ID correlation
 
 ## 7. Testing Strategy
 
-To validate the transformation logic before integrating with the full app:
+To validate the connection, tool discovery, and transformation logic:
 
-1.  **Unit Test:** Create a test that loads `docs/examples/ha-mcp-tools-list.json` and runs it through the transformer
-      * Verify all 15 tools are converted
+### Phase 1: Connection Testing
+1.  **Manual SSE Test:** Create standalone Android app that just tests MCP connection
+      * Verify SSE connection opens successfully
+      * Verify initialization handshake completes
+      * Log all incoming/outgoing messages
+      * Test graceful shutdown
+
+### Phase 2: Tool Discovery Testing
+2.  **MCP Integration Test:** Test full cycle with real HA instance
+      * Connect to real HA MCP server
+      * Fetch tools via `tools/list`
+      * Verify JSON parsing works with real data
+      * Print tool count and names
+
+### Phase 3: Transformation Testing
+3.  **Unit Test:** Create test that loads `docs/examples/ha-mcp-tools-list.json` and transforms it
+      * Verify all 15 tools are converted to Gemini format
       * Spot-check complex cases (anyOf, arrays, empty descriptions)
+      * Validate no exceptions are thrown
 
-2.  **Sample Output:** Manually inspect the generated `Tool` object
-      * Print the transformed `FunctionDeclaration` list
+4.  **Sample Output:** Manually inspect generated `Tool` objects
+      * Print transformed `FunctionDeclaration` list
       * Verify names, descriptions, and parameter schemas are sensible
 
-3.  **Integration Test:** Once Task 1 (Live API) is complete, test with dummy executor
+### Phase 4: Tool Execution Testing
+5.  **MCP Tool Call Test:** Test tool execution with real HA instance
+      * Call a simple tool like "HassTurnOn" with valid arguments
+      * Verify JSON-RPC `tools/call` request is sent correctly
+      * Verify response is parsed correctly
+      * Print result content
+
+6.  **Error Handling Test:** Test error scenarios
+      * Call a tool with invalid arguments
+      * Call a non-existent tool
+      * Verify errors are captured and returned properly
+
+### Phase 5: End-to-End Testing
+7.  **Integration Test:** Once Task 1 (Live API) is complete
       * Pass transformed tools to `LiveSession`
-      * Verify Gemini can call the functions with appropriate parameters
+      * Have Gemini call a tool during conversation
+      * Verify `executeTool()` is called correctly
+      * Verify result makes it back to Gemini
+      * Verify Gemini responds appropriately to the result
 
 ## 8. Example Transformations
 
@@ -376,3 +928,93 @@ FunctionDeclaration(
     )
 )
 ```
+
+## 9. Implementation Summary
+
+This task delivers a complete MCP client implementation with three key capabilities:
+
+### What Gets Built:
+
+1. **McpClientManager** (`services/McpClientManager.kt`)
+   - Opens persistent SSE connection to `/api/mcp`
+   - Performs MCP initialization handshake (initialize → initialized)
+   - Sends JSON-RPC requests and correlates responses
+   - Fetches tools via `tools/list`
+   - Executes tools via `tools/call`
+   - Handles graceful shutdown
+   - ~550 lines of code
+
+2. **MCP Message Types** (`services/mcp/McpMessages.kt`)
+   - Data classes for JSON-RPC messages (request, response, notification, error)
+   - Data classes for MCP protocol types (initialize params/result, capabilities, etc.)
+   - Data classes for tool definitions (McpTool, McpInputSchema, McpProperty, etc.)
+   - Data classes for tool execution (ToolCallParams, ToolCallResult, ToolContent)
+   - ~120 lines of code
+
+3. **HomeAssistantRepository** (`services/HomeAssistantRepository.kt`)
+   - Wraps McpClientManager
+   - Fetches tools via `getTools()` and transforms to Gemini format
+   - Executes tools via `executeTool()` and transforms results
+   - ~200 lines of code (transformation + execution logic)
+
+### Integration Points:
+
+- **Task 0 (App Skeleton)**: `HAGeminiApp.initializeHomeAssistant()` calls `mcpClient.initialize()`
+- **Task 1 (Gemini Live)**:
+  - `GeminiService` gets tools via `haRepository.getTools()` and passes to Gemini
+  - When Gemini calls a tool, `GeminiService` executes via `haRepository.executeTool()`
+
+### Connection Flow:
+
+```
+App Start
+    ↓
+User Configures HA (URL + Token)
+    ↓
+HAGeminiApp.initializeHomeAssistant()
+    ↓
+McpClientManager.initialize()
+    ├─ Open SSE connection to /api/mcp
+    ├─ Send "initialize" request
+    ├─ Wait for "initialize" response
+    └─ Send "initialized" notification
+    ↓
+[Connection Ready - Can fetch tools and call them]
+    ↓
+HomeAssistantRepository.getTools()
+    ├─ Call mcpClient.getTools()
+    ├─ Transform to Gemini format
+    └─ Return List<Tool>
+    ↓
+Pass to GeminiService (Task 1)
+    ↓
+[User talks to Gemini, Gemini decides to call a tool]
+    ↓
+Gemini returns FunctionCallPart
+    ↓
+GeminiService calls haRepository.executeTool()
+    ↓
+HomeAssistantRepository.executeTool()
+    ├─ Call mcpClient.callTool(name, args)
+    ├─ Transform ToolCallResult to FunctionResponsePart
+    └─ Return to GeminiService
+    ↓
+GeminiService sends FunctionResponsePart back to Gemini
+    ↓
+Gemini processes result and responds to user
+    ↓
+App Closes
+    ↓
+HAGeminiApp.shutdownHomeAssistant()
+    ↓
+McpClientManager.shutdown()
+    └─ Close SSE connection
+```
+
+### Key Decisions Made:
+
+1. **OkHttp SSE** over Ktor: Simpler, more focused library
+2. **kotlinx.serialization** for JSON: Type-safe, compile-time code generation
+3. **POST for requests, SSE for responses**: Standard pattern for bidirectional communication over SSE
+4. **Request ID correlation**: ConcurrentHashMap + CompletableDeferred for async request/response matching
+5. **Single persistent connection**: Opens on HA config, closes on app shutdown (no reconnection in MVP)

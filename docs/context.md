@@ -13,30 +13,35 @@ This is the most critical decision, as it solves the billing and API access conf
 * **Result:** The user pays for their own Gemini usage, and we get to use the Gemini Live API.
 
 ## 3. Technical Implementation & "The Glue"
-We cannot connect the Gemini Live API directly to Home Assistant's MCP (Model Context Protocol) server. Our Android app must act as the "glue" or "translator" in a two-part process.
+We cannot connect the Gemini Live API directly to Home Assistant's MCP (Model Context Protocol) server. Our Android app must act as the "glue" or "translator" by maintaining a persistent SSE connection to the MCP server.
 
-* **Part 1: Tool Discovery (Task 1)**
-    * The app will *fetch* the tool definitions from the user's HA **MCP Server** as a large JSON file.
-    * It will then *transform* this MCP-formatted JSON into the `List<Tool>` (Function Declarations) that the Gemini API understands.
+* **Connection Management:**
+    * The app establishes a persistent SSE (Server-Sent Events) connection to the HA **MCP Server** at `/api/mcp`.
+    * It performs the MCP initialization handshake (initialize → initialized) before any operations.
+    * This connection stays open for the lifetime of the app session.
+
+* **Part 1: Tool Discovery (Task 2)**
+    * The app *fetches* tool definitions via JSON-RPC `tools/list` method through the SSE connection.
+    * It *transforms* the MCP-formatted JSON into `List<Tool>` (Function Declarations) that the Gemini API understands.
     * This `List<Tool>` is given to the `LiveSession` on initialization.
 
 * **Part 2: Tool Execution (Task 2)**
-    * When the Live API returns a `FunctionCallPart` (e.g., `name="light.turn_on"`), our app intercepts it.
-    * It *executes* this call by parsing the name (e.g., to `domain="light"`, `service="turn_on"`) and making a standard `POST` call to the HA **REST API** (e.g., `/api/services/light/turn_on`).
-    * The app then sends a `FunctionResponsePart` (e.g., `{"status": "success"}`) back into the `LiveSession` to close the loop.
+    * When the Live API returns a `FunctionCallPart` (e.g., `name="HassTurnOn"`), our app intercepts it.
+    * It *executes* this call via JSON-RPC `tools/call` method through the MCP connection.
+    * The MCP server handles the internal mapping to Home Assistant services.
+    * The app sends a `FunctionResponsePart` back to the `LiveSession` to close the loop.
 
 ## 4. Development Strategy (Risk-First)
 The core risk is the "live" audio experience, so:
 
-1.  **Step 1 (Task 0):** Build the app skeleton, including the "BYOFP" file-picker UI and dynamic Firebase initialization.
+1.  **Step 1 (Task 0):** Build the app skeleton, including the "BYOFP" file-picker UI, dynamic Firebase initialization, HA configuration UI (URL + token), and MCP SSE connection establishment.
 2.  **Step 2 (Task 1):** Immediately implement the Gemini Live API (`LiveSession`, mic/speaker) with **dummy tools** and a **mocked executor** (`delay(1000)`). This is to validate the core conversational feel of the app *first*.
-3.  **Step 3 (Tasks 2 & 3):** Once the live UX is proven, build the *real* tool discovery (Task 2) and execution (Task 3) modules to replace the mocks.
+3.  **Step 3 (Task 2):** Once the live UX is proven, build the complete MCP client (connection, discovery, and execution) to replace the mocks with real functionality.
 
 ## 5. Reference Documents
 For detailed implementation plans, please refer to the following files:
 
 * `project_plan.md`: The main project overview and development strategy.
-* `task_0_app_skeleton.md`: Plan for the "BYOFP" setup UI and app framework.
-* `task_1_live_api_wiring.md`: Plan for integrating the Gemini Live API (audio I/O, session management).
-* `task_2_mcp_transformer.md`: Plan for the "Tool Discovery" (MCP -> Gemini) transformation.
-* `task_3_ha_executor.md`: Plan for the "Tool Execution" (Gemini -> HA REST API) logic.
+* `task_0_app_skeleton.md`: Plan for the "BYOFP" setup UI, HA configuration, and MCP connection initialization.
+* `task_1_live_api_wiring.md`: Plan for integrating the Gemini Live API (audio I/O, session management) with mock tools.
+* `task_2_mcp_transformer.md`: Complete MCP client implementation (SSE connection, tool discovery, transformation, and execution).
