@@ -17,37 +17,65 @@ This task is **not** responsible for *executing* tools, only *discovering* them.
 
 We need to model the *source* (MCP JSON) and the *destination* (Gemini `Tool`).
 
-### Source: MCP JSON (Assumed Structure)
+### Source: MCP JSON (Actual Structure from HA)
 
-We must *assume* the HA MCP Server's output format. Based on the MCP spec, it will likely be a JSON object containing a list of "tools."
+Based on the actual response from Home Assistant's MCP server (see [ha-mcp-tools-list.json](examples/ha-mcp-tools-list.json)), we now know the real format:
 
 ```kotlin
-// --- Assumed MCP Data Models ---
+// --- MCP Data Models (Based on Real HA Response) ---
 
-// Represents the full response from /api/mcp
-data class McpServerResponse(
+// Represents the full JSON-RPC response
+data class McpJsonRpcResponse(
+    val jsonrpc: String, // "2.0"
+    val id: Int, // Request ID
+    val result: McpResult
+)
+
+data class McpResult(
     val tools: List<McpTool>
-    // May also include 'resources' or 'prompts', which we will ignore.
 )
 
 data class McpTool(
-    val name: String, // e.g., "light.turn_on"
-    val description: String, // e.g., "Turns on a light"
-    val parameters: McpParameters
+    val name: String, // e.g., "HassTurnOn", "HassLightSet", "GetLiveContext"
+    val description: String, // e.g., "Turns on/opens/presses a device or entity..."
+    val inputSchema: McpInputSchema
 )
 
-data class McpParameters(
-    val type: String, // "object"
-    val properties: Map<String, McpParameterProperty>, // e.g., "entity_id" -> { "type": "string" }
-    val required: List<String> // e.g., ["entity_id"]
+data class McpInputSchema(
+    val type: String, // Always "object"
+    val properties: Map<String, McpProperty>, // e.g., "name" -> { "type": "string" }
+    val required: List<String>? = null // Optional, only present on some tools
 )
 
-data class McpParameterProperty(
-    val type: String, // "string", "integer", "boolean", "enum"
-    val description: String,
+data class McpProperty(
+    val type: String? = null, // "string", "integer", "array", etc. (can be null if anyOf is present)
+    val description: String? = null,
+    val minimum: Int? = null,
+    val maximum: Int? = null,
+    val enum: List<String>? = null,
+    val items: McpItems? = null, // For array types
+    val anyOf: List<McpAnyOfOption>? = null // For union types (e.g., HassSetVolumeRelative)
+)
+
+data class McpItems(
+    val type: String, // e.g., "string"
     val enum: List<String>? = null
 )
+
+data class McpAnyOfOption(
+    val type: String, // e.g., "string", "integer"
+    val enum: List<String>? = null,
+    val minimum: Int? = null,
+    val maximum: Int? = null
+)
 ```
+
+**Key Observations:**
+1. **JSON-RPC wrapper:** The response uses JSON-RPC 2.0 format with `jsonrpc`, `id`, and `result` fields
+2. **inputSchema not parameters:** The tool parameters are under `inputSchema`, not `parameters`
+3. **Complex types:** Properties can have `anyOf` for union types (e.g., volume can be "up"/"down" or -100 to 100)
+4. **Array types with items:** Properties like `device_class` are arrays with `items.enum`
+5. **Optional required:** The `required` field is not always present (many tools have all optional params)
 
 ### Destination: Gemini `Tool` (Known Structure)
 
@@ -87,16 +115,36 @@ Tool(
 
 ## 4. Step 2: Implement the Network Call
 
-We'll add the discovery endpoint to our (not-yet-created) `HAApiService`.
+We'll make a JSON-RPC call to the HA MCP server. Note that this is not a simple REST GET - it's a JSON-RPC POST request.
 
 ```kotlin
 // In services/HomeAssistantRepository.kt
 
-// This interface will be built out more in Task 2
+// This interface will be built out more in Task 3
 interface HAApiService {
-    @GET("/api/mcp") // <-- This path is an assumption!
-    suspend fun getMcpTools(@Header("Authorization") token: String): McpServerResponse
+    @POST("/api/mcp") // JSON-RPC endpoint
+    @Headers("Content-Type: application/json")
+    suspend fun getMcpTools(
+        @Header("Authorization") token: String,
+        @Body request: JsonRpcRequest
+    ): McpJsonRpcResponse
 }
+
+// JSON-RPC request structure
+data class JsonRpcRequest(
+    val jsonrpc: String = "2.0",
+    val id: Int = 1,
+    val method: String, // e.g., "tools/list"
+    val params: Map<String, Any>? = null
+)
+```
+
+**Usage:**
+```kotlin
+val request = JsonRpcRequest(
+    method = "tools/list"
+)
+val response = haApiService.getMcpTools(userBearerToken, request)
 ```
 
 ## 5. Step 3: Build the Transformer
@@ -120,41 +168,79 @@ class HomeAssistantRepository(
      * Fetches tools from HA MCP Server and transforms them for Gemini.
      */
     suspend fun getTools(): List<Tool> {
-        val mcpResponse = haApiService.getMcpTools(userBearerToken)
-        
-        // Use map to transform each McpTool into a Gemini Tool
-        return mcpResponse.tools.map { mcpTool ->
-            transformMcpToGeminiTool(mcpTool)
+        // Build JSON-RPC request
+        val request = JsonRpcRequest(method = "tools/list")
+
+        // Make the call
+        val mcpResponse = haApiService.getMcpTools(userBearerToken, request)
+
+        // Extract tools from the result wrapper
+        val tools = mcpResponse.result.tools
+
+        // Transform each McpTool into a Gemini FunctionDeclaration
+        val functionDeclarations = tools.map { mcpTool ->
+            transformMcpToGeminiFunctionDeclaration(mcpTool)
         }
+
+        // Return a single Tool containing all function declarations
+        return listOf(Tool(functionDeclarations = functionDeclarations))
     }
 
-    private fun transformMcpToGeminiTool(mcpTool: McpTool): Tool {
+    private fun transformMcpToGeminiFunctionDeclaration(mcpTool: McpTool): FunctionDeclaration {
         // 1. Transform the properties
-        val geminiProperties = mcpTool.parameters.properties.mapValues { (_, mcpProp) ->
-            Schema(
-                type = mcpProp.type.toGeminiType(),
-                description = mcpProp.description,
-                enum = mcpProp.enum
-            )
+        val geminiProperties = mcpTool.inputSchema.properties.mapValues { (_, mcpProp) ->
+            transformMcpPropertyToSchema(mcpProp)
         }
 
         // 2. Create the parameter schema
         val geminiParameters = Schema(
             type = Type.OBJECT,
             properties = geminiProperties,
-            required = mcpTool.parameters.required
+            required = mcpTool.inputSchema.required ?: emptyList()
         )
 
         // 3. Create the function declaration
-        val functionDeclaration = FunctionDeclaration(
+        return FunctionDeclaration(
             name = mcpTool.name,
-            description = mcpTool.description,
+            description = mcpTool.description.ifEmpty { "No description provided" },
             parameters = geminiParameters
         )
+    }
 
-        // 4. Wrap in a Tool object
-        return Tool(
-            functionDeclarations = listOf(functionDeclaration)
+    private fun transformMcpPropertyToSchema(mcpProp: McpProperty): Schema {
+        // Handle 'anyOf' union types (e.g., HassSetVolumeRelative's volume_step)
+        if (mcpProp.anyOf != null) {
+            // For now, pick the first option as the primary type
+            // In the future, we might want to document both options in the description
+            val firstOption = mcpProp.anyOf.first()
+            return Schema(
+                type = firstOption.type.toGeminiType(),
+                description = mcpProp.description,
+                enum = firstOption.enum,
+                minimum = firstOption.minimum,
+                maximum = firstOption.maximum
+            )
+        }
+
+        // Handle array types (e.g., device_class with enum items)
+        if (mcpProp.type == "array" && mcpProp.items != null) {
+            return Schema(
+                type = Type.ARRAY,
+                description = mcpProp.description,
+                items = Schema(
+                    type = mcpProp.items.type.toGeminiType(),
+                    enum = mcpProp.items.enum
+                )
+            )
+        }
+
+        // Handle simple types
+        return Schema(
+            type = mcpProp.type?.toGeminiType() ?: Type.STRING,
+            description = mcpProp.description,
+            enum = mcpProp.enum,
+            minimum = mcpProp.minimum,
+            maximum = mcpProp.maximum
         )
     }
 
@@ -165,17 +251,128 @@ class HomeAssistantRepository(
             "integer" -> Type.INTEGER
             "number" -> Type.NUMBER
             "boolean" -> Type.BOOLEAN
+            "array" -> Type.ARRAY
+            "object" -> Type.OBJECT
             else -> Type.STRING // Default fallback
         }
     }
 
-    // ... executeTool function will be added in Task 2 ...
+    // ... executeTool function will be added in Task 3 ...
 }
 ```
 
-## 6. Assumptions & Risks
+**Key Changes from Original Plan:**
+1. **Single Tool, Many Functions:** Gemini prefers a single `Tool` object containing all `FunctionDeclaration`s, rather than a list of single-function Tools
+2. **JSON-RPC Unwrapping:** We extract `result.tools` from the response wrapper
+3. **Complex Property Handling:**
+   - `anyOf` union types: Pick the first option (with a TODO for better handling)
+   - Array types with `items.enum`: Properly create nested Schema with items
+4. **Empty Descriptions:** Handle tools that have empty descriptions (e.g., "describe_doorbell")
+5. **Required Field:** Default to empty list if not present (many HA tools have all optional params)
 
-1.  **MCP Endpoint:** We are *assuming* the MCP server exposes its tools at a simple `/api/mcp` GET endpoint. This is a major assumption.
-      * **Mitigation:** If it's more complex (e.g., requires a POST or WebSocket), this task's "Network Call" step will need to be revised. The *transformation logic*, however, will remain the same.
-2.  **MCP JSON Schema:** We are *assuming* the structure of the JSON.
-      * **Mitigation:** The `Mcp*` data classes will need to be adjusted once we have a real sample payload from the HA MCP Server.
+## 6. Known Complexities & Edge Cases
+
+Now that we have the actual MCP response format, here are the known complexities:
+
+1.  **Union Types (`anyOf`):** Some properties like `HassSetVolumeRelative.volume_step` can be EITHER a string enum ("up"/"down") OR an integer (-100 to 100)
+      * **Current Strategy:** Pick the first option in the transformation
+      * **Future Enhancement:** Could concatenate both options into the description for better LLM understanding
+
+2.  **Array Properties with Enums:** Properties like `device_class` are arrays of strings with enum constraints
+      * **Handled:** The transformer properly creates nested `Schema` with `items` containing the enum
+
+3.  **Optional Everything:** Many tools (like `describe_doorbell`, `GetLiveContext`) have empty or all-optional parameter schemas
+      * **Handled:** Default `required` to empty list if not present
+
+4.  **Empty Descriptions:** Some tools have empty description strings
+      * **Handled:** Default to "No description provided" to avoid confusing the LLM
+
+5.  **Tool Count:** The example response has 15 tools, but a real HA instance may have dozens or hundreds
+      * **Risk:** Large tool lists might hit Gemini's context limits
+      * **Mitigation:** Monitor token usage and consider filtering or chunking if needed
+
+6.  **Tool Naming Convention:** HA uses PascalCase names (e.g., `HassTurnOn`, `HassLightSet`) rather than domain.service format
+      * **Impact:** This affects Task 3 (execution) - we can't simply split on `.` to get domain/service
+      * **Solution:** Task 3 will need a different strategy (likely a mapping table or parsing the tool's semantic meaning)
+
+## 7. Testing Strategy
+
+To validate the transformation logic before integrating with the full app:
+
+1.  **Unit Test:** Create a test that loads `docs/examples/ha-mcp-tools-list.json` and runs it through the transformer
+      * Verify all 15 tools are converted
+      * Spot-check complex cases (anyOf, arrays, empty descriptions)
+
+2.  **Sample Output:** Manually inspect the generated `Tool` object
+      * Print the transformed `FunctionDeclaration` list
+      * Verify names, descriptions, and parameter schemas are sensible
+
+3.  **Integration Test:** Once Task 1 (Live API) is complete, test with dummy executor
+      * Pass transformed tools to `LiveSession`
+      * Verify Gemini can call the functions with appropriate parameters
+
+## 8. Example Transformations
+
+Here's what the transformer should produce for specific tools:
+
+**HassTurnOn (Complex):**
+```kotlin
+FunctionDeclaration(
+    name = "HassTurnOn",
+    description = "Turns on/opens/presses a device or entity...",
+    parameters = Schema(
+        type = Type.OBJECT,
+        properties = mapOf(
+            "name" to Schema(type = Type.STRING),
+            "area" to Schema(type = Type.STRING),
+            "floor" to Schema(type = Type.STRING),
+            "domain" to Schema(
+                type = Type.ARRAY,
+                items = Schema(type = Type.STRING)
+            ),
+            "device_class" to Schema(
+                type = Type.ARRAY,
+                items = Schema(
+                    type = Type.STRING,
+                    enum = listOf("tv", "speaker", "outlet", ...)
+                )
+            )
+        ),
+        required = emptyList() // All optional
+    )
+)
+```
+
+**HassSetVolume (With Constraints):**
+```kotlin
+FunctionDeclaration(
+    name = "HassSetVolume",
+    description = "Sets the volume percentage of a media player",
+    parameters = Schema(
+        type = Type.OBJECT,
+        properties = mapOf(
+            // ... name, area, floor, domain, device_class ...
+            "volume_level" to Schema(
+                type = Type.INTEGER,
+                description = "The volume percentage of the media player",
+                minimum = 0,
+                maximum = 100
+            )
+        ),
+        required = emptyList()
+    )
+)
+```
+
+**describe_doorbell (Empty Schema):**
+```kotlin
+FunctionDeclaration(
+    name = "describe_doorbell",
+    description = "No description provided",
+    parameters = Schema(
+        type = Type.OBJECT,
+        properties = emptyMap(),
+        required = emptyList()
+    )
+)
+```

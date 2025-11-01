@@ -1,63 +1,154 @@
-# **Task 0: Android App Skeleton (MVP v2)**
+# **Task 0: Android App Skeleton (MVP v3)**
 
 ## **1. Objective**
 
-To create a minimal viable product (MVP) for the Android app. This version will **not** require the user to rebuild. Instead, it will:
+To create a minimal viable product (MVP) for the Android app with a two-step configuration flow:
 
-1. On first launch, check if it's configured.  
-2. If not configured, it will display an "Import google-services.json" button.  
-3. The user will use the Android file picker to select the google-services.json file they downloaded from their **own Firebase project**.  
-4. The app will parse this file, save the necessary credentials to SharedPreferences, and then initialize Firebase dynamically.  
-5. On all subsequent launches, the app will find the saved credentials and initialize automatically, showing the "Talk" button.
+### **Step 1: Firebase Setup (BYOFP)**
+1. On first launch, check if Firebase is configured
+2. If not, display "Import google-services.json" button
+3. User selects their google-services.json file via file picker
+4. App parses and saves credentials to SharedPreferences
+5. Firebase is initialized dynamically
 
-This achieves the "Bring Your Own Firebase Project" (BYOFP) goal in a user-friendly, "geek-friendly" way.
+### **Step 2: Home Assistant Setup**
+1. After Firebase is configured, prompt for HA connection details
+2. User enters HA base URL (e.g., `https://homeassistant.local:8123`)
+3. User enters HA long-lived access token
+4. App saves these to SharedPreferences
+5. App establishes MCP SSE connection and performs initialization handshake
+
+### **Step 3: Ready to Talk**
+- Both Firebase and HA are configured
+- MCP connection is established and initialized
+- "Talk" button is available
+
+This achieves both "Bring Your Own Firebase Project" (BYOFP) and "Bring Your Own Home Assistant" goals.
 
 ## **2. Core Architecture**
 
 The file structure is similar, but the logic inside the files is different.
 
-app/  
-├── src/main/  
-│   ├── java/com/example/halive/  
-│   │   ├── core/  
-│   │   │   └── **FirebaseConfig.kt** <-- (NOW parses JSON and uses SharedPreferences)  
-│   │   ├── services/  
-│   │   │   ├── GeminiService.kt     (Stubbed)  
-│   │   │   └── HomeAssistantRepository.kt (Stubbed)  
-│   │   ├── ui/  
-│   │   │   ├── MainViewModel.kt     (Manages UI state: Loading, ConfigNeeded, Ready)  
-│   │   │   └── MainActivity.kt      (Handles file picking & UI state)  
-│   │   └── HAGeminiApp.kt           (Application class, tries to init)  
-│   ├── res/  
-│   │   └── layout/  
-│   │       └── activity_main.xml    (Button text/visibility will change based on state)  
-│   └── AndroidManifest.xml        (Permissions)  
-│  
-└── build.gradle.kts                 (Dependencies)
+app/
+├── src/main/
+│   ├── java/com/example/halive/
+│   │   ├── core/
+│   │   │   ├── **FirebaseConfig.kt** <-- (Parses JSON and uses SharedPreferences)
+│   │   │   └── **HAConfig.kt** <-- (NEW: Stores HA URL and token)
+│   │   ├── services/
+│   │   │   ├── **McpClientManager.kt** <-- (NEW: SSE connection + MCP lifecycle)
+│   │   │   ├── GeminiService.kt     (Stubbed for Task 1)
+│   │   │   └── HomeAssistantRepository.kt (Wraps McpClientManager)
+│   │   ├── ui/
+│   │   │   ├── MainViewModel.kt     (Manages multi-step config states)
+│   │   │   └── MainActivity.kt      (Handles file picking, text input & UI state)
+│   │   └── HAGeminiApp.kt           (Application class, holds global MCP client)
+│   ├── res/
+│   │   └── layout/
+│   │       └── activity_main.xml    (Dynamic UI based on configuration state)
+│   └── AndroidManifest.xml        (Permissions: INTERNET, READ_EXTERNAL_STORAGE)
+│
+└── build.gradle.kts                 (Dependencies: Firebase, OkHttp SSE, etc.)
 
 ## **3. Key File Definitions**
 
 ### **HAGeminiApp.kt (Application Class)**
 
+```kotlin
 package com.example.halive
 
-import android.app.Application  
-import com.example.halive.core.FirebaseConfig  
-import com.google.firebase.FirebaseApp
+import android.app.Application
+import com.example.halive.core.FirebaseConfig
+import com.example.halive.services.McpClientManager
+import com.example.halive.services.HomeAssistantRepository
 
-class HAGeminiApp : Application() {  
-    override fun onCreate() {  
-        super.onCreate()  
-          
-        // Try to initialize Firebase on launch.  
-        // If config is not saved, this will just be skipped.  
-        // MainActivity is responsible for forcing the user to configure.  
-        FirebaseConfig.initializeFirebase(this)  
-    }  
+class HAGeminiApp : Application() {
+    // Global MCP client - will be initialized after HA config
+    var mcpClient: McpClientManager? = null
+    var haRepository: HomeAssistantRepository? = null
+
+    override fun onCreate() {
+        super.onCreate()
+
+        // Try to initialize Firebase on launch
+        FirebaseConfig.initializeFirebase(this)
+
+        // Note: MCP connection is NOT established here
+        // It will be established in MainActivity after user configures HA
+    }
+
+    /**
+     * Called by MainActivity after user provides HA credentials.
+     * Establishes the MCP SSE connection and performs initialization handshake.
+     */
+    suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
+        mcpClient = McpClientManager(haUrl, haToken)
+        mcpClient?.initialize() // SSE connection + MCP handshake
+        haRepository = HomeAssistantRepository(mcpClient!!)
+    }
+
+    /**
+     * Called when app is closing to gracefully shut down MCP connection.
+     */
+    fun shutdownHomeAssistant() {
+        mcpClient?.shutdown()
+        mcpClient = null
+        haRepository = null
+    }
 }
+```
+
+### **core/HAConfig.kt (NEW: Home Assistant Config Manager)**
+
+```kotlin
+package com.example.halive.core
+
+import android.content.Context
+import android.content.SharedPreferences
+
+object HAConfig {
+    private const val PREFS_NAME = "ha_config"
+    private const val KEY_BASE_URL = "base_url"
+    private const val KEY_TOKEN = "token"
+
+    private fun getPrefs(context: Context): SharedPreferences {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    fun isConfigured(context: Context): Boolean {
+        val prefs = getPrefs(context)
+        return prefs.getString(KEY_BASE_URL, null) != null &&
+               prefs.getString(KEY_TOKEN, null) != null
+    }
+
+    fun saveConfig(context: Context, baseUrl: String, token: String) {
+        getPrefs(context).edit()
+            .putString(KEY_BASE_URL, baseUrl)
+            .putString(KEY_TOKEN, token)
+            .apply()
+    }
+
+    fun loadConfig(context: Context): Pair<String, String>? {
+        val prefs = getPrefs(context)
+        val baseUrl = prefs.getString(KEY_BASE_URL, null)
+        val token = prefs.getString(KEY_TOKEN, null)
+
+        return if (baseUrl != null && token != null) {
+            Pair(baseUrl, token)
+        } else {
+            null
+        }
+    }
+
+    fun clearConfig(context: Context) {
+        getPrefs(context).edit().clear().apply()
+    }
+}
+```
 
 ### **core/FirebaseConfig.kt (Config Manager)**
 
+```kotlin
 package com.example.halive.core
 
 import android.content.Context  
@@ -154,85 +245,189 @@ object FirebaseConfig {
         getPrefs(context).edit().clear().apply()  
     }  
 }
+```
+
+### **services/McpClientManager.kt (NEW: MCP Connection Manager)**
+
+```kotlin
+package com.example.halive.services
+
+// NOTE: This is a STUB for Task 0. Full implementation in Task 2.
+// This class will handle:
+// - Opening SSE connection to /api/mcp
+// - MCP initialization handshake (initialize -> initialized)
+// - Sending JSON-RPC requests and correlating responses
+// - Graceful shutdown
+
+class McpClientManager(
+    private val haBaseUrl: String,
+    private val haToken: String
+) {
+    /**
+     * Phase 1: Initialize the MCP connection.
+     * - Opens SSE connection
+     * - Sends 'initialize' request
+     * - Sends 'initialized' notification
+     */
+    suspend fun initialize(): Boolean {
+        // TODO (Task 2): Implement SSE connection + handshake
+        return true // Stub: always succeeds
+    }
+
+    /**
+     * Phase 3: Gracefully shut down the connection.
+     */
+    fun shutdown() {
+        // TODO (Task 2): Close SSE connection
+    }
+
+    // TODO (Task 2): Add getTools() method
+    // TODO (Task 3): Add callTool() method
+}
+```
+
+### **services/HomeAssistantRepository.kt (Wraps MCP Client)**
+
+```kotlin
+package com.example.halive.services
+
+// NOTE: This is a STUB for Task 0. Full implementation in Tasks 2 & 3.
+
+class HomeAssistantRepository(
+    private val mcpClient: McpClientManager
+) {
+    // TODO (Task 2): suspend fun getTools(): List<Tool>
+    // TODO (Task 3): suspend fun executeTool(functionCall: FunctionCallPart): FunctionResponsePart
+}
+```
 
 ### **ui/MainViewModel.kt (State Holder)**
 
+```kotlin
 package com.example.halive.ui
 
-import android.app.Application  
-import android.net.Uri  
-import androidx.lifecycle.AndroidViewModel  
-import androidx.lifecycle.viewModelScope  
-import com.example.halive.core.FirebaseConfig  
-import com.google.firebase.FirebaseApp  
-import kotlinx.coroutines.flow.MutableStateFlow  
-import kotlinx.coroutines.flow.StateFlow  
+import android.app.Application
+import android.net.Uri
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.halive.HAGeminiApp
+import com.example.halive.core.FirebaseConfig
+import com.example.halive.core.HAConfig
+import com.google.firebase.FirebaseApp
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-// Define the different states our UI can be in  
-sealed class UiState {  
-    object Loading : UiState()  
-    object ConfigNeeded : UiState()  
-    object ReadyToTalk : UiState()  
-    object Listening : UiState()  
-    data class Error(val message: String) : UiState()  
+// Define the different states our UI can be in
+sealed class UiState {
+    object Loading : UiState()
+    object FirebaseConfigNeeded : UiState()  // Need google-services.json
+    object HAConfigNeeded : UiState()        // Need HA URL + token
+    object ReadyToTalk : UiState()           // Everything initialized
+    object Listening : UiState()
+    data class Error(val message: String) : UiState()
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow<UiState>(UiState.Loading)  
+    private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState
 
-    // Stubs for later tasks  
-    // private val geminiService = GeminiService()  
-    // private val homeAssistantRepository = HomeAssistantRepository()
+    private val app = application as HAGeminiApp
 
-    init {  
-        checkIfConfigured()  
+    init {
+        checkConfiguration()
     }
 
-    private fun checkIfConfigured() {  
-        viewModelScope.launch {  
-            _uiState.value = UiState.Loading  
-            // Check if Firebase was successfully initialized on app start  
-            if (FirebaseApp.getApps(getApplication()).isEmpty()) {  
-                _uiState.value = UiState.ConfigNeeded  
-            } else {  
-                // In a real app, we'd also init GeminiService, etc.  
-                _uiState.value = UiState.ReadyToTalk  
-            }  
-        }  
+    /**
+     * Check what needs to be configured.
+     */
+    private fun checkConfiguration() {
+        viewModelScope.launch {
+            _uiState.value = UiState.Loading
+
+            // Step 1: Check Firebase
+            if (FirebaseApp.getApps(getApplication()).isEmpty()) {
+                _uiState.value = UiState.FirebaseConfigNeeded
+                return@launch
+            }
+
+            // Step 2: Check Home Assistant
+            if (!HAConfig.isConfigured(getApplication())) {
+                _uiState.value = UiState.HAConfigNeeded
+                return@launch
+            }
+
+            // Step 3: Initialize MCP connection
+            try {
+                val (haUrl, haToken) = HAConfig.loadConfig(getApplication())!!
+                app.initializeHomeAssistant(haUrl, haToken)
+                _uiState.value = UiState.ReadyToTalk
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Failed to connect to HA: ${e.message}")
+            }
+        }
     }
 
-    /**  
-     * Called by MainActivity when the user selects a file.  
-     */  
-    fun saveConfigFile(uri: Uri) {  
-        viewModelScope.launch {  
-            try {  
-                FirebaseConfig.saveConfigFromUri(getApplication(), uri)  
-                // Now try to initialize with the new config  
-                if (FirebaseConfig.initializeFirebase(getApplication())) {  
-                    _uiState.value = UiState.ReadyToTalk  
-                } else {  
-                    _uiState.value = UiState.Error("Invalid config file.")  
-                }  
-            } catch (e: Exception) {  
-                _uiState.value = UiState.Error("Failed to read file: ${e.message}")  
-            }  
-        }  
+    /**
+     * Called by MainActivity when the user selects a Firebase config file.
+     */
+    fun saveFirebaseConfigFile(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                FirebaseConfig.saveConfigFromUri(getApplication(), uri)
+
+                // Try to initialize Firebase with the new config
+                if (FirebaseConfig.initializeFirebase(getApplication())) {
+                    // Move to next step: HA config
+                    checkConfiguration()
+                } else {
+                    _uiState.value = UiState.Error("Invalid Firebase config file.")
+                }
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Failed to read file: ${e.message}")
+            }
+        }
     }
 
-    fun onTalkButtonPressed() {  
-        _uiState.value = UiState.Listening  
-        // TODO (Task 3): geminiService.startSession(...)  
+    /**
+     * Called by MainActivity when user provides HA credentials.
+     */
+    fun saveHAConfig(baseUrl: String, token: String) {
+        viewModelScope.launch {
+            try {
+                // Validate inputs (basic check)
+                if (baseUrl.isBlank() || token.isBlank()) {
+                    _uiState.value = UiState.Error("URL and token cannot be empty")
+                    return@launch
+                }
+
+                // Save config
+                HAConfig.saveConfig(getApplication(), baseUrl, token)
+
+                // Try to initialize MCP connection
+                app.initializeHomeAssistant(baseUrl, token)
+
+                _uiState.value = UiState.ReadyToTalk
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Failed to connect: ${e.message}")
+                // Clear bad config
+                HAConfig.clearConfig(getApplication())
+            }
+        }
     }
 
-    fun onTalkButtonReleased() {  
-        _uiState.value = UiState.ReadyToTalk  
-        // TODO (Task 3): geminiService.stopSession()  
-    }  
+    fun onTalkButtonPressed() {
+        _uiState.value = UiState.Listening
+        // TODO (Task 1): Start Gemini Live session
+    }
+
+    fun onTalkButtonReleased() {
+        _uiState.value = UiState.ReadyToTalk
+        // TODO (Task 1): Stop Gemini Live session
+    }
 }
+```
 
 ### **ui/MainActivity.kt (The View)**
 

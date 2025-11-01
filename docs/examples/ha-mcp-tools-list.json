@@ -1,0 +1,532 @@
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+        "tools": [
+            {
+                "name": "HassTurnOn",
+                "description": "Turns on/opens/presses a device or entity. For locks, this performs a 'lock' action. Use for requests like 'turn on', 'activate', 'enable', or 'lock'.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "area": {
+                            "type": "string"
+                        },
+                        "floor": {
+                            "type": "string"
+                        },
+                        "domain": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "device_class": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "tv",
+                                    "speaker",
+                                    "receiver",
+                                    "identify",
+                                    "restart",
+                                    "update",
+                                    "outlet",
+                                    "switch",
+                                    "water",
+                                    "gas",
+                                    "awning",
+                                    "blind",
+                                    "curtain",
+                                    "damper",
+                                    "door",
+                                    "garage",
+                                    "gate",
+                                    "shade",
+                                    "shutter",
+                                    "window"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "name": "HassTurnOff",
+                "description": "Turns off/closes a device or entity. For locks, this performs an 'unlock' action. Use for requests like 'turn off', 'deactivate', 'disable', or 'unlock'.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "area": {
+                            "type": "string"
+                        },
+                        "floor": {
+                            "type": "string"
+                        },
+                        "domain": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "device_class": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "tv",
+                                    "speaker",
+                                    "receiver",
+                                    "identify",
+                                    "restart",
+                                    "update",
+                                    "outlet",
+                                    "switch",
+                                    "water",
+                                    "gas",
+                                    "awning",
+                                    "blind",
+                                    "curtain",
+                                    "damper",
+                                    "door",
+                                    "garage",
+                                    "gate",
+                                    "shade",
+                                    "shutter",
+                                    "window"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "name": "HassSetPosition",
+                "description": "Sets the position of a device or entity",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "area": {
+                            "type": "string"
+                        },
+                        "floor": {
+                            "type": "string"
+                        },
+                        "domain": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "device_class": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "awning",
+                                    "blind",
+                                    "curtain",
+                                    "damper",
+                                    "door",
+                                    "garage",
+                                    "gate",
+                                    "shade",
+                                    "shutter",
+                                    "window",
+                                    "water",
+                                    "gas"
+                                ]
+                            }
+                        },
+                        "position": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100
+                        }
+                    }
+                }
+            },
+            {
+                "name": "HassCancelAllTimers",
+                "description": "Cancels all timers",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "area": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "HassMediaUnpause",
+                "description": "Resumes a media player",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "area": {
+                            "type": "string"
+                        },
+                        "floor": {
+                            "type": "string"
+                        },
+                        "domain": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "media_player"
+                                ]
+                            }
+                        },
+                        "device_class": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "tv",
+                                    "speaker",
+                                    "receiver"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "name": "HassMediaPause",
+                "description": "Pauses a media player",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "area": {
+                            "type": "string"
+                        },
+                        "floor": {
+                            "type": "string"
+                        },
+                        "domain": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "media_player"
+                                ]
+                            }
+                        },
+                        "device_class": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "tv",
+                                    "speaker",
+                                    "receiver"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "name": "HassMediaNext",
+                "description": "Skips a media player to the next item",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "area": {
+                            "type": "string"
+                        },
+                        "floor": {
+                            "type": "string"
+                        },
+                        "domain": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "media_player"
+                                ]
+                            }
+                        },
+                        "device_class": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "tv",
+                                    "speaker",
+                                    "receiver"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "name": "HassMediaPrevious",
+                "description": "Replays the previous item for a media player",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "area": {
+                            "type": "string"
+                        },
+                        "floor": {
+                            "type": "string"
+                        },
+                        "domain": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "media_player"
+                                ]
+                            }
+                        },
+                        "device_class": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "tv",
+                                    "speaker",
+                                    "receiver"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "name": "HassSetVolume",
+                "description": "Sets the volume percentage of a media player",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "area": {
+                            "type": "string"
+                        },
+                        "floor": {
+                            "type": "string"
+                        },
+                        "domain": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "media_player"
+                                ]
+                            }
+                        },
+                        "device_class": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "tv",
+                                    "speaker",
+                                    "receiver"
+                                ]
+                            }
+                        },
+                        "volume_level": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "description": "The volume percentage of the media player"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "HassSetVolumeRelative",
+                "description": "Increases or decreases the volume of a media player",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "volume_step": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "enum": [
+                                        "up",
+                                        "down"
+                                    ]
+                                },
+                                {
+                                    "type": "integer",
+                                    "minimum": -100,
+                                    "maximum": 100
+                                }
+                            ]
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "area": {
+                            "type": "string"
+                        },
+                        "floor": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "HassMediaSearchAndPlay",
+                "description": "Searches for media and plays the first result",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "search_query": {
+                            "type": "string"
+                        },
+                        "media_class": {
+                            "type": "string",
+                            "enum": [
+                                "album",
+                                "app",
+                                "artist",
+                                "channel",
+                                "composer",
+                                "contributing_artist",
+                                "directory",
+                                "episode",
+                                "game",
+                                "genre",
+                                "image",
+                                "movie",
+                                "music",
+                                "playlist",
+                                "podcast",
+                                "season",
+                                "track",
+                                "tv_show",
+                                "url",
+                                "video"
+                            ]
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "area": {
+                            "type": "string"
+                        },
+                        "floor": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "HassLightSet",
+                "description": "Sets the brightness percentage or color of a light",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        },
+                        "area": {
+                            "type": "string"
+                        },
+                        "floor": {
+                            "type": "string"
+                        },
+                        "domain": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "color": {
+                            "type": "string"
+                        },
+                        "temperature": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "brightness": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "description": "The brightness percentage of the light between 0 and 100, where 0 is off and 100 is fully lit"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "HassBroadcast",
+                "description": "Broadcast a message through the home",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "describe_doorbell",
+                "description": "",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            {
+                "name": "set_house_state",
+                "description": "",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "to_state": {
+                            "type": "string",
+                            "enum": [
+                                "Day",
+                                "Early evening",
+                                "Late evening",
+                                "Sleep"
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                "name": "GetLiveContext",
+                "description": "Provides real-time information about the CURRENT state, value, or mode of devices, sensors, entities, or areas. Use this tool for: 1. Answering questions about current conditions (e.g., 'Is the light on?'). 2. As the first step in conditional actions (e.g., 'If the weather is rainy, turn off sprinklers' requires checking the weather first).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        ]
+    }
+}
