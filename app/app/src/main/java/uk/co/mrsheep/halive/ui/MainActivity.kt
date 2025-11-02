@@ -95,6 +95,12 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Listening..."
                 // Listener is already active
             }
+            UiState.ExecutingAction -> {
+                mainButton.visibility = View.VISIBLE
+                haConfigContainer.visibility = View.GONE
+                statusText.text = "Executing action..."
+                // Keep button active but show execution status
+            }
             is UiState.Error -> {
                 mainButton.visibility = View.GONE
                 haConfigContainer.visibility = View.GONE

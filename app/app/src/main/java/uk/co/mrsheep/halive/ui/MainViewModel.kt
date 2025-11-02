@@ -7,7 +7,10 @@ import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.HAConfig
+import uk.co.mrsheep.halive.services.GeminiService
 import com.google.firebase.FirebaseApp
+import com.google.firebase.vertexai.type.FunctionCallPart
+import com.google.firebase.vertexai.type.FunctionResponsePart
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -19,6 +22,7 @@ sealed class UiState {
     object HAConfigNeeded : UiState()        // Need HA URL + token
     object ReadyToTalk : UiState()           // Everything initialized
     object Listening : UiState()
+    object ExecutingAction : UiState()       // Executing a Home Assistant action
     data class Error(val message: String) : UiState()
 }
 
@@ -28,6 +32,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<UiState> = _uiState
 
     private val app = application as HAGeminiApp
+    private val geminiService = GeminiService()
 
     init {
         checkConfiguration()
@@ -52,11 +57,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            // Step 3: Initialize MCP connection
+            // Step 3: Initialize MCP connection and Gemini
             try {
                 val (haUrl, haToken) = HAConfig.loadConfig(getApplication())!!
                 app.initializeHomeAssistant(haUrl, haToken)
-                _uiState.value = UiState.ReadyToTalk
+                initializeGemini()
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to connect to HA: ${e.message}")
             }
@@ -102,7 +107,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Try to initialize MCP connection
                 app.initializeHomeAssistant(baseUrl, token)
 
-                _uiState.value = UiState.ReadyToTalk
+                // Initialize Gemini
+                initializeGemini()
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to connect: ${e.message}")
                 // Clear bad config
@@ -111,13 +117,74 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Initialize the Gemini model with tools from Task 1 (currently mocked).
+     */
+    private suspend fun initializeGemini() {
+        try {
+            // TASK 1: Fetch and transform tools
+            // For now, we'll use an empty list as a placeholder
+            // Once Task 1 is complete, this will be:
+            // val tools = app.haRepository?.fetchTools() ?: emptyList()
+            val tools = emptyList<com.google.firebase.vertexai.type.Tool>()
+
+            val systemPrompt = "You are a helpful home assistant. You can control devices and answer questions about the user's home."
+
+            // Initialize the Gemini model
+            geminiService.initializeModel(tools, systemPrompt)
+
+            _uiState.value = UiState.ReadyToTalk
+        } catch (e: Exception) {
+            _uiState.value = UiState.Error("Failed to initialize Gemini: ${e.message}")
+        }
+    }
+
     fun onTalkButtonPressed() {
         _uiState.value = UiState.Listening
-        // TODO (Task 2): Start Gemini Live session
+        viewModelScope.launch {
+            try {
+                // Start the session, passing our Task 2 executor as the handler
+                geminiService.startSession(
+                    functionCallHandler = ::executeHomeAssistantTool
+                )
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Failed to start session: ${e.message}")
+            }
+        }
     }
 
     fun onTalkButtonReleased() {
+        geminiService.stopSession()
         _uiState.value = UiState.ReadyToTalk
-        // TODO (Task 2): Stop Gemini Live session
+    }
+
+    /**
+     * This is the function that is passed to `geminiService`.
+     * It directly connects the Gemini `functionCall` to our Task 2 executor.
+     */
+    private suspend fun executeHomeAssistantTool(call: FunctionCallPart): FunctionResponsePart {
+        _uiState.value = UiState.ExecutingAction
+
+        // TASK 2: Execute the tool
+        // For now, this is a mock implementation
+        // Once Task 2 is complete, this will be:
+        // val result = app.haRepository?.executeTool(call) ?: createErrorResponse(call)
+
+        // Mock delay to simulate execution
+        kotlinx.coroutines.delay(1000)
+
+        // Mock response
+        val result = FunctionResponsePart(
+            name = call.name,
+            response = mapOf("success" to true, "message" to "Mocked execution of ${call.name}")
+        )
+
+        _uiState.value = UiState.Listening // Return to listening state
+        return result
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        geminiService.cleanup()
     }
 }
