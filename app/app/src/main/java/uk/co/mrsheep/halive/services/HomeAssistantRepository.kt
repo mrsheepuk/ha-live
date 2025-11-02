@@ -49,10 +49,7 @@ class HomeAssistantRepository(
         return FunctionDeclaration(
             name = mcpTool.name,
             description = mcpTool.description.ifEmpty { "No description provided" },
-            parameters = Schema.obj(
-                properties = geminiProperties,
-                required = mcpTool.inputSchema.required ?: emptyList()
-            )
+            parameters = geminiProperties,
         )
     }
 
@@ -96,9 +93,9 @@ class HomeAssistantRepository(
                 Schema.string(mcpProp.description)
             }
             "integer" -> Schema.integer(mcpProp.description)
-            "number" -> Schema.number(mcpProp.description)
+            "number" -> Schema.double(mcpProp.description)
             "boolean" -> Schema.boolean(mcpProp.description)
-            "object" -> Schema.obj(emptyMap(), mcpProp.description)
+            "object" -> Schema.obj(emptyMap(), emptyList(), mcpProp.description)
             else -> Schema.string(mcpProp.description) // Default fallback
         }
     }
