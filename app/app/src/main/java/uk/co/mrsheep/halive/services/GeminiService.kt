@@ -29,16 +29,6 @@ class GeminiService {
     private var generativeModel: LiveGenerativeModel? = null
     private var liveSession: LiveSession? = null
 
-    // Outputs for the UI
-//    private val _transcribedUserText = MutableStateFlow("")
-//    val transcribedUserText: StateFlow<String> = _transcribedUserText.asStateFlow()
-//
-//    private val _modelResponseText = MutableStateFlow("")
-//    val modelResponseText: StateFlow<String> = _modelResponseText.asStateFlow()
-//
-//    private val _isSpeaking = MutableStateFlow(false)
-//    val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
-
     /**
      * Called by ViewModel on app launch, *after* Task 1 is complete.
      */
@@ -80,9 +70,6 @@ class GeminiService {
                 functionCallHandler = { call -> runBlocking { functionCallHandler(call) } }
             )
 
-//            // 3. Start listening for responses
-//            listenForModelResponses()
-
         } catch (e: SecurityException) {
             Log.e(TAG, "No permission", e)
             throw e
@@ -91,50 +78,6 @@ class GeminiService {
             throw e
         }
     }
-
-//    /**
-//     * A long-running coroutine to process messages from the live session
-//     */
-//    @OptIn(PublicPreviewAPI::class)
-//    private suspend fun listenForModelResponses() {
-//        try {
-//            liveSession?.receive()?.collect { message ->
-//                // Process the stream of messages from Gemini
-//                when (message) {
-//                    is com.google.firebase.ai.type.LiveServerContent -> {
-//                        // Handle content from the model
-//                        message.content?.parts?.forEach { part ->
-//                            when (part) {
-//                                is com.google.firebase.ai.type.TextPart -> {
-//                                    _modelResponseText.value = part.text
-//                                    _isSpeaking.value = true
-//                                }
-//                            }
-//                        }
-//
-//                        // Handle turn completion
-//                        if (message.turnComplete) {
-//                            _isSpeaking.value = false
-//                        }
-//                    }
-//                    is com.google.firebase.ai.type.LiveServerSetupComplete -> {
-//                        Log.d(TAG, "Live session setup complete")
-//                    }
-//                    is com.google.firebase.ai.type.LiveServerToolCall -> {
-//                        // This shouldn't happen when using startAudioConversation
-//                        // with a functionCallHandler, but log it just in case
-//                        Log.d(TAG, "Received tool call request: ${message.functionCalls.size} calls")
-//                    }
-//                    is com.google.firebase.ai.type.LiveServerToolCallCancellation -> {
-//                        Log.d(TAG, "Tool call cancellation: ${message.functionIds}")
-//                    }
-//                }
-//            }
-//        } catch (e: Exception) {
-//            Log.e(TAG, "Error in listenForModelResponses", e)
-//            _isSpeaking.value = false
-//        }
-//    }
 
     /**
      * Called by ViewModel when the user releases the "talk" button.
@@ -146,11 +89,6 @@ class GeminiService {
             liveSession?.stopAudioConversation()
             liveSession?.stopReceiving()
             liveSession = null
-
-//            // Reset state
-//            _transcribedUserText.value = ""
-//            _modelResponseText.value = ""
-//            _isSpeaking.value = false
 
             Log.d(TAG, "Session stopped")
         } catch (e: Exception) {
