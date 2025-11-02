@@ -14,8 +14,6 @@ import com.google.firebase.ai.type.FunctionResponsePart
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 
 // Define the different states our UI can be in
 sealed class UiState {
@@ -124,15 +122,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Initialize the Gemini model with tools from Task 1 (currently mocked).
+     * Initialize the Gemini model with tools from MCP.
      */
     private suspend fun initializeGemini() {
         try {
-            // TASK 1: Fetch and transform tools
-            // For now, we'll use an empty list as a placeholder
-            // Once Task 1 is complete, this will be:
-            // val tools = app.haRepository?.fetchTools() ?: emptyList()
-            val tools = emptyList<com.google.firebase.ai.type.Tool>()
+            // Fetch and transform tools from Home Assistant MCP server
+            val tools = app.haRepository?.getTools() ?: emptyList()
 
             val systemPrompt = """
             You are a helpful home assistant. 
@@ -218,25 +213,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * This is the function that is passed to `geminiService`.
-     * It directly connects the Gemini `functionCall` to our Task 2 executor.
+     * It directly connects the Gemini `functionCall` to the MCP executor.
      */
-    private fun executeHomeAssistantTool(call: FunctionCallPart): FunctionResponsePart {
+    private suspend fun executeHomeAssistantTool(call: FunctionCallPart): FunctionResponsePart {
         _uiState.value = UiState.ExecutingAction
 
-        // TASK 2: Execute the tool
-        // For now, this is a mock implementation
-        // Once Task 3 is complete, this will be:
-        // val result = app.haRepository?.executeTool(call) ?: createErrorResponse(call)
-
-        // Mock response using kotlinx.serialization JsonObject
-        val result = FunctionResponsePart(
-            name = call.name,
-            response = buildJsonObject {
-                put("success", true)
-                put("message", "Mocked execution of ${call.name}")
-            },
-            id = call.id
-        )
+        // Execute the tool via MCP
+        val result = try {
+            app.haRepository?.executeTool(call) ?: FunctionResponsePart(
+                name = call.name,
+                response = mapOf("error" to "Repository not initialized"),
+                id = call.id
+            )
+        } catch (e: Exception) {
+            FunctionResponsePart(
+                name = call.name,
+                response = mapOf("error" to "Failed to execute: ${e.message}"),
+                id = call.id
+            )
+        }
 
         _uiState.value = UiState.Listening // Return to listening state
         return result

@@ -60,12 +60,12 @@ class GeminiService {
 
     /**
      * Called by ViewModel when the user presses the "talk" button.
-     * The handler is the *key* to connecting Task 2.
+     * The handler is the *key* to connecting Task 3 (MCP execution).
      */
     @OptIn(PublicPreviewAPI::class)
     suspend fun startSession(
         // The ViewModel passes a lambda that knows how to call the repository
-        functionCallHandler: (FunctionCallPart) -> FunctionResponsePart
+        functionCallHandler: suspend (FunctionCallPart) -> FunctionResponsePart
     ) {
         val model = generativeModel ?: throw IllegalStateException("Model not initialized")
 
