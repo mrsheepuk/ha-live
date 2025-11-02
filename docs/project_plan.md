@@ -116,24 +116,24 @@ The core logic of this app, and our primary development focus, lies in two key "
 
 We will follow a risk-first approach, prioritizing the validation of the core "live" conversational experience before building the production-level HA connectors.
 
-1. **Task 0: Android App Skeleton:**
+1. **Task 1: Android App Skeleton:**
    * Create the base Android project with BYOFP (Bring Your Own Firebase Project) setup
    * Create HA configuration UI (URL + token input)
-   * Establish persistent MCP SSE connection to Home Assistant
-   * See: [task_0_app_skeleton.md](task_0_app_skeleton.md)
+   * Establish persistent MCP SSE connection to Home Assistant (mocked - implement in Task 3)
+   * See: [task_1_app_skeleton.md](task_1_app_skeleton.md)
 
-2. **Task 1: Gemini Live API Integration & Mock Executor:**
+2. **Task 2: Gemini Live API Integration & Mock Executor:**
    * Implement the GeminiService to manage the LiveSession, microphone, and AudioTrack playback
    * **Instead of Task 2:** Hard-code a *dummy* list of tools (e.g., Tool(name="HassTurnOn", ...))
    * **Instead of Task 2:** Create a *dummy* executeHomeAssistantTool function with delay(1000) and hard-coded "success" responses
    * **Goal:** Have a fully working app that *feels* real. Test audio latency, transcription, and conversational flow.
-   * See: [task_1_live_api_wiring.md](task_1_live_api_wiring.md)
+   * See: [task_2_live_api_wiring.md](task_2_live_api_wiring.md)
 
-3. **Task 2: Complete MCP Client (Discovery & Execution):**
+3. **Task 3: Complete MCP Client (Discovery & Execution):**
    * Build the complete MCP client with SSE connection management
    * Implement tool discovery (fetch + transform tools from MCP to Gemini format)
    * Implement tool execution (call tools via MCP and return results to Gemini)
    * **Swap:** Replace *both* dummy components from Task 1 with the real MCP client
-   * See: [task_2_mcp_transformer.md](task_2_mcp_transformer.md)
+   * See: [task_3_mcp_transformer.md](task_3_mcp_transformer.md)
 
 4. **Final Test:** At this point, all mock components have been replaced with real, data-driven components. The app is feature-complete.

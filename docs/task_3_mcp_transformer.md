@@ -34,15 +34,15 @@ The MCP spec requires a handshake before any operations:
 ```
 Client                                    Server
   |                                         |
-  |--- initialize request ---------------->|
-  |    (protocolVersion, capabilities)     |
+  |--- initialize request ----------------->|
+  |    (protocolVersion, capabilities)      |
   |                                         |
-  |<-- initialize response ----------------|
-  |    (protocolVersion, capabilities)     |
+  |<-- initialize response -----------------|
+  |    (protocolVersion, capabilities)      |
   |                                         |
-  |--- initialized notification ---------->|
+  |--- initialized notification ----------->|
   |                                         |
-  |    [NOW READY FOR OPERATIONS]          |
+  |    [NOW READY FOR OPERATIONS]           |
 ```
 
 ### Phase 2: Operation
