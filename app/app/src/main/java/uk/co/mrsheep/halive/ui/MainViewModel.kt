@@ -1,7 +1,9 @@
 package uk.co.mrsheep.halive.ui
 
+import android.Manifest
 import android.app.Application
 import android.net.Uri
+import androidx.annotation.RequiresPermission
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
@@ -9,11 +11,13 @@ import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.services.GeminiService
 import com.google.firebase.FirebaseApp
-import com.google.firebase.vertexai.type.FunctionCallPart
-import com.google.firebase.vertexai.type.FunctionResponsePart
+import com.google.firebase.ai.type.FunctionCallPart
+import com.google.firebase.ai.type.FunctionResponsePart
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 // Define the different states our UI can be in
 sealed class UiState {
@@ -126,7 +130,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // For now, we'll use an empty list as a placeholder
             // Once Task 1 is complete, this will be:
             // val tools = app.haRepository?.fetchTools() ?: emptyList()
-            val tools = emptyList<com.google.firebase.vertexai.type.Tool>()
+            val tools = emptyList<com.google.firebase.ai.type.Tool>()
 
             val systemPrompt = "You are a helpful home assistant. You can control devices and answer questions about the user's home."
 
@@ -139,6 +143,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun onTalkButtonPressed() {
         _uiState.value = UiState.Listening
         viewModelScope.launch {
@@ -162,21 +167,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * This is the function that is passed to `geminiService`.
      * It directly connects the Gemini `functionCall` to our Task 2 executor.
      */
-    private suspend fun executeHomeAssistantTool(call: FunctionCallPart): FunctionResponsePart {
+    private fun executeHomeAssistantTool(call: FunctionCallPart): FunctionResponsePart {
         _uiState.value = UiState.ExecutingAction
 
         // TASK 2: Execute the tool
         // For now, this is a mock implementation
-        // Once Task 2 is complete, this will be:
+        // Once Task 3 is complete, this will be:
         // val result = app.haRepository?.executeTool(call) ?: createErrorResponse(call)
 
-        // Mock delay to simulate execution
-        kotlinx.coroutines.delay(1000)
-
-        // Mock response
+        // Mock response using kotlinx.serialization JsonObject
         val result = FunctionResponsePart(
             name = call.name,
-            response = mapOf("success" to true, "message" to "Mocked execution of ${call.name}")
+            response = buildJsonObject {
+                put("success", true)
+                put("message", "Mocked execution of ${call.name}")
+            },
+            id = call.id
         )
 
         _uiState.value = UiState.Listening // Return to listening state

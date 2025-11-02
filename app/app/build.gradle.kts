@@ -49,6 +49,9 @@ dependencies {
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
+    // Kotlinx Serialization for JSON
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
     // Import the BoM for the Firebase platform
     implementation(platform("com.google.firebase:firebase-bom:34.5.0"))
 

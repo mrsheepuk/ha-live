@@ -110,6 +110,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Talk button listener for push-to-talk functionality
+    // TODO: Add runtime permission request for RECORD_AUDIO
+    @android.annotation.SuppressLint("MissingPermission")
     private val talkListener = View.OnTouchListener { _, event ->
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
