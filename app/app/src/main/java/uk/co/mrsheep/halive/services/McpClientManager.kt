@@ -21,6 +21,7 @@ class McpClientManager(
     private val haToken: String
 ) {
     private val json = Json {
+        encodeDefaults = true
         ignoreUnknownKeys = true
         prettyPrint = false
     }
@@ -30,6 +31,7 @@ class McpClientManager(
         .build()
 
     private var eventSource: EventSource? = null
+    private var endpoint: String? = null
     private var isInitialized = false
     private val nextRequestId = AtomicInteger(1)
     private val pendingRequests = ConcurrentHashMap<Int, CompletableDeferred<JsonRpcResponse>>()
@@ -43,9 +45,11 @@ class McpClientManager(
      */
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
         try {
+            Log.d(TAG, "Connecting to: \"$haBaseUrl/mcp_server/sse\"")
+
             // 1. Open SSE connection
             val request = Request.Builder()
-                .url("$haBaseUrl/api/mcp")
+                .url("$haBaseUrl/mcp_server/sse")
                 .header("Authorization", "Bearer $haToken")
                 .header("Accept", "text/event-stream")
                 .build()
@@ -56,9 +60,11 @@ class McpClientManager(
 
             // Wait for connection to open
             sseListener.waitForConnection()
+            endpoint = sseListener.waitForEndpoint()
 
             // 2. Send initialize request
             val initParams = InitializeParams(
+//                protocolVersion = "2024-11-05",
                 capabilities = ClientCapabilities(),
                 clientInfo = ClientInfo(
                     name = "HALiveAndroid",
@@ -67,6 +73,7 @@ class McpClientManager(
             )
 
             val initRequest = JsonRpcRequest(
+//                jsonrpc = "2.0",
                 id = nextRequestId.getAndIncrement(),
                 method = "initialize",
                 params = json.encodeToJsonElement(InitializeParams.serializer(), initParams)
@@ -88,6 +95,7 @@ class McpClientManager(
 
             // 3. Send initialized notification
             val initializedNotification = JsonRpcNotification(
+//                jsonrpc = "2.0",
                 method = "notifications/initialized"
             )
             sendNotification(initializedNotification)
@@ -95,7 +103,7 @@ class McpClientManager(
             isInitialized = true
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize MCP connection", e)
+            Log.e(TAG, "Failed to initialize MCP connection: ${e.toString()}", e)
             shutdown()
             throw McpException("Failed to initialize MCP connection", e)
         }
@@ -108,6 +116,7 @@ class McpClientManager(
         require(isInitialized) { "Must call initialize() first" }
 
         val request = JsonRpcRequest(
+//            jsonrpc = "2.0",
             id = nextRequestId.getAndIncrement(),
             method = "tools/list",
             params = null
@@ -140,6 +149,7 @@ class McpClientManager(
         )
 
         val request = JsonRpcRequest(
+            jsonrpc = "2.0",
             id = nextRequestId.getAndIncrement(),
             method = "tools/call",
             params = json.encodeToJsonElement(ToolCallParams.serializer(), toolCallParams)
@@ -194,8 +204,9 @@ class McpClientManager(
     private fun sendMessage(message: String) {
         scope.launch {
             try {
+                Log.d(TAG, "Sending $message")
                 val request = Request.Builder()
-                    .url("$haBaseUrl/api/mcp")
+                    .url("$haBaseUrl$endpoint")
                     .header("Authorization", "Bearer $haToken")
                     .header("Content-Type", "application/json")
                     .post(message.toRequestBody("application/json".toMediaType()))
@@ -230,13 +241,18 @@ class McpClientManager(
      */
     private inner class McpEventSourceListener : EventSourceListener() {
         private val connectionEstablished = CompletableDeferred<Unit>()
+        private val endpointSet = CompletableDeferred<String>()
 
         suspend fun waitForConnection() {
             connectionEstablished.await()
         }
 
+        suspend fun waitForEndpoint(): String {
+            return endpointSet.await()
+        }
+
         override fun onOpen(eventSource: EventSource, response: Response) {
-            Log.d(TAG, "SSE connection opened")
+            Log.d(TAG, "SSE connection opened, ${response.body.toString()}")
             connectionEstablished.complete(Unit)
         }
 
@@ -246,6 +262,15 @@ class McpClientManager(
             type: String?,
             data: String
         ) {
+            Log.d(TAG, "Received event of type ${type} (ID: ${id})")
+            when (type) {
+                "endpoint" -> {
+                    endpointSet.complete(data )
+                    Log.d(TAG, "Endpoint set to $data")
+                    return
+                }
+            }
+
             scope.launch {
                 try {
                     // Parse incoming JSON-RPC message
@@ -260,7 +285,8 @@ class McpClientManager(
                         handleServerMessage(data)
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to parse message: $data", e)
+                    // It's not a JSON message - likely the channel establishment message, ignore.
+                    Log.w(TAG, "Failed to parse message, ignoring: $data", e)
                 }
             }
         }

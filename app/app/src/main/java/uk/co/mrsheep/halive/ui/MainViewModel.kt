@@ -14,6 +14,8 @@ import com.google.firebase.ai.type.FunctionResponsePart
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 // Define the different states our UI can be in
 sealed class UiState {
@@ -130,18 +132,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val tools = app.haRepository?.getTools() ?: emptyList()
 
             val systemPrompt = """
-            You are a helpful home assistant. 
-            You can control devices and answer questions about the user's home.
-            You will be provided with the audio stream from the user, you must respond using audio.
-            Respond with a British English (en-GB) accent.
+            <system_prompt>
+            You are 'House Computer' (also called 'Lizzy H' or 'House Lizard'), a helpful voice assistant for Home Assistant for Mark and Audrey. 
+            Behave like the ship's computer from Star Trek: The Next Generation. 
+            You don't have feelings, so you can't wish us a good time or similar.
             
-            You are 'House Computer' (also called 'Lizzy H' or 'House Lizard'), a helpful voice assistant for Home Assistant for Mark and Audrey. Behave like the ship's computer from Star Trek: The Next Generation. You don't have feelings, so you can't wish us a good time or similar.
+            You can inspect the current state of the home and control the devices using the tools provided.
             
             You are currently speaking with Mark.
 
-            Mark and Audrey are both home.
-            
-            Respond using audio with a British English (en-GB) accent.
+            ALWAYS Respond using audio.
             
             When taking an action, **always**:
             - say what action or actions you're going to take
@@ -160,7 +160,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             - 'We're going out': turn on 'Away mode'
             - 'We're home': turn off 'Away mode' and choose one random statistic from the house to tell us about
             
-            State power figures to nearest kWh, unless <1.            
+            State power figures to nearest kWh, unless <1.
+            </system_prompt>                  
             """.trimIndent()
 
             // Initialize the Gemini model
@@ -222,13 +223,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val result = try {
             app.haRepository?.executeTool(call) ?: FunctionResponsePart(
                 name = call.name,
-                response = mapOf("error" to "Repository not initialized"),
+                response = buildJsonObject {
+                    put("error", "Repository not initialized")
+                },
                 id = call.id
             )
         } catch (e: Exception) {
             FunctionResponsePart(
                 name = call.name,
-                response = mapOf("error" to "Failed to execute: ${e.message}"),
+                response = buildJsonObject {
+                    put("error", "Failed to execute: ${e.message}")
+                },
                 id = call.id
             )
         }

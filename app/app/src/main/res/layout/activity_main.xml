@@ -37,7 +37,7 @@
             android:layout_height="wrap_content"
             android:hint="Home Assistant URL"
             android:inputType="textUri"
-            android:text="https://homeassistant.local:8123" />
+            android:text="http://192.168.20.253:8123" />
 
         <EditText
             android:id="@+id/haTokenInput"

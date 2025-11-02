@@ -9,6 +9,8 @@ import com.google.firebase.ai.type.FunctionResponsePart
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import uk.co.mrsheep.halive.services.mcp.*
 
 class HomeAssistantRepository(
@@ -129,9 +131,9 @@ class HomeAssistantRepository(
             // Handle exceptions (network errors, timeouts, etc.)
             FunctionResponsePart(
                 name = functionCall.name,
-                response = mapOf(
-                    "error" to "Exception: ${e.message}"
-                )
+                response = buildJsonObject {
+                    put("error", "Exception: ${e.message}")
+                }
             )
         }
     }
@@ -161,9 +163,9 @@ class HomeAssistantRepository(
 
         return FunctionResponsePart(
             name = name,
-            response = mapOf(
-                "result" to textContent.ifEmpty { "Success" }
-            )
+            response = buildJsonObject {
+                put("result", textContent.ifEmpty { "Success" })
+            }
         )
     }
 
@@ -180,9 +182,9 @@ class HomeAssistantRepository(
 
         return FunctionResponsePart(
             name = name,
-            response = mapOf(
-                "error" to errorMessage.ifEmpty { "Unknown error" }
-            )
+            response = buildJsonObject {
+                put("error", errorMessage.ifEmpty { "Unknown error" })
+            }
         )
     }
 
