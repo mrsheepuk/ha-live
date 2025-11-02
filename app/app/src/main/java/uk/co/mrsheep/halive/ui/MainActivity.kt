@@ -1,5 +1,7 @@
 package uk.co.mrsheep.halive.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.view.MotionEvent
@@ -10,6 +12,7 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import uk.co.mrsheep.halive.R
 import kotlinx.coroutines.launch
@@ -30,6 +33,25 @@ class MainActivity : AppCompatActivity() {
     ) { uri: Uri? ->
         uri?.let {
             viewModel.saveFirebaseConfigFile(it)
+        }
+    }
+
+    // Activity Result Launcher for audio permission
+    private val requestAudioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            // Permission granted, double-check and proceed with talk action
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                viewModel.onTalkButtonPressed()
+            }
+        } else {
+            // Permission denied, show error state
+            viewModel.onPermissionDenied()
         }
     }
 
@@ -110,12 +132,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Talk button listener for push-to-talk functionality
-    // TODO: Add runtime permission request for RECORD_AUDIO
-    @android.annotation.SuppressLint("MissingPermission")
     private val talkListener = View.OnTouchListener { _, event ->
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                viewModel.onTalkButtonPressed()
+                // Check audio permission before starting
+                if (ContextCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.RECORD_AUDIO
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    viewModel.onTalkButtonPressed()
+                } else {
+                    // Request permission
+                    requestAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
                 true
             }
             MotionEvent.ACTION_UP -> {

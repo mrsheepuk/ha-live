@@ -1,11 +1,10 @@
 package uk.co.mrsheep.halive.services
 
-import android.Manifest
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.util.Log
-import androidx.annotation.RequiresPermission
+import androidx.core.content.ContextCompat
 import com.google.firebase.Firebase
 import com.google.firebase.ai.LiveGenerativeModel
 import com.google.firebase.ai.ai
@@ -14,7 +13,11 @@ import com.google.firebase.ai.type.FunctionCallPart
 import com.google.firebase.ai.type.FunctionResponsePart
 import com.google.firebase.ai.type.LiveSession
 import com.google.firebase.ai.type.PublicPreviewAPI
+import com.google.firebase.ai.type.ResponseModality
+import com.google.firebase.ai.type.SpeechConfig
+import com.google.firebase.ai.type.Voice
 import com.google.firebase.ai.type.content
+import com.google.firebase.ai.type.liveGenerationConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,9 +38,6 @@ class GeminiService {
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
-    // Audio player for the model's voice
-    private var audioPlayer: AudioTrack? = null
-
     /**
      * Called by ViewModel on app launch, *after* Task 1 is complete.
      */
@@ -47,33 +47,13 @@ class GeminiService {
         generativeModel = Firebase.ai.liveModel(
             modelName = "gemini-live-2.5-flash-preview",
             systemInstruction = content { text(systemPrompt) },
-            tools = tools
+            tools = tools,
+            generationConfig = liveGenerationConfig {
+                responseModality = ResponseModality.AUDIO
+                speechConfig = SpeechConfig(voice = Voice("Puck"))
+
+            }
         )
-
-        // 2. Initialize the AudioTrack for playback
-        // Configuration for PCM, 24kHz, 16-bit mono based on Gemini API output
-        val sampleRate = 24000
-        val channelConfig = AudioFormat.CHANNEL_OUT_MONO
-        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-        val bufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-
-        audioPlayer = AudioTrack.Builder()
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build()
-            )
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setSampleRate(sampleRate)
-                    .setChannelMask(channelConfig)
-                    .setEncoding(audioFormat)
-                    .build()
-            )
-            .setBufferSizeInBytes(bufferSize)
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .build()
 
         Log.d(TAG, "GeminiService initialized with ${tools.size} tools")
     }
@@ -83,7 +63,6 @@ class GeminiService {
      * The handler is the *key* to connecting Task 2.
      */
     @OptIn(PublicPreviewAPI::class)
-    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     suspend fun startSession(
         // The ViewModel passes a lambda that knows how to call the repository
         functionCallHandler: (FunctionCallPart) -> FunctionResponsePart
@@ -102,6 +81,9 @@ class GeminiService {
             // 3. Start listening for responses
             listenForModelResponses()
 
+        } catch (e: SecurityException) {
+            Log.e(TAG, "No permission", e)
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start session", e)
             throw e
@@ -179,8 +161,6 @@ class GeminiService {
      */
     fun cleanup() {
         stopSession()
-        audioPlayer?.release()
-        audioPlayer = null
     }
 
     companion object {

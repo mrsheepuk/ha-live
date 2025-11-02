@@ -1,9 +1,7 @@
 package uk.co.mrsheep.halive.ui
 
-import android.Manifest
 import android.app.Application
 import android.net.Uri
-import androidx.annotation.RequiresPermission
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
@@ -132,7 +130,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // val tools = app.haRepository?.fetchTools() ?: emptyList()
             val tools = emptyList<com.google.firebase.ai.type.Tool>()
 
-            val systemPrompt = "You are a helpful home assistant. You can control devices and answer questions about the user's home."
+            val systemPrompt = """
+            You are a helpful home assistant. 
+            You can control devices and answer questions about the user's home.
+            You will be provided with the audio stream from the user, you must respond using audio.
+            Respond with a British English (en-GB) accent.
+            
+            You are 'House Computer' (also called 'Lizzy H' or 'House Lizard'), a helpful voice assistant for Home Assistant for Mark and Audrey. Behave like the ship's computer from Star Trek: The Next Generation. You don't have feelings, so you can't wish us a good time or similar.
+            
+            You are currently speaking with Mark.
+
+            Mark and Audrey are both home.
+            
+            Respond using audio with a British English (en-GB) accent.
+            
+            When taking an action, **always**:
+            - say what action or actions you're going to take
+            - call the tool or tools to perform the actions
+            - say the result of the actions
+            
+            Useful facts:
+            - House battery level 23%
+            - Outside temperature 4.3°C 
+            - Wake up time 07:25
+            - Solar forecast 9.3kWh
+            
+            Specific actions to take when we say certain things: 
+            - 'Good morning': run 'Set house state' to 'Day', report house battery level, solar forecast, outside temperature.
+            - 'Good night', 'Time for bed', 'We're done downstairs': run 'Set house state' to 'Sleep', {report house battery level, outside temperature, wake up time, solar forecast.
+            - 'We're going out': turn on 'Away mode'
+            - 'We're home': turn off 'Away mode' and choose one random statistic from the house to tell us about
+            
+            State power figures to nearest kWh, unless <1.            
+            """.trimIndent()
 
             // Initialize the Gemini model
             geminiService.initializeModel(tools, systemPrompt)
@@ -143,7 +173,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun onTalkButtonPressed() {
         _uiState.value = UiState.Listening
         viewModelScope.launch {
@@ -161,6 +190,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun onTalkButtonReleased() {
         geminiService.stopSession()
         _uiState.value = UiState.ReadyToTalk
+    }
+
+    /**
+     * Called when the user denies the RECORD_AUDIO permission.
+     */
+    fun onPermissionDenied() {
+        _uiState.value = UiState.Error("Microphone permission is required to use voice assistant")
     }
 
     /**
