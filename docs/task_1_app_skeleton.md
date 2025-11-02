@@ -31,7 +31,7 @@ The file structure is similar, but the logic inside the files is different.
 
 app/
 ├── src/main/
-│   ├── java/com/example/halive/
+│   ├── java/uk/co/mrsheep/halive/
 │   │   ├── core/
 │   │   │   ├── **FirebaseConfig.kt** <-- (Parses JSON and uses SharedPreferences)
 │   │   │   └── **HAConfig.kt** <-- (NEW: Stores HA URL and token)
@@ -55,12 +55,12 @@ app/
 ### **HAGeminiApp.kt (Application Class)**
 
 ```kotlin
-package com.example.halive
+package uk.co.mrsheep.halive
 
 import android.app.Application
-import com.example.halive.core.FirebaseConfig
-import com.example.halive.services.McpClientManager
-import com.example.halive.services.HomeAssistantRepository
+import uk.co.mrsheep.halive.core.FirebaseConfig
+import uk.co.mrsheep.halive.services.McpClientManager
+import uk.co.mrsheep.halive.services.HomeAssistantRepository
 
 class HAGeminiApp : Application() {
     // Global MCP client - will be initialized after HA config
@@ -101,7 +101,7 @@ class HAGeminiApp : Application() {
 ### **core/HAConfig.kt (NEW: Home Assistant Config Manager)**
 
 ```kotlin
-package com.example.halive.core
+package uk.co.mrsheep.halive.core
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -149,7 +149,7 @@ object HAConfig {
 ### **core/FirebaseConfig.kt (Config Manager)**
 
 ```kotlin
-package com.example.halive.core
+package uk.co.mrsheep.halive.core
 
 import android.content.Context  
 import android.net.Uri  
@@ -250,7 +250,7 @@ object FirebaseConfig {
 ### **services/McpClientManager.kt (NEW: MCP Connection Manager)**
 
 ```kotlin
-package com.example.halive.services
+package uk.co.mrsheep.halive.services
 
 // NOTE: This is a STUB for Task 0. Full implementation in Task 2.
 // This class will handle:
@@ -289,7 +289,7 @@ class McpClientManager(
 ### **services/HomeAssistantRepository.kt (Wraps MCP Client)**
 
 ```kotlin
-package com.example.halive.services
+package uk.co.mrsheep.halive.services
 
 // NOTE: This is a STUB for Task 0. Full implementation in Tasks 2 & 3.
 
@@ -304,15 +304,15 @@ class HomeAssistantRepository(
 ### **ui/MainViewModel.kt (State Holder)**
 
 ```kotlin
-package com.example.halive.ui
+package uk.co.mrsheep.halive.ui
 
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.halive.HAGeminiApp
-import com.example.halive.core.FirebaseConfig
-import com.example.halive.core.HAConfig
+import uk.co.mrsheep.halive.HAGeminiApp
+import uk.co.mrsheep.halive.core.FirebaseConfig
+import uk.co.mrsheep.halive.core.HAConfig
 import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -431,7 +431,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
 ### **ui/MainActivity.kt (The View)**
 
-package com.example.halive.ui
+package uk.co.mrsheep.halive.ui
 
 import android.os.Bundle  
 import android.view.MotionEvent  
@@ -442,7 +442,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels  
 import androidx.appcompat.app.AppCompatActivity  
 import androidx.lifecycle.lifecycleScope  
-import com.example.halive.R  
+import uk.co.mrsheep.halive.R  
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
