@@ -1,0 +1,41 @@
+package uk.co.mrsheep.halive
+
+import android.app.Application
+import uk.co.mrsheep.halive.core.FirebaseConfig
+import uk.co.mrsheep.halive.services.McpClientManager
+import uk.co.mrsheep.halive.services.HomeAssistantRepository
+
+class HAGeminiApp : Application() {
+    // Global MCP client - will be initialized after HA config
+    var mcpClient: McpClientManager? = null
+    var haRepository: HomeAssistantRepository? = null
+
+    override fun onCreate() {
+        super.onCreate()
+
+        // Try to initialize Firebase on launch
+        FirebaseConfig.initializeFirebase(this)
+
+        // Note: MCP connection is NOT established here
+        // It will be established in MainActivity after user configures HA
+    }
+
+    /**
+     * Called by MainActivity after user provides HA credentials.
+     * Establishes the MCP SSE connection and performs initialization handshake.
+     */
+    suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
+        mcpClient = McpClientManager(haUrl, haToken)
+        mcpClient?.initialize() // SSE connection + MCP handshake
+        haRepository = HomeAssistantRepository(mcpClient!!)
+    }
+
+    /**
+     * Called when app is closing to gracefully shut down MCP connection.
+     */
+    fun shutdownHomeAssistant() {
+        mcpClient?.shutdown()
+        mcpClient = null
+        haRepository = null
+    }
+}
