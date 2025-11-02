@@ -1,0 +1,405 @@
+Live Context: An overview of the areas and the devices in this smart home:
+- names: Audrey bedside lamp
+  domain: switch
+  state: 'off'
+  areas: Front bedroom
+- names: Available house battery energy
+  domain: sensor
+  state: '1.75'
+  areas: Under-stairs cupboard
+  attributes:
+    unit_of_measurement: kWh
+    device_class: energy
+- names: Away mode, house away mode
+  domain: input_boolean
+  state: 'off'
+- names: Back Bedroom Velux
+  domain: cover
+  state: closed
+  areas: Back bedroom
+  attributes:
+    current_position: '0'
+    device_class: window
+- names: Back bedroom blind
+  domain: cover
+  state: closed
+  areas: Back bedroom
+  attributes:
+    current_position: '0'
+- names: Back bedroom lamp 1
+  domain: switch
+  state: 'off'
+  areas: Back bedroom
+- names: Back bedroom lamp 2
+  domain: switch
+  state: 'off'
+  areas: Back bedroom
+- names: Courtyard lights
+  domain: switch
+  state: 'off'
+  areas: Courtyard, landing
+- names: Current power production
+  domain: sensor
+  state: '1.549'
+  areas: Under-stairs cupboard
+  attributes:
+    unit_of_measurement: kW
+    device_class: power
+- names: Ensuite niche lights
+  domain: light
+  state: 'on'
+  areas: Ensuite
+  attributes:
+    brightness: '203'
+- names: Ensuite towel rail
+  domain: light
+  state: 'off'
+  areas: Ensuite
+- names: Family bathroom towel rail
+  domain: light
+  state: 'off'
+  areas: Family bathroom
+- names: Finish in relative
+  domain: number
+  state: unavailable
+  areas: Utility
+  attributes:
+    unit_of_measurement: s
+- names: Front room main light
+  domain: light
+  state: 'off'
+  areas: Front room
+  attributes:
+    brightness:
+- names: Front room shelf lights
+  domain: light
+  state: unavailable
+  areas: Front room
+- names: Hall lights
+  domain: switch
+  state: 'off'
+  areas: Hallway
+- names: Heat pump consumption today
+  domain: sensor
+  state: unavailable
+  areas: Shed
+  attributes:
+    unit_of_measurement: kWh
+    device_class: energy
+- names: Home Outdoor Temperature
+  domain: sensor
+  state: '10.3'
+  areas: Shed
+  attributes:
+    unit_of_measurement: °C
+    device_class: temperature
+- names: Home state, home mode, house state, house mode
+  domain: input_select
+  state: Day
+- names: Hot Water
+  domain: water_heater
+  state: Time Controlled
+  areas: Boiler room
+  attributes:
+    current_temperature: 45.5
+    temperature: 50.0
+- names: Hot Water Boost
+  domain: switch
+  state: 'off'
+  areas: Boiler room
+- names: Hot Water Tank Temperature
+  domain: sensor
+  state: '45.5'
+  areas: Boiler room
+  attributes:
+    unit_of_measurement: °C
+    device_class: temperature
+- names: House battery level
+  domain: sensor
+  state: '35'
+  areas: Under-stairs cupboard
+  attributes:
+    unit_of_measurement: '%'
+    device_class: battery
+- names: House consumption today excl. battery
+  domain: sensor
+  state: '6.52808332506917'
+  attributes:
+    unit_of_measurement: kWh
+    device_class: energy
+- names: House current power usage
+  domain: sensor
+  state: '2.708'
+  attributes:
+    unit_of_measurement: kW
+    device_class: power
+- names: Humidity - Back bedroom
+  domain: sensor
+  state: '55.3'
+  areas: Back bedroom
+  attributes:
+    unit_of_measurement: '%'
+    device_class: humidity
+- names: Humidity - Ensuite
+  domain: sensor
+  state: '58.2'
+  areas: Ensuite
+  attributes:
+    unit_of_measurement: '%'
+    device_class: humidity
+- names: Humidity - Family bathroom
+  domain: sensor
+  state: '60.3'
+  areas: Family bathroom
+  attributes:
+    unit_of_measurement: '%'
+    device_class: humidity
+- names: Humidity - Front bedroom
+  domain: sensor
+  state: '56.6'
+  areas: Front bedroom
+  attributes:
+    unit_of_measurement: '%'
+    device_class: humidity
+- names: Humidity - Kitchen
+  domain: sensor
+  state: '54.4'
+  areas: Kitchen
+  attributes:
+    unit_of_measurement: '%'
+    device_class: humidity
+- names: Humidity - Living room
+  domain: sensor
+  state: '55.4'
+  areas: Front room
+  attributes:
+    unit_of_measurement: '%'
+    device_class: humidity
+- names: Humidity - Mezzanine
+  domain: sensor
+  state: '55.3'
+  areas: Mezzanine
+  attributes:
+    unit_of_measurement: '%'
+    device_class: humidity
+- names: Kitchen dew point
+  domain: sensor
+  state: '11.64'
+  areas: Kitchen
+  attributes:
+    unit_of_measurement: °C
+    device_class: temperature
+- names: Kitchen evening
+  domain: scene
+  state: '2025-10-26T19:34:48.855921+00:00'
+  areas: Kitchen
+- names: Kitchen main lights, main lights
+  domain: light
+  state: 'off'
+  areas: Kitchen
+  attributes:
+    brightness:
+- names: Kitchen speaker
+  domain: media_player
+  state: 'off'
+  attributes:
+    device_class: speaker
+- names: Living Room Chromecast
+  domain: media_player
+  state: 'off'
+  areas: Nook
+  attributes:
+    device_class: tv
+- names: Living Room Chromecast
+  domain: media_player
+  state: 'off'
+- names: Mark Desktop PC
+  domain: switch
+  state: 'on'
+  areas: Mezzanine
+  attributes:
+    device_class: outlet
+- names: Mark bedside lamp
+  domain: switch
+  state: 'off'
+  areas: Front bedroom
+- names: Mezzanine TV
+  domain: media_player
+  state: 'off'
+- names: Mezzanine Velux
+  domain: cover
+  state: closed
+  areas: Mezzanine
+  attributes:
+    current_position: '0'
+    device_class: window
+- names: Mezzanine blind
+  domain: cover
+  state: open
+  areas: Mezzanine
+  attributes:
+    current_position: '100'
+- names: Mezzanine cinema
+  domain: scene
+  state: '2025-09-28T20:02:55.754258+00:00'
+  areas: Mezzanine
+- names: Mezzanine lights
+  domain: light
+  state: 'off'
+  areas: Mezzanine
+  attributes:
+    brightness:
+- names: Mezzanine twilight
+  domain: scene
+  state: '2025-09-28T22:29:47.765952+00:00'
+  areas: Mezzanine
+- names: Mr Coffee, coffee machine, coffee
+  domain: switch
+  state: 'off'
+  areas: Kitchen
+- names: Nook lights, nook lights
+  domain: light
+  state: 'off'
+  areas: Nook
+  attributes:
+    brightness:
+- names: Outside front lights
+  domain: switch
+  state: 'off'
+  areas: Front garden
+- names: Outside rear lights
+  domain: switch
+  state: 'off'
+  areas: Garden
+- names: Portable speaker
+  domain: media_player
+  state: 'off'
+  attributes:
+    device_class: speaker
+- names: Radiators Flow Temperature
+  domain: sensor
+  state: '25.0'
+  areas: Boiler room
+  attributes:
+    unit_of_measurement: °C
+    device_class: temperature
+- names: Solar Forecast (Solcast) Forecast Today
+  domain: sensor
+  state: '11.6475'
+  areas: Roof
+  attributes:
+    unit_of_measurement: kWh
+    device_class: energy
+- names: Solar Forecast (Solcast) Forecast Tomorrow
+  domain: sensor
+  state: '4.5367'
+  areas: Roof
+  attributes:
+    unit_of_measurement: kWh
+    device_class: energy
+- names: Stairs lights
+  domain: switch
+  state: 'off'
+  areas: Hallway
+- names: Temperature - Back bedroom
+  domain: sensor
+  state: '21.1'
+  areas: Back bedroom
+  attributes:
+    unit_of_measurement: °C
+    device_class: temperature
+- names: Temperature - Ensuite
+  domain: sensor
+  state: '21.3'
+  areas: Ensuite
+  attributes:
+    unit_of_measurement: °C
+    device_class: temperature
+- names: Temperature - Family bathroom
+  domain: sensor
+  state: '20.2'
+  areas: Family bathroom
+  attributes:
+    unit_of_measurement: °C
+    device_class: temperature
+- names: Temperature - Front bedroom
+  domain: sensor
+  state: '21.2'
+  areas: Front bedroom
+  attributes:
+    unit_of_measurement: °C
+    device_class: temperature
+- names: Temperature - Kitchen
+  domain: sensor
+  state: '21.2'
+  areas: Kitchen
+  attributes:
+    unit_of_measurement: °C
+    device_class: temperature
+- names: Temperature - Living room
+  domain: sensor
+  state: '20.7'
+  areas: Front room
+  attributes:
+    unit_of_measurement: °C
+    device_class: temperature
+- names: Temperature - Mezzanine
+  domain: sensor
+  state: '21.3'
+  areas: Mezzanine
+  attributes:
+    unit_of_measurement: °C
+    device_class: temperature
+- names: Underfloor Heating Flow Temperature
+  domain: sensor
+  state: '25.1875'
+  areas: Boiler room
+  attributes:
+    unit_of_measurement: °C
+    device_class: temperature
+- names: Wake up time
+  domain: input_datetime
+  state: 09:15:00
+- names: Washing machine Active programme
+  domain: select
+  state: laundry_care_washer_program_cotton
+  areas: Utility
+- names: Washing machine Operation state
+  domain: sensor
+  state: run
+  areas: Utility
+  attributes:
+    device_class: enum
+- names: Washing machine Programme finish time
+  domain: sensor
+  state: '2025-11-02T12:26:05+00:00'
+  areas: Utility
+  attributes:
+    device_class: timestamp
+- names: audrey
+  domain: person
+  state: not_home
+- names: blink home
+  domain: alarm_control_panel
+  state: unavailable
+- names: mark
+  domain: person
+  state: home
+- names: myenergi Home Generated today
+  domain: sensor
+  state: '3.04'
+  attributes:
+    unit_of_measurement: kWh
+    device_class: energy
+- names: myenergi Home Grid export today
+  domain: sensor
+  state: '0.39'
+  attributes:
+    unit_of_measurement: kWh
+    device_class: energy
+- names: myenergi Home Grid import today
+  domain: sensor
+  state: '4.02'
+  attributes:
+    unit_of_measurement: kWh
+    device_class: energy

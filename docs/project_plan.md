@@ -8,6 +8,52 @@ The app will provide a continuous, "live" conversational experience, allowing th
 
 This will be achieved by using the **Gemini Live API** for real-time audio streaming and the **Home Assistant Model Context Protocol (MCP) Server** as the dynamic "source of truth" for the assistant's capabilities.
 
+## Revised Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Android App                            │
+│                                                             │
+│  ┌────────────────┐         ┌─────────────────────────┐     │
+│  │ Gemini Live    │         │   McpClientManager      │     │
+│  │ Session        │         │   ├─ SSE Connection     │     │
+│  │                │         │   ├─ Init handshake     │     │
+│  │ ┌────────────┐ │         │   ├─ Request queue      │     │
+│  │ │ Mic Input  │ │         │   └─ Message router     │     │
+│  │ └────────────┘ │         └───────────┬─────────────┘     │
+│  │                │                     │                   │
+│  │ ┌────────────┐ │         ┌───────────▼─────────────┐     │
+│  │ │Speaker Out │ │         │  HomeAssistantRepository│     │
+│  │ └────────────┘ │◄────────┤  ├─ getTools()          │     │
+│  │                │         │  └─ executeTool()       │     │
+│  │  Tools: List   │         └─────────────────────────┘     │
+│  │  [HassTurnOn,  │                                         │
+│  │   HassLightSet,│                                         │
+│  │   ...]         │                                         │
+│  └────────────────┘                                         │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ SSE (persistent)
+                              │
+┌─────────────────────────────▼───────────────────────────────┐
+│              Home Assistant MCP Server                      │
+│                                                             │
+│  ┌─────────────────────────────────────────────────┐        │
+│  │  MCP Protocol Handler                           │        │
+│  │  ├─ Initialize handshake                        │        │
+│  │  ├─ tools/list → returns [HassTurnOn, ...]      │        │
+│  │  └─ tools/call → executes HA service            │        │
+│  └───────────────────────┬─────────────────────────┘        │
+│                          │                                  │
+│  ┌───────────────────────▼─────────────────────────┐        │
+│  │  Home Assistant Core                            │        │
+│  │  ├─ light.turn_on                               │        │
+│  │  ├─ media_player.set_volume                     │        │
+│  │  └─ ...                                         │        │
+│  └─────────────────────────────────────────────────┘        │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ## **2. Core Components**
 
 1. **Android App (The "Orchestrator"):**  
@@ -70,19 +116,24 @@ The core logic of this app, and our primary development focus, lies in two key "
 
 We will follow a risk-first approach, prioritizing the validation of the core "live" conversational experience before building the production-level HA connectors.
 
-1. **Task 0: Android App Skeleton:**  
-   * Create the base Android project, permissions, dependencies, ViewModels, and UI (per the task_0_app_skeleton.md plan).  
-2. **Task 1: Gemini Live API Integration & Mock Executor:**  
-   * Implement the GeminiService (per task_1_live_api_wiring.md) to manage the LiveSession, microphone, and AudioTrack playback.  
-   * **Instead of Task 2:** In MainViewModel, hard-code a *dummy* list of tools (e.g., Tool(name="light.turn_on", ...)).  
-   * **Instead of Task 3:** In MainViewModel, create a *dummy* executeHomeAssistantTool function. This function will *not* call HA. It will use a when statement on the function name, delay(1000) to simulate a network call, and return a hard-coded "success" FunctionResponsePart.  
-   * **Goal:** Have a fully working app that *feels* real to the user. We can test the audio latency, transcription, and conversational flow.  
-3. **Task 2: MCP Discovery & Transformation:**  
-   * With the core app validated, now build the *real* "Glue Task #1" (per task_2_mcp_transformer.md).  
-   * Implement the network call to the MCP server and the JSON transformation logic.  
-   * **Swap:** Replace the *dummy* tool list from Step 2 with the *real*, dynamically-fetched list from this task.  
-4. **Task 3: HA Service Execution:**  
-   * Build the *real* "Glue Task #2" (per task_3_ha_executor.md).  
-   * Implement the Retrofit/Ktor interface and the executeTool function in the HomeAssistantRepository.  
-   * **Swap:** Replace the *dummy* executeHomeAssistantTool function in the MainViewModel with the *real* one that calls the repository.  
-5. **Final Test:** At this point, all mock components have been replaced with real, data-driven components. The app is feature-complete.
+1. **Task 1: Android App Skeleton:**
+   * Create the base Android project with BYOFP (Bring Your Own Firebase Project) setup
+   * Create HA configuration UI (URL + token input)
+   * Establish persistent MCP SSE connection to Home Assistant (mocked - implement in Task 3)
+   * See: [task_1_app_skeleton.md](task_1_app_skeleton.md)
+
+2. **Task 2: Gemini Live API Integration & Mock Executor:**
+   * Implement the GeminiService to manage the LiveSession, microphone, and AudioTrack playback
+   * **Instead of Task 2:** Hard-code a *dummy* list of tools (e.g., Tool(name="HassTurnOn", ...))
+   * **Instead of Task 2:** Create a *dummy* executeHomeAssistantTool function with delay(1000) and hard-coded "success" responses
+   * **Goal:** Have a fully working app that *feels* real. Test audio latency, transcription, and conversational flow.
+   * See: [task_2_live_api_wiring.md](task_2_live_api_wiring.md)
+
+3. **Task 3: Complete MCP Client (Discovery & Execution):**
+   * Build the complete MCP client with SSE connection management
+   * Implement tool discovery (fetch + transform tools from MCP to Gemini format)
+   * Implement tool execution (call tools via MCP and return results to Gemini)
+   * **Swap:** Replace *both* dummy components from Task 1 with the real MCP client
+   * See: [task_3_mcp_transformer.md](task_3_mcp_transformer.md)
+
+4. **Final Test:** At this point, all mock components have been replaced with real, data-driven components. The app is feature-complete.
