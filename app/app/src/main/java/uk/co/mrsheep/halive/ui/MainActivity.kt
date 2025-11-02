@@ -40,14 +40,7 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            // Permission granted, double-check and proceed with chat action
-            if (ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.RECORD_AUDIO
-                ) == PackageManager.PERMISSION_GRANTED
-            ) {
-                viewModel.onChatButtonClicked()
-            }
+            viewModel.onChatButtonClicked()
         } else {
             // Permission denied, show error state
             viewModel.onPermissionDenied()
