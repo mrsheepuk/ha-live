@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
-import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
@@ -41,13 +40,13 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            // Permission granted, double-check and proceed with talk action
+            // Permission granted, double-check and proceed with chat action
             if (ContextCompat.checkSelfPermission(
                     this,
                     Manifest.permission.RECORD_AUDIO
                 ) == PackageManager.PERMISSION_GRANTED
             ) {
-                viewModel.onTalkButtonPressed()
+                viewModel.onChatButtonClicked()
             }
         } else {
             // Permission denied, show error state
@@ -106,20 +105,29 @@ class MainActivity : AppCompatActivity() {
             UiState.ReadyToTalk -> {
                 mainButton.visibility = View.VISIBLE
                 haConfigContainer.visibility = View.GONE
-                mainButton.text = "TALK"
-                statusText.text = "Hold to Talk"
-                mainButton.setOnClickListener(null) // Remove config listeners
-                mainButton.setOnTouchListener(talkListener)
+                mainButton.text = "Start Chat"
+                statusText.text = "Ready to chat"
+                mainButton.setOnTouchListener(null) // Remove touch listener
+                mainButton.setOnClickListener(chatButtonClickListener)
+            }
+            UiState.ChatActive -> {
+                mainButton.visibility = View.VISIBLE
+                haConfigContainer.visibility = View.GONE
+                mainButton.text = "Stop Chat"
+                statusText.text = "Chat active - listening..."
+                // Listener is already active
             }
             UiState.Listening -> {
                 mainButton.visibility = View.VISIBLE
                 haConfigContainer.visibility = View.GONE
+                mainButton.text = "Stop Chat"
                 statusText.text = "Listening..."
                 // Listener is already active
             }
             UiState.ExecutingAction -> {
                 mainButton.visibility = View.VISIBLE
                 haConfigContainer.visibility = View.GONE
+                mainButton.text = "Stop Chat"
                 statusText.text = "Executing action..."
                 // Keep button active but show execution status
             }
@@ -131,28 +139,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Talk button listener for push-to-talk functionality
-    private val talkListener = View.OnTouchListener { _, event ->
-        when (event.action) {
-            MotionEvent.ACTION_DOWN -> {
-                // Check audio permission before starting
-                if (ContextCompat.checkSelfPermission(
-                        this,
-                        Manifest.permission.RECORD_AUDIO
-                    ) == PackageManager.PERMISSION_GRANTED
-                ) {
-                    viewModel.onTalkButtonPressed()
-                } else {
-                    // Request permission
-                    requestAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                }
-                true
-            }
-            MotionEvent.ACTION_UP -> {
-                viewModel.onTalkButtonReleased()
-                true
-            }
-            else -> false
+    // Chat button click listener for toggle functionality
+    private val chatButtonClickListener = View.OnClickListener {
+        // Check audio permission before starting
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            viewModel.onChatButtonClicked()
+        } else {
+            // Request permission
+            requestAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 }

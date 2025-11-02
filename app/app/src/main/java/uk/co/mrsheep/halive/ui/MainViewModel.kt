@@ -22,7 +22,8 @@ sealed class UiState {
     object Loading : UiState()
     object FirebaseConfigNeeded : UiState()  // Need google-services.json
     object HAConfigNeeded : UiState()        // Need HA URL + token
-    object ReadyToTalk : UiState()           // Everything initialized
+    object ReadyToTalk : UiState()           // Everything initialized, ready to start chat
+    object ChatActive : UiState()            // Chat session is active (listening or executing)
     object Listening : UiState()
     object ExecutingAction : UiState()       // Executing a Home Assistant action
     data class Error(val message: String) : UiState()
@@ -35,6 +36,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as HAGeminiApp
     private val geminiService = GeminiService()
+
+    // Track whether a chat session is currently active
+    private var isSessionActive = false
 
     init {
         checkConfiguration()
@@ -173,8 +177,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun onTalkButtonPressed() {
-        _uiState.value = UiState.Listening
+    fun onChatButtonClicked() {
+        if (isSessionActive) {
+            // Stop the chat session
+            stopChat()
+        } else {
+            // Start the chat session
+            startChat()
+        }
+    }
+
+    private fun startChat() {
+        isSessionActive = true
+        _uiState.value = UiState.ChatActive
         viewModelScope.launch {
             try {
                 // Start the session, passing our Task 2 executor as the handler
@@ -182,13 +197,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     functionCallHandler = ::executeHomeAssistantTool
                 )
             } catch (e: Exception) {
+                isSessionActive = false
                 _uiState.value = UiState.Error("Failed to start session: ${e.message}")
             }
         }
     }
 
-    fun onTalkButtonReleased() {
+    private fun stopChat() {
         geminiService.stopSession()
+        isSessionActive = false
         _uiState.value = UiState.ReadyToTalk
     }
 
