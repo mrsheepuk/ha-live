@@ -62,13 +62,13 @@ class HomeAssistantRepository(
             val firstOption = mcpProp.anyOf.first()
             return when (firstOption.type.lowercase()) {
                 "string" -> if (firstOption.enum != null) {
-                    Schema.enumeration(firstOption.enum, mcpProp.description)
+                    Schema.enumeration(firstOption.enum, mcpProp.description, true)
                 } else {
-                    Schema.string(mcpProp.description)
+                    Schema.string(mcpProp.description, true)
                 }
-                "integer", "number" -> Schema.integer(mcpProp.description)
-                "boolean" -> Schema.boolean(mcpProp.description)
-                else -> Schema.string(mcpProp.description)
+                "integer", "number" -> Schema.integer(mcpProp.description, true)
+                "boolean" -> Schema.boolean(mcpProp.description, true)
+                else -> Schema.string(mcpProp.description, true)
             }
         }
 
@@ -76,29 +76,29 @@ class HomeAssistantRepository(
         if (mcpProp.type == "array" && mcpProp.items != null) {
             val itemSchema = when (mcpProp.items.type.lowercase()) {
                 "string" -> if (mcpProp.items.enum != null) {
-                    Schema.enumeration(mcpProp.items.enum)
+                    Schema.enumeration(mcpProp.items.enum, null, true)
                 } else {
-                    Schema.string()
+                    Schema.string(null, true)
                 }
-                "integer", "number" -> Schema.integer()
-                "boolean" -> Schema.boolean()
-                else -> Schema.string()
+                "integer", "number" -> Schema.integer(null, true)
+                "boolean" -> Schema.boolean(null, true)
+                else -> Schema.string(null, true)
             }
-            return Schema.array(itemSchema, mcpProp.description)
+            return Schema.array(itemSchema, mcpProp.description, true)
         }
 
         // Handle simple types
         return when (mcpProp.type?.lowercase()) {
             "string" -> if (mcpProp.enum != null) {
-                Schema.enumeration(mcpProp.enum, mcpProp.description)
+                Schema.enumeration(mcpProp.enum, mcpProp.description, true)
             } else {
                 Schema.string(mcpProp.description)
             }
-            "integer" -> Schema.integer(mcpProp.description)
-            "number" -> Schema.double(mcpProp.description)
-            "boolean" -> Schema.boolean(mcpProp.description)
-            "object" -> Schema.obj(emptyMap(), emptyList(), mcpProp.description)
-            else -> Schema.string(mcpProp.description) // Default fallback
+            "integer" -> Schema.integer(mcpProp.description, true)
+            "number" -> Schema.double(mcpProp.description, true)
+            "boolean" -> Schema.boolean(mcpProp.description, true)
+            "object" -> Schema.obj(emptyMap(), emptyList(), mcpProp.description, true)
+            else -> Schema.string(mcpProp.description, true) // Default fallback
         }
     }
 
@@ -164,7 +164,7 @@ class HomeAssistantRepository(
         return FunctionResponsePart(
             name = name,
             response = buildJsonObject {
-                put("result", json.parseToJsonElement(textContent))
+                json.parseToJsonElement(textContent)
             }
         )
     }
