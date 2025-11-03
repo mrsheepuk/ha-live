@@ -164,7 +164,7 @@ class HomeAssistantRepository(
         return FunctionResponsePart(
             name = name,
             response = buildJsonObject {
-                put("result", textContent.ifEmpty { "Success" })
+                put("result", json.parseToJsonElement(textContent))
             }
         )
     }

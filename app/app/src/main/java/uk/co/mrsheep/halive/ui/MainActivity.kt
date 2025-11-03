@@ -25,6 +25,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var haUrlInput: EditText
     private lateinit var haTokenInput: EditText
     private lateinit var haConfigContainer: View
+    private lateinit var toolLogText: TextView
 
     // Activity Result Launcher for the file picker
     private val selectConfigFileLauncher = registerForActivityResult(
@@ -56,11 +57,19 @@ class MainActivity : AppCompatActivity() {
         haUrlInput = findViewById(R.id.haUrlInput)
         haTokenInput = findViewById(R.id.haTokenInput)
         haConfigContainer = findViewById(R.id.haConfigContainer)
+        toolLogText = findViewById(R.id.toolLogText)
 
         // Observe the UI state from the ViewModel
         lifecycleScope.launch {
             viewModel.uiState.collect { state ->
                 updateUiForState(state)
+            }
+        }
+
+        // Observe tool logs from the ViewModel
+        lifecycleScope.launch {
+            viewModel.toolLogs.collect { logs ->
+                updateToolLogs(logs)
             }
         }
     }
@@ -145,5 +154,27 @@ class MainActivity : AppCompatActivity() {
             // Request permission
             requestAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
+
+    private fun updateToolLogs(logs: List<ToolCallLog>) {
+        if (logs.isEmpty()) {
+            toolLogText.text = "Tool call log will appear here..."
+            return
+        }
+
+        // Format logs in reverse order (newest first)
+        val formattedLogs = logs.reversed().joinToString("\n\n") { log ->
+            val statusIcon = if (log.success) "✓" else "✗"
+            val statusColor = if (log.success) "SUCCESS" else "FAILED"
+
+            """
+            |[$statusIcon] ${log.timestamp} - $statusColor
+            |Tool: ${log.toolName}
+            |Params: ${log.parameters}
+            |Result: ${log.result}
+            """.trimMargin()
+        }
+
+        toolLogText.text = formattedLogs
     }
 }

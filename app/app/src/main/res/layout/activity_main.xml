@@ -55,9 +55,32 @@
         android:text="TALK"
         android:textSize="24sp"
         android:layout_marginTop="24dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/toolLogContainer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/haConfigContainer" />
+
+    <ScrollView
+        android:id="@+id/toolLogContainer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="24dp"
+        android:background="#F5F5F5"
+        android:padding="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/mainButton"
+        app:layout_constraintHeight_percent="0.3">
+
+        <TextView
+            android:id="@+id/toolLogText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:text="Tool call log will appear here..."
+            android:textSize="12sp"
+            android:textColor="#333333" />
+    </ScrollView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
