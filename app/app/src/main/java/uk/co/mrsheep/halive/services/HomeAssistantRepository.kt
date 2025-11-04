@@ -47,11 +47,18 @@ class HomeAssistantRepository(
             transformMcpPropertyToSchema(mcpProp)
         }
 
+        // Compile the list of optional properties: all properties NOT in the required list
+        val requiredProps = mcpTool.inputSchema.required ?: emptyList()
+        val optionalProps = mcpTool.inputSchema.properties.keys.filter { propName ->
+            propName !in requiredProps
+        }
+
         // Create the function declaration using the required field from MCP
         return FunctionDeclaration(
             name = mcpTool.name,
             description = mcpTool.description.ifEmpty { "No description provided" },
             parameters = geminiProperties,
+            optionalParameters = optionalProps,
         )
     }
 
@@ -122,15 +129,16 @@ class HomeAssistantRepository(
 
             // Check if it was an error
             if (result.isError == true) {
-                createErrorResponse(functionCall.name, result)
+                createErrorResponse(functionCall, result)
             } else {
-                createSuccessResponse(functionCall.name, result)
+                createSuccessResponse(functionCall, result)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Exception executing tool: ${functionCall.name}", e)
             // Handle exceptions (network errors, timeouts, etc.)
             FunctionResponsePart(
                 name = functionCall.name,
+                id = functionCall.id,
                 response = buildJsonObject {
                     put("error", "Exception: ${e.message}")
                 }
@@ -150,7 +158,7 @@ class HomeAssistantRepository(
     }
 
     private fun createSuccessResponse(
-        name: String,
+        functionCall: FunctionCallPart,
         result: ToolCallResult
     ): FunctionResponsePart {
         // Extract text content from MCP result
@@ -159,18 +167,19 @@ class HomeAssistantRepository(
             .mapNotNull { it.text }
             .joinToString("\n")
 
-        Log.d(TAG, "Tool $name succeeded: $textContent")
+        Log.d(TAG, "Tool ${functionCall.name} succeeded: $textContent")
 
         return FunctionResponsePart(
-            name = name,
+            name = functionCall.name,
+            id = functionCall.id,
             response = buildJsonObject {
-                json.parseToJsonElement(textContent)
+                put( key="result", json.parseToJsonElement(textContent))
             }
         )
     }
 
     private fun createErrorResponse(
-        name: String,
+        functionCall: FunctionCallPart,
         result: ToolCallResult
     ): FunctionResponsePart {
         val errorMessage = result.content
@@ -178,10 +187,11 @@ class HomeAssistantRepository(
             .mapNotNull { it.text }
             .joinToString("\n")
 
-        Log.e(TAG, "Tool $name failed: $errorMessage")
+        Log.e(TAG, "Tool ${functionCall.name} failed: $errorMessage")
 
         return FunctionResponsePart(
-            name = name,
+            name = functionCall.name,
+            id = functionCall.id,
             response = buildJsonObject {
                 put("error", errorMessage.ifEmpty { "Unknown error" })
             }

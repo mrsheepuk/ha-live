@@ -41,7 +41,8 @@ class GeminiService {
             tools = tools,
             generationConfig = liveGenerationConfig {
                 responseModality = ResponseModality.AUDIO
-                speechConfig = SpeechConfig(voice = Voice("Puck"))
+                // Good voices: 'Leda', 'Aoede'
+                speechConfig = SpeechConfig(voice = Voice("Aoede"))
 
             }
         )
