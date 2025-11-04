@@ -29,10 +29,22 @@ sealed class UiState {
     data class Error(val message: String) : UiState()
 }
 
+// Represents a tool call log entry
+data class ToolCallLog(
+    val timestamp: String,
+    val toolName: String,
+    val parameters: String,
+    val success: Boolean,
+    val result: String
+)
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState
+
+    private val _toolLogs = MutableStateFlow<List<ToolCallLog>>(emptyList())
+    val toolLogs: StateFlow<List<ToolCallLog>> = _toolLogs
 
     private val app = application as HAGeminiApp
     private val geminiService = GeminiService()
@@ -124,49 +136,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Initialize the Gemini model with tools from Task 1 (currently mocked).
+     * Initialize the Gemini model with tools from MCP.
      */
     private suspend fun initializeGemini() {
         try {
-            // TASK 1: Fetch and transform tools
-            // For now, we'll use an empty list as a placeholder
-            // Once Task 1 is complete, this will be:
-            // val tools = app.haRepository?.fetchTools() ?: emptyList()
-            val tools = emptyList<com.google.firebase.ai.type.Tool>()
+            // Fetch and transform tools from Home Assistant MCP server
+            val tools = app.haRepository?.getTools() ?: emptyList()
 
             val systemPrompt = """
-            You are a helpful home assistant. 
-            You can control devices and answer questions about the user's home.
-            You will be provided with the audio stream from the user, you must respond using audio.
-            Respond with a British English (en-GB) accent.
+            <system_prompt>
+            You are a helpful assistant integrated with Home Assistant. 
             
-            You are 'House Computer' (also called 'Lizzy H' or 'House Lizard'), a helpful voice assistant for Home Assistant for Mark and Audrey. Behave like the ship's computer from Star Trek: The Next Generation. You don't have feelings, so you can't wish us a good time or similar.
+            ALWAYS start the conversation by saying 'Hello', do not wait for the user to speak.
             
-            You are currently speaking with Mark.
+            Your job is to help the user, answering questions and calling the tools provided to perform actions requested.
+            
+            You are equipped to answer questions about the current state of the home using the `GetLiveContext` tool. This is a primary function. 
 
-            Mark and Audrey are both home.
-            
-            Respond using audio with a British English (en-GB) accent.
-            
+            If the user asks about the CURRENT state, value, or mode (e.g., "Is the lock locked?", "Is the fan on?", "What mode is the thermostat in?", "What is the temperature outside?"):
+                1.  Recognize this requires live data.
+                2.  You MUST call `GetLiveContext`. This tool will provide the needed real-time information (like temperature from the local weather, lock status, etc.).
+                3.  Use the tool's response to answer the user accurately (e.g., "The temperature outside is [value from tool].").
+
+            You can control many aspects of the home using the other tools provided. When calling tools to control things, prefer passing just name and domain parameters. 
+            Use `GetLiveContext` to determine the names, domains, to use to control devices.
+
             When taking an action, **always**:
-            - say what action or actions you're going to take
-            - call the tool or tools to perform the actions
-            - say the result of the actions
+            - Decide what action or actions you're going to take
+            - Call the tool or tools to perform the actions
+            - Confirm the action taken, or what error occurred if failed.
+            </system_prompt>
             
-            Useful facts:
-            - House battery level 23%
-            - Outside temperature 4.3°C 
-            - Wake up time 07:25
-            - Solar forecast 9.3kWh
+            <personality>
+            You are 'House Lizard' (also called 'Lizzy H'), a helpful voice assistant for Home Assistant for Mark and Audrey. 
+            Behave like the ship's computer from Star Trek: The Next Generation. 
+            </personality>
             
-            Specific actions to take when we say certain things: 
-            - 'Good morning': run 'Set house state' to 'Day', report house battery level, solar forecast, outside temperature.
-            - 'Good night', 'Time for bed', 'We're done downstairs': run 'Set house state' to 'Sleep', {report house battery level, outside temperature, wake up time, solar forecast.
-            - 'We're going out': turn on 'Away mode'
-            - 'We're home': turn off 'Away mode' and choose one random statistic from the house to tell us about
-            
-            State power figures to nearest kWh, unless <1.            
+            <background_info>
+            You are currently speaking with Mark.
+            </background_info>                  
             """.trimIndent()
+
+//            Specific actions to take when we say certain things:
+//            - 'Good morning': run 'Set house state' to 'Day', report house battery level, solar forecast, outside temperature.
+//            - 'Good night', 'Time for bed', 'We're done downstairs': run 'Set house state' to 'Sleep', {report house battery level, outside temperature, wake up time, solar forecast.
+//            - 'We're going out': turn on 'Away mode'
+//            - 'We're home': turn off 'Away mode' and choose one random statistic from the house to tell us about
+
 
             // Initialize the Gemini model
             geminiService.initializeModel(tools, systemPrompt)
@@ -218,28 +234,68 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * This is the function that is passed to `geminiService`.
-     * It directly connects the Gemini `functionCall` to our Task 2 executor.
+     * It directly connects the Gemini `functionCall` to the MCP executor.
      */
-    private fun executeHomeAssistantTool(call: FunctionCallPart): FunctionResponsePart {
+    private suspend fun executeHomeAssistantTool(call: FunctionCallPart): FunctionResponsePart {
         _uiState.value = UiState.ExecutingAction
 
-        // TASK 2: Execute the tool
-        // For now, this is a mock implementation
-        // Once Task 3 is complete, this will be:
-        // val result = app.haRepository?.executeTool(call) ?: createErrorResponse(call)
+        // Prepare parameters string for logging
+        val paramsString = call.args.toString()
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+            .format(java.util.Date())
 
-        // Mock response using kotlinx.serialization JsonObject
-        val result = FunctionResponsePart(
-            name = call.name,
-            response = buildJsonObject {
-                put("success", true)
-                put("message", "Mocked execution of ${call.name}")
-            },
-            id = call.id
-        )
+        // Execute the tool via MCP
+        val result = try {
+            val response = app.haRepository?.executeTool(call) ?: FunctionResponsePart(
+                name = call.name,
+                response = buildJsonObject {
+                    put("error", "Repository not initialized")
+                },
+                id = call.id
+            )
+
+            // Log successful call
+            val isSuccess = !response.response.toString().contains("\"error\"")
+            addToolLog(
+                ToolCallLog(
+                    timestamp = timestamp,
+                    toolName = call.name,
+                    parameters = paramsString,
+                    success = isSuccess,
+                    result = response.response.toString()
+                )
+            )
+
+            response
+        } catch (e: Exception) {
+            val errorResponse = FunctionResponsePart(
+                name = call.name,
+                response = buildJsonObject {
+                    put("error", "Failed to execute: ${e.message}")
+                },
+                id = call.id
+            )
+
+            // Log failed call
+            addToolLog(
+                ToolCallLog(
+                    timestamp = timestamp,
+                    toolName = call.name,
+                    parameters = paramsString,
+                    success = false,
+                    result = "Exception: ${e.message}"
+                )
+            )
+
+            errorResponse
+        }
 
         _uiState.value = UiState.Listening // Return to listening state
         return result
+    }
+
+    private fun addToolLog(log: ToolCallLog) {
+        _toolLogs.value = _toolLogs.value + log
     }
 
     override fun onCleared() {

@@ -1,34 +1,330 @@
 package uk.co.mrsheep.halive.services
 
-// NOTE: This is a STUB for Task 1. Full implementation in Task 3.
-// This class will handle:
-// - Opening SSE connection to /api/mcp
-// - MCP initialization handshake (initialize -> initialized)
-// - Sending JSON-RPC requests and correlating responses
-// - Graceful shutdown
+import android.util.Log
+import kotlinx.coroutines.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonObject
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.sse.EventSource
+import okhttp3.sse.EventSourceListener
+import okhttp3.sse.EventSources
+import uk.co.mrsheep.halive.services.mcp.*
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 class McpClientManager(
     private val haBaseUrl: String,
     private val haToken: String
 ) {
+    private val json = Json {
+        encodeDefaults = true
+        ignoreUnknownKeys = true
+        prettyPrint = false
+    }
+
+    private val client = OkHttpClient.Builder()
+        .readTimeout(0, java.util.concurrent.TimeUnit.SECONDS) // Infinite for SSE
+        .build()
+
+    private var eventSource: EventSource? = null
+    private var endpoint: String? = null
+    private var isInitialized = false
+    private val nextRequestId = AtomicInteger(1)
+    private val pendingRequests = ConcurrentHashMap<Int, CompletableDeferred<JsonRpcResponse>>()
+
+    // Coroutine scope for background processing
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
     /**
      * Phase 1: Initialize the MCP connection.
-     * - Opens SSE connection
-     * - Sends 'initialize' request
-     * - Sends 'initialized' notification
+     * Opens SSE connection and performs the handshake.
      */
-    suspend fun initialize(): Boolean {
-        // TODO (Task 3): Implement SSE connection + handshake
-        return true // Stub: always succeeds
+    suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Connecting to: \"$haBaseUrl/mcp_server/sse\"")
+
+            // 1. Open SSE connection
+            val request = Request.Builder()
+                .url("$haBaseUrl/mcp_server/sse")
+                .header("Authorization", "Bearer $haToken")
+                .header("Accept", "text/event-stream")
+                .build()
+
+            val sseListener = McpEventSourceListener()
+            eventSource = EventSources.createFactory(client)
+                .newEventSource(request, sseListener)
+
+            // Wait for connection to open
+            sseListener.waitForConnection()
+            endpoint = sseListener.waitForEndpoint()
+
+            // 2. Send initialize request
+            val initParams = InitializeParams(
+//                protocolVersion = "2024-11-05",
+                capabilities = ClientCapabilities(),
+                clientInfo = ClientInfo(
+                    name = "HALiveAndroid",
+                    version = "1.0.0"
+                )
+            )
+
+            val initRequest = JsonRpcRequest(
+//                jsonrpc = "2.0",
+                id = nextRequestId.getAndIncrement(),
+                method = "initialize",
+                params = json.encodeToJsonElement(InitializeParams.serializer(), initParams)
+            )
+
+            val initResponse = sendAndAwaitResponse(initRequest)
+
+            // Parse and validate response
+            if (initResponse.error != null) {
+                throw McpException("Initialize failed: ${initResponse.error.message}")
+            }
+
+            val initResult = json.decodeFromJsonElement(
+                InitializeResult.serializer(),
+                initResponse.result!!
+            )
+
+            Log.d(TAG, "MCP initialized with server: ${initResult.serverInfo.name} v${initResult.serverInfo.version}")
+
+            // 3. Send initialized notification
+            val initializedNotification = JsonRpcNotification(
+//                jsonrpc = "2.0",
+                method = "notifications/initialized"
+            )
+            sendNotification(initializedNotification)
+
+            isInitialized = true
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize MCP connection: ${e.toString()}", e)
+            shutdown()
+            throw McpException("Failed to initialize MCP connection", e)
+        }
+    }
+
+    /**
+     * Fetch tools from the MCP server.
+     */
+    suspend fun getTools(): McpToolsListResult = withContext(Dispatchers.IO) {
+        require(isInitialized) { "Must call initialize() first" }
+
+        val request = JsonRpcRequest(
+//            jsonrpc = "2.0",
+            id = nextRequestId.getAndIncrement(),
+            method = "tools/list",
+            params = null
+        )
+
+        val response = sendAndAwaitResponse(request)
+
+        if (response.error != null) {
+            throw McpException("tools/list failed: ${response.error.message}")
+        }
+
+        json.decodeFromJsonElement(
+            McpToolsListResult.serializer(),
+            response.result!!
+        )
+    }
+
+    /**
+     * Execute a tool on the MCP server.
+     */
+    suspend fun callTool(
+        name: String,
+        arguments: Map<String, JsonElement>
+    ): ToolCallResult = withContext(Dispatchers.IO) {
+        require(isInitialized) { "Must call initialize() first" }
+
+        val toolCallParams = ToolCallParams(
+            name = name,
+            arguments = arguments
+        )
+
+        val request = JsonRpcRequest(
+            jsonrpc = "2.0",
+            id = nextRequestId.getAndIncrement(),
+            method = "tools/call",
+            params = json.encodeToJsonElement(ToolCallParams.serializer(), toolCallParams)
+        )
+
+        val response = sendAndAwaitResponse(request, timeout = 60_000) // Longer timeout for tool execution
+
+        if (response.error != null) {
+            throw McpException("tools/call failed: ${response.error.message}")
+        }
+
+        json.decodeFromJsonElement(
+            ToolCallResult.serializer(),
+            response.result!!
+        )
+    }
+
+    /**
+     * Send a JSON-RPC request and suspend until response arrives.
+     */
+    private suspend fun sendAndAwaitResponse(
+        request: JsonRpcRequest,
+        timeout: Long = 30_000
+    ): JsonRpcResponse = withTimeout(timeout) {
+        val deferred = CompletableDeferred<JsonRpcResponse>()
+        pendingRequests[request.id] = deferred
+
+        val message = json.encodeToString(request)
+        sendMessage(message)
+
+        try {
+            deferred.await()
+        } finally {
+            pendingRequests.remove(request.id)
+        }
+    }
+
+    /**
+     * Send a fire-and-forget notification.
+     */
+    private fun sendNotification(notification: JsonRpcNotification) {
+        val message = json.encodeToString(notification)
+        sendMessage(message)
+    }
+
+    /**
+     * Send a raw message over the SSE connection.
+     * Note: SSE is unidirectional (server -> client), but MCP uses
+     * a technique where we POST each request as a separate HTTP call
+     * to the same endpoint, and responses come back via SSE.
+     */
+    private fun sendMessage(message: String) {
+        scope.launch {
+            try {
+                Log.d(TAG, "Sending $message")
+                val request = Request.Builder()
+                    .url("$haBaseUrl$endpoint")
+                    .header("Authorization", "Bearer $haToken")
+                    .header("Content-Type", "application/json")
+                    .post(message.toRequestBody("application/json".toMediaType()))
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        Log.e(TAG, "Failed to send message: ${response.code}")
+                        throw McpException("Failed to send message: ${response.code}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to send message", e)
+            }
+        }
     }
 
     /**
      * Phase 3: Gracefully shut down the connection.
      */
     fun shutdown() {
-        // TODO (Task 3): Close SSE connection
+        isInitialized = false
+        eventSource?.cancel()
+        eventSource = null
+        pendingRequests.clear()
+        scope.cancel()
+        Log.d(TAG, "MCP client shut down")
     }
 
-    // TODO (Task 3): Add getTools() method
-    // TODO (Task 3): Add callTool() method
+    /**
+     * EventSource listener that processes incoming SSE messages.
+     */
+    private inner class McpEventSourceListener : EventSourceListener() {
+        private val connectionEstablished = CompletableDeferred<Unit>()
+        private val endpointSet = CompletableDeferred<String>()
+
+        suspend fun waitForConnection() {
+            connectionEstablished.await()
+        }
+
+        suspend fun waitForEndpoint(): String {
+            return endpointSet.await()
+        }
+
+        override fun onOpen(eventSource: EventSource, response: Response) {
+            Log.d(TAG, "SSE connection opened, ${response.body.toString()}")
+            connectionEstablished.complete(Unit)
+        }
+
+        override fun onEvent(
+            eventSource: EventSource,
+            id: String?,
+            type: String?,
+            data: String
+        ) {
+            Log.d(TAG, "Received event of type ${type} (ID: ${id})")
+            when (type) {
+                "endpoint" -> {
+                    endpointSet.complete(data )
+                    Log.d(TAG, "Endpoint set to $data")
+                    return
+                }
+            }
+
+            scope.launch {
+                try {
+                    // Parse incoming JSON-RPC message
+                    val jsonObject = json.parseToJsonElement(data).jsonObject
+
+                    if (jsonObject.containsKey("id") && (jsonObject.containsKey("result") || jsonObject.containsKey("error"))) {
+                        // It's a response
+                        val response = json.decodeFromString<JsonRpcResponse>(data)
+                        pendingRequests.remove(response.id)?.complete(response)
+                    } else if (jsonObject.containsKey("method")) {
+                        // It's a request or notification from server
+                        handleServerMessage(data)
+                    }
+                } catch (e: Exception) {
+                    // It's not a JSON message - likely the channel establishment message, ignore.
+                    Log.w(TAG, "Failed to parse message, ignoring: $data", e)
+                }
+            }
+        }
+
+        override fun onFailure(
+            eventSource: EventSource,
+            t: Throwable?,
+            response: Response?
+        ) {
+            Log.e(TAG, "SSE connection failed", t)
+            connectionEstablished.completeExceptionally(
+                t ?: McpException("SSE connection failed")
+            )
+
+            // Fail all pending requests
+            pendingRequests.values.forEach {
+                it.completeExceptionally(McpException("Connection lost"))
+            }
+            pendingRequests.clear()
+        }
+
+        override fun onClosed(eventSource: EventSource) {
+            Log.d(TAG, "SSE connection closed")
+        }
+    }
+
+    /**
+     * Handle incoming requests/notifications from server.
+     */
+    private fun handleServerMessage(data: String) {
+        // TODO: Handle server-initiated requests (e.g., sampling)
+        // TODO: Handle notifications (e.g., tools/listChanged)
+        Log.d(TAG, "Received server message: $data")
+    }
+
+    companion object {
+        private const val TAG = "McpClientManager"
+    }
 }
+
+class McpException(message: String, cause: Throwable? = null) : Exception(message, cause)
