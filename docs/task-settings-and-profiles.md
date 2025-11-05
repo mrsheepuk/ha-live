@@ -17,23 +17,19 @@ Separate the "configuration" experience from the "usage" experience by introduci
 
 ---
 
-## Questions for Refinement
+## Design Decisions
 
 ### 1. Settings Screen Access
-**Question**: How should users access the Settings screen?
-- Option A: Menu button (three dots) in the top-right corner of MainActivity
-- Option B: Dedicated "Settings" button on the main screen (visible when ReadyToTalk)
-- Option C: Both options available
-- Option D: Other approach?
-
-**My suggestion**: Option A (menu button) - this is the Android standard and keeps main screen clean.
+**Approach**: Menu button (three dots) in the top-right corner of MainActivity
+- Standard Android pattern
+- Keeps main screen clean and focused on chat functionality
 
 ---
 
 ### 2. Profile System - Storage & Structure
-**Question**: How should we structure the profile data?
+**Approach**: SharedPreferences with JSON serialization
 
-**Proposed structure**:
+**Data structure**:
 ```kotlin
 data class Profile(
     val id: String,           // UUID
@@ -45,37 +41,26 @@ data class Profile(
 )
 ```
 
-**Storage options**:
-- Option A: Continue using SharedPreferences (serialize to JSON, store as string)
-- Option B: Use Room database for better querying
-- Option C: Store as individual JSON files in app's private storage
+**Rationale**:
+- Simple implementation, no new dependencies
+- Consistent with existing config storage (FirebaseConfig, HAConfig, SystemPromptConfig)
+- Can migrate to Room database later if needed
 
-**My suggestion**: Option A for now (SharedPreferences with JSON) - simpler, no new dependencies. Can migrate to Room later if needed.
-
-**Sub-questions**:
+**Open question**:
 - Should there be a maximum number of profiles? (e.g., 10 profiles max)
-- What happens to the current saved system prompt when we migrate to profiles?
 
 ---
 
 ### 3. Profile Selection UI on Main Screen
-**Question**: Where/how should users select a profile on the main screen?
+**Approach**: Dropdown/Spinner above the main button (replaces system prompt container)
 
 **Current main screen layout**:
 - Status text at top
-- System prompt container (currently takes up space with 200dp EditText)
+- System prompt container (200dp EditText) ← **TO BE REMOVED**
 - Main button (200dp circle "Start Chat")
 - Tool log at bottom
 
-**Options for profile selection**:
-- Option A: Dropdown/Spinner above the main button (replaces system prompt container)
-- Option B: Small dropdown in the top-right corner
-- Option C: Show currently selected profile name as text, tap to open selection dialog
-- Option D: Floating action button to switch profiles
-
-**My suggestion**: Option A - prominent dropdown above main button, showing profile name. Easy to discover and use.
-
-**Visual concept for Option A**:
+**New layout**:
 ```
 [Status: Ready to chat]
 
@@ -92,16 +77,21 @@ data class Profile(
 [Tool Log Area]
 ```
 
-**Sub-questions**:
+**Rationale**:
+- Prominent and easy to discover
+- Replaces the system prompt editor (which moves to Settings)
+- Clear visual hierarchy
+
+**Open questions**:
 - Should profile selection be disabled during active chat?
 - Should switching profiles during chat stop the current session?
 
 ---
 
 ### 4. Settings Screen - Structure & Organization
-**Question**: How should the Settings screen be organized?
+**Approach**: Grouped sections with separate activities for complex management
 
-**Proposed structure**:
+**Structure**:
 ```
 Settings Screen
 ├── Profiles Section
@@ -118,20 +108,21 @@ Settings Screen
     └── "Change Firebase Config" button → file picker
 ```
 
-**Alternative**: Single scrollable settings screen with inline editors (like Android system settings)
+**Rationale**:
+- Grouped approach is easier to navigate and test
+- Separate activities for complex sections (like profile management)
+- Consistent with simple app architecture (no Navigation component needed)
 
-**My suggestion**: Start with the grouped approach (separate activities for complex sections). Easier to navigate and test.
-
-**Sub-questions**:
+**Open questions**:
 - Should we show connection status in real-time on Settings screen?
 - Should there be a "Test Connection" button for HA config?
 
 ---
 
 ### 5. Profile Management Screen
-**Question**: What actions should be available in the Profile Management screen?
+**Approach**: Card-based UI with visible action buttons
 
-**Proposed features**:
+**Features**:
 - ✓ View list of all profiles (with name, preview of prompt)
 - ✓ Create new profile (name + prompt editor)
 - ✓ Edit existing profile (name + prompt)
@@ -139,14 +130,12 @@ Settings Screen
 - ✓ Set default profile (used for new sessions)
 - ✓ Duplicate profile (copy existing to create new one)
 
-**UI approach**:
-- Option A: RecyclerView list with swipe actions (swipe to delete, tap to edit)
-- Option B: Simple list with context menu on long-press
-- Option C: Card-based UI with action buttons visible on each card
+**Rationale**:
+- Card-based UI is most discoverable for users unfamiliar with swipe gestures
+- Action buttons are visible and clear
+- Supports all required CRUD operations
 
-**My suggestion**: Option C - most discoverable for users unfamiliar with swipe gestures.
-
-**Sub-questions**:
+**Open questions**:
 - Should profiles show "last used" timestamp?
 - Should we support importing/exporting profiles (JSON file)?
 - Should there be preset/template profiles? (e.g., "Professional", "Casual", "Nerdy")
@@ -154,105 +143,79 @@ Settings Screen
 ---
 
 ### 6. Profile Editor UI
-**Question**: How should the profile editor work?
+**Approach**: Separate ProfileEditorActivity (dedicated screen)
 
-**Requirements**:
+**Components**:
 - Name input (short, e.g., "House Lizard")
 - System prompt input (large multiline text, similar to current implementation)
 - Save/Cancel buttons
 
-**Options**:
-- Option A: Separate ProfileEditorActivity (dedicated screen)
-- Option B: Dialog with full-screen prompt editor
-- Option C: Bottom sheet that expands to full screen for prompt editing
+**Rationale**:
+- Dedicated screen allows more space for prompt editing
+- Better keyboard handling than dialogs
+- Consistent with other separate activities (ProfileManagementActivity)
 
-**My suggestion**: Option A - allows more space for prompt editing and better keyboard handling.
-
-**Sub-questions**:
+**Open questions**:
 - Should there be a character count indicator for the prompt?
 - Should we offer prompt templates or examples?
 - Should there be a "Preview" button to test the prompt before saving?
 
 ---
 
-### 7. Migration Strategy
-**Question**: How should we handle existing users who upgrade to this version?
+### 7. Configuration Reconfiguration
+**Current behavior**: Config is set once during initial setup, never changed (no UI to change it)
 
-**Current state**:
-- User has Firebase config saved
-- User has HA config saved
-- User MAY have a customized system prompt saved
-
-**Migration approach**:
-```kotlin
-1. On first launch after upgrade:
-   - Detect no profiles exist
-   - Load existing system prompt (or default)
-   - Create a default profile: "Default Profile"
-   - Mark it as default and last used
-   - Done!
-
-2. Maintain backward compatibility with existing config storage
-```
-
-**Sub-questions**:
-- Should we prompt the user about the new feature with a "What's New" dialog?
-- Should we offer to rename "Default Profile" to something personalized?
-
----
-
-### 8. Configuration Reconfiguration
-**Question**: What should happen when a user changes Firebase or HA config?
-
-**Current behavior**: Config is set once, never changed (no UI to change it)
-
-**Proposed behavior**:
+**New behavior**:
 
 **For Firebase config change**:
 - Stop any active session
 - Show warning: "Changing Firebase config will restart the app"
 - User picks new file → save → kill app (System.exit(0)) → user relaunches
+- App reinitializes with new Firebase config
 
 **For HA config change**:
 - Stop any active session
 - Show editor dialog with current URL/token
 - User saves → attempt to reconnect to MCP server
 - If success: continue, if fail: show error, stay in Settings
-- Need to re-fetch tools and reinitialize Gemini
+- Re-fetch tools and reinitialize Gemini with current profile
 
-**Sub-questions**:
+**Open questions**:
 - Should changing HA config automatically refetch tools and reinitialize?
 - Should we show a loading indicator during reconnection?
 - What if user is in a chat when they try to access Settings?
 
 ---
 
-### 9. Main Screen Cleanup
-**Question**: What should be removed from the main screen?
+### 8. Main Screen Cleanup
 
 **To remove**:
 - ❌ System prompt EditText (200dp multiline editor)
 - ❌ Save/Reset prompt buttons
-- ❌ Potentially: HA config input fields (only shown during initial setup)
+- ❌ HA config input fields (moves to Settings for reconfiguration)
 
 **To keep**:
 - ✓ Status text
 - ✓ Main button (Start/Stop Chat)
 - ✓ Tool log
-- ✓ Profile selector (NEW)
+- ✓ Initial setup flow (Firebase → HA) for first-time users
 
 **To add**:
 - ✓ Settings menu button (top-right)
-- ✓ Profile dropdown/selector
+- ✓ Profile dropdown/selector (replaces system prompt container)
 
-**Questions**:
+**Rationale**:
+- Significantly cleaner UI focused on usage
+- Configuration moved to dedicated Settings screen
+- Initial setup remains on MainActivity for simplicity
+
+**Open questions**:
 - Should the initial setup flow (Firebase → HA) remain on MainActivity, or move to separate onboarding screens?
 - Should we add any other quick actions to the main screen? (e.g., "Clear tool log")
 
 ---
 
-### 10. UX Flow
-**Question**: Confirm the complete user flow:
+### 9. UX Flow
 
 **First-time user**:
 ```
@@ -261,20 +224,12 @@ Settings Screen
 3. Pick file → saved
 4. See HA config inputs (MainActivity)
 5. Enter URL/token → saved → connects to MCP
-6. Automatically create "Default Profile" with default prompt
+6. Automatically create "Default Profile" with default system prompt
 7. See main screen with profile dropdown + Start Chat button
 8. Ready to use!
 ```
 
-**Existing user (after upgrade)**:
-```
-1. Launch app
-2. Migration: Create "Default Profile" from existing prompt
-3. See main screen with new profile dropdown
-4. Can now access Settings → Manage Profiles
-```
-
-**Regular user (configured)**:
+**Regular user (app configured)**:
 ```
 1. Launch app
 2. See main screen with profile dropdown
@@ -284,110 +239,125 @@ Settings Screen
 6. Tap menu → Settings to configure profiles/settings
 ```
 
-**Is this flow acceptable?**
+**Creating additional profiles**:
+```
+1. Tap menu → Settings
+2. Tap "Manage Profiles"
+3. Tap "+" or "Create New Profile"
+4. Enter name and system prompt
+5. Save
+6. Return to main screen, new profile available in dropdown
+```
 
 ---
 
-### 11. Profile Selection Behavior
-**Question**: When should the selected profile be used?
+### 10. Profile Selection Behavior
+**Approach**: Lazy initialization - profile is applied when "Start Chat" is pressed
 
-**Options**:
-- Option A: Profile selected on main screen is used when "Start Chat" is pressed
-  - Gemini is re-initialized with new prompt if different from last chat
-- Option B: Profile is "loaded" immediately when selected (re-initializes Gemini)
-  - "Start Chat" always uses the currently loaded profile
-- Option C: Profile selection just sets a preference, Gemini initialized on "Start Chat"
+**Behavior**:
+- User selects profile from dropdown (just updates selection, no initialization yet)
+- User taps "Start Chat"
+- If profile differs from last session: re-initialize Gemini with new system prompt
+- If same profile: continue with existing initialization
+- Start chat session
 
-**My suggestion**: Option A - lazy initialization only when starting chat. Allows quick profile switching without unnecessary initialization.
+**Rationale**:
+- Allows quick profile switching without unnecessary re-initialization
+- Only initializes when actually needed (starting chat)
+- Clearer separation between selection and usage
 
-**Sub-questions**:
+**Open questions**:
 - Should we show a brief "Initializing profile..." message when switching?
 - Should recently used profiles appear at the top of the dropdown?
 
 ---
 
-### 12. Settings Screen Implementation
-**Question**: Should Settings be a new Activity or a Fragment?
+### 11. Settings Screen Implementation
+**Approach**: Simple SettingsActivity with custom UI (regular Views)
 
-**Options**:
-- Option A: New SettingsActivity with PreferenceFragmentCompat (Android standard)
-- Option B: Simple custom Activity with regular Views
-- Option C: Fragment-based navigation (requires adding Navigation component)
+**Rationale**:
+- App is small and doesn't need PreferenceFragmentCompat complexity
+- No need for Navigation component
+- Custom UI allows better control over layout and interactions
+- Consistent with existing simple architecture
 
-**My suggestion**: Option B - Simple SettingsActivity with custom UI. The app is small and doesn't need the complexity of PreferenceFragmentCompat or Navigation.
-
-**Sub-questions**:
+**Open question**:
 - Should Settings be accessible during a chat session? (Probably "No" - require stopping chat first)
 
 ---
 
-### 13. Default Profile Behavior
-**Question**: How should "default profile" work?
+### 12. Default Profile Behavior
+**Approach**: Remember last-used profile, fall back to default if deleted
 
-**Options**:
-- Option A: Default profile is auto-selected on app launch
-- Option B: App remembers last-used profile, falls back to default if deleted
-- Option C: Always show profile dropdown with no auto-selection
+**Behavior**:
+- App remembers the last profile used in a chat session
+- On app launch, that profile is pre-selected in the dropdown
+- If that profile was deleted: fall back to the profile marked as "default"
+- If no default is set: select the first available profile
 
-**My suggestion**: Option B - remember last used, more intuitive for regular use.
+**Rationale**:
+- More intuitive for regular use (doesn't require re-selecting each time)
+- Default profile acts as a safety fallback
+- Balances convenience with flexibility
 
-**Sub-questions**:
+**Open questions**:
 - Can users un-set the default (no default profile)?
 - What happens if the last-used profile is deleted?
 
 ---
 
-### 14. Error Handling
-**Question**: How should we handle errors during profile operations?
+### 13. Error Handling
 
-**Scenarios**:
-- User tries to delete the only remaining profile
-- User creates profile with duplicate name
-- User tries to save profile with empty name
-- User tries to save profile with empty system prompt
-- Profile data becomes corrupted
+**Scenarios and handling**:
 
-**Proposed handling**:
-- Show friendly error dialog for each case
-- Prevent destructive actions (can't delete last profile)
-- Auto-generate name if empty? ("Profile 1", "Profile 2")
-- Allow empty prompt (uses empty string, Gemini will handle)
+| Scenario | Handling |
+|----------|----------|
+| User tries to delete the only remaining profile | Show error dialog: "Cannot delete the last profile. Create another profile first." Disable delete button if only one profile exists. |
+| User creates profile with duplicate name | Show error dialog: "A profile with this name already exists. Please choose a different name." |
+| User tries to save profile with empty name | Auto-generate name: "Profile 1", "Profile 2", etc. OR show error and require name. |
+| User tries to save profile with empty system prompt | Allow empty prompt (uses empty string, Gemini will handle it). Show warning: "Are you sure you want to save an empty prompt?" |
+| Profile data becomes corrupted | Show error on app launch, offer to "Reset profiles to default" (creates single default profile) |
 
-**Acceptable?**
+**Open question**:
+- Should we auto-generate names for empty profile names, or require the user to provide a name?
 
 ---
 
-### 15. Implementation Phases
-**Question**: Should this be implemented in multiple phases or all at once?
-
-**Proposed phases**:
+### 14. Implementation Phases
+**Approach**: Phased implementation (4 phases)
 
 **Phase 1: Core Settings Screen**
 - Create SettingsActivity with basic navigation
 - Move HA config editing to Settings
 - Move Firebase config change to Settings
 - Add menu button to MainActivity
+- Basic layout and navigation structure
 
-**Phase 2: Profile System**
+**Phase 2: Profile System Backend**
 - Create Profile data model
-- Create ProfileManager class (handles storage/CRUD)
+- Create ProfileManager class (handles storage/CRUD operations)
+- Unit tests for ProfileManager
+- Auto-create default profile on first run (if no profiles exist)
+
+**Phase 3: Profile UI & Main Screen Integration**
 - Create ProfileManagementActivity (list profiles)
 - Create ProfileEditorActivity (edit/create profile)
-- Implement migration for existing system prompt
-
-**Phase 3: Main Screen Integration**
 - Add profile dropdown to MainActivity
 - Remove system prompt editor from MainActivity
 - Update MainViewModel to work with selected profile
 - Handle profile switching and initialization
 
 **Phase 4: Polish & Testing**
-- Add default profile templates
-- Improve error handling
-- Add "What's New" dialog for upgrades
-- Testing & bug fixes
+- Add preset/template profiles (if desired)
+- Implement all error handling (duplicate names, empty fields, etc.)
+- Connection status indicators on Settings screen
+- Comprehensive testing & bug fixes
 
-**Is this phased approach acceptable, or prefer all-at-once?**
+**Rationale**:
+- Safer implementation with smaller, testable increments
+- Can validate each phase before moving to next
+- Easier to debug and troubleshoot
+- Settings screen can be useful even before profiles are fully implemented
 
 ---
 
@@ -408,21 +378,56 @@ Settings Screen
 
 ---
 
-## Open Questions / Discussion Points
+## Summary of Open Questions
 
-1. **Profile sharing**: Should users be able to export/import profiles to share with others?
-2. **Cloud sync**: Future feature to sync profiles across devices? (Out of scope for this task)
-3. **Profile icons**: Should profiles have custom icons or colors for visual distinction?
-4. **Quick profile switch**: Should there be a quick-switch gesture during chat (e.g., swipe)?
-5. **Profile variables**: Should prompts support variables like `{{USER_NAME}}` that can be set per-profile?
+Throughout the design decisions above, the following questions remain to be answered:
+
+### Profile System
+1. Should there be a maximum number of profiles? (e.g., 10 profiles max)
+2. Should profiles show "last used" timestamp?
+3. Should we support importing/exporting profiles (JSON file)?
+4. Should there be preset/template profiles? (e.g., "Professional", "Casual", "Nerdy")
+
+### Profile Editor
+5. Should there be a character count indicator for the prompt?
+6. Should we offer prompt templates or examples?
+7. Should there be a "Preview" button to test the prompt before saving?
+
+### Profile Selection
+8. Should profile selection be disabled during active chat?
+9. Should switching profiles during chat stop the current session?
+10. Should we show a brief "Initializing profile..." message when switching?
+11. Should recently used profiles appear at the top of the dropdown?
+
+### Settings & Configuration
+12. Should we show connection status in real-time on Settings screen?
+13. Should there be a "Test Connection" button for HA config?
+14. Should changing HA config automatically refetch tools and reinitialize?
+15. Should we show a loading indicator during reconnection?
+16. What if user is in a chat when they try to access Settings?
+17. Should Settings be accessible during a chat session?
+
+### Main Screen
+18. Should the initial setup flow (Firebase → HA) remain on MainActivity, or move to separate onboarding screens?
+19. Should we add any other quick actions to the main screen? (e.g., "Clear tool log")
+
+### Default Profile & Error Handling
+20. Can users un-set the default (no default profile)?
+21. What happens if the last-used profile is deleted?
+22. Should we auto-generate names for empty profile names, or require the user to provide a name?
+
+### Future Considerations (Out of Scope)
+- Profile sharing: Export/import profiles to share with others?
+- Cloud sync: Sync profiles across devices?
+- Profile icons/colors: Visual distinction for profiles?
+- Quick profile switch gesture during chat?
+- Profile variables: Support for `{{USER_NAME}}` style variables?
 
 ---
 
 ## Next Steps
 
-Once you've reviewed and answered these questions, I'll create:
-1. Detailed implementation plan with file changes
-2. Updated architecture diagram
-3. Step-by-step implementation tasks
-
-**Please provide your answers/preferences for the questions above, and feel free to add any additional requirements or concerns!**
+Once you've reviewed and answered the open questions above, the next steps are:
+1. Create detailed implementation plan with specific file changes for each phase
+2. Begin Phase 1 implementation (Core Settings Screen)
+3. Iteratively implement and test each subsequent phase
