@@ -93,4 +93,8 @@ object FirebaseConfig {
     private fun clearConfig(context: Context) {
         getPrefs(context).edit().clear().apply()
     }
+
+    fun getProjectId(context: Context): String? {
+        return getPrefs(context).getString(KEY_PROJECT_ID, null)
+    }
 }

@@ -292,6 +292,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Public method to expose session state
+     */
+    fun isSessionActive(): Boolean = isSessionActive
+
     override fun onCleared() {
         super.onCleared()
         geminiService.cleanup()

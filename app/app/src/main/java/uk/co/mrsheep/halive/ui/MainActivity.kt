@@ -1,9 +1,12 @@
 package uk.co.mrsheep.halive.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
@@ -13,7 +16,9 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
+import uk.co.mrsheep.halive.core.HAConfig
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -22,14 +27,18 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var statusText: TextView
     private lateinit var mainButton: Button
-    private lateinit var haUrlInput: EditText
-    private lateinit var haTokenInput: EditText
-    private lateinit var haConfigContainer: View
-    private lateinit var systemPromptContainer: View
-    private lateinit var systemPromptInput: EditText
-    private lateinit var savePromptButton: Button
-    private lateinit var resetPromptButton: Button
     private lateinit var toolLogText: TextView
+
+    private fun checkConfigurationAndLaunch() {
+        // Check if app is configured
+        if (FirebaseApp.getApps(this).isEmpty() || !HAConfig.isConfigured(this)) {
+            // Launch onboarding
+            val intent = Intent(this, OnboardingActivity::class.java)
+            startActivity(intent)
+            finish()
+            return
+        }
+    }
 
     // Activity Result Launcher for the file picker
     private val selectConfigFileLauncher = registerForActivityResult(
@@ -54,17 +63,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Check configuration first
+        checkConfigurationAndLaunch()
+
         setContentView(R.layout.activity_main)
 
         statusText = findViewById(R.id.statusText)
         mainButton = findViewById(R.id.mainButton)
-        haUrlInput = findViewById(R.id.haUrlInput)
-        haTokenInput = findViewById(R.id.haTokenInput)
-        haConfigContainer = findViewById(R.id.haConfigContainer)
-        systemPromptContainer = findViewById(R.id.systemPromptContainer)
-        systemPromptInput = findViewById(R.id.systemPromptInput)
-        savePromptButton = findViewById(R.id.savePromptButton)
-        resetPromptButton = findViewById(R.id.resetPromptButton)
         toolLogText = findViewById(R.id.toolLogText)
 
         // Observe the UI state from the ViewModel
@@ -80,77 +86,44 @@ class MainActivity : AppCompatActivity() {
                 updateToolLogs(logs)
             }
         }
+    }
 
-        // Observe system prompt from the ViewModel
-        lifecycleScope.launch {
-            viewModel.systemPrompt.collect { prompt ->
-                // Only update the EditText if it's different to avoid cursor jumping
-                if (systemPromptInput.text.toString() != prompt) {
-                    systemPromptInput.setText(prompt)
-                }
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_settings -> {
+                val intent = Intent(this, SettingsActivity::class.java)
+                // Pass chat active state
+                intent.putExtra("isChatActive", viewModel.isSessionActive())
+                startActivity(intent)
+                true
             }
+            else -> super.onOptionsItemSelected(item)
         }
-
-        // Set up system prompt button listeners
-        savePromptButton.setOnClickListener {
-            viewModel.updateSystemPrompt(systemPromptInput.text.toString())
-            viewModel.saveSystemPrompt()
-        }
-
-        resetPromptButton.setOnClickListener {
-            viewModel.resetSystemPromptToDefault()
-        }
-
-        // Listen for text changes to update ViewModel (but don't save yet)
-        systemPromptInput.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) {
-                viewModel.updateSystemPrompt(s.toString())
-            }
-        })
     }
 
     private fun updateUiForState(state: UiState) {
         when (state) {
             UiState.Loading -> {
                 mainButton.visibility = View.GONE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.GONE
                 statusText.text = "Loading..."
             }
             UiState.FirebaseConfigNeeded -> {
-                mainButton.visibility = View.VISIBLE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.GONE
-                mainButton.text = "Import google-services.json"
-                statusText.text = "Firebase configuration needed"
-                mainButton.setOnClickListener {
-                    // Launch file picker
-                    selectConfigFileLauncher.launch(arrayOf("application/json"))
-                }
-                mainButton.setOnTouchListener(null) // Remove talk listener
+                // Should not reach here - handled by OnboardingActivity
+                mainButton.visibility = View.GONE
+                statusText.text = "Please complete onboarding"
             }
             UiState.HAConfigNeeded -> {
-                mainButton.visibility = View.VISIBLE
-                haConfigContainer.visibility = View.VISIBLE
-                systemPromptContainer.visibility = View.GONE
-                mainButton.text = "Save HA Config"
-                statusText.text = "Home Assistant configuration needed"
-                mainButton.setOnClickListener {
-                    val url = haUrlInput.text.toString()
-                    val token = haTokenInput.text.toString()
-                    viewModel.saveHAConfig(url, token)
-                }
-                mainButton.setOnTouchListener(null) // Remove talk listener
+                // Should not reach here - handled by OnboardingActivity
+                mainButton.visibility = View.GONE
+                statusText.text = "Please complete onboarding"
             }
             UiState.ReadyToTalk -> {
                 mainButton.visibility = View.VISIBLE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.VISIBLE
-                systemPromptInput.isEnabled = true
-                savePromptButton.isEnabled = true
-                resetPromptButton.isEnabled = true
                 mainButton.text = "Start Chat"
                 statusText.text = "Ready to chat"
                 mainButton.setOnTouchListener(null) // Remove touch listener
@@ -158,41 +131,24 @@ class MainActivity : AppCompatActivity() {
             }
             UiState.ChatActive -> {
                 mainButton.visibility = View.VISIBLE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.VISIBLE
-                systemPromptInput.isEnabled = false
-                savePromptButton.isEnabled = false
-                resetPromptButton.isEnabled = false
                 mainButton.text = "Stop Chat"
                 statusText.text = "Chat active - listening..."
                 // Listener is already active
             }
             UiState.Listening -> {
                 mainButton.visibility = View.VISIBLE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.VISIBLE
-                systemPromptInput.isEnabled = false
-                savePromptButton.isEnabled = false
-                resetPromptButton.isEnabled = false
                 mainButton.text = "Stop Chat"
                 statusText.text = "Listening..."
                 // Listener is already active
             }
             UiState.ExecutingAction -> {
                 mainButton.visibility = View.VISIBLE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.VISIBLE
-                systemPromptInput.isEnabled = false
-                savePromptButton.isEnabled = false
-                resetPromptButton.isEnabled = false
                 mainButton.text = "Stop Chat"
                 statusText.text = "Executing action..."
                 // Keep button active but show execution status
             }
             is UiState.Error -> {
                 mainButton.visibility = View.GONE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.GONE
                 statusText.text = state.message
             }
         }
