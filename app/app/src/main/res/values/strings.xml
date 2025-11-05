@@ -16,4 +16,25 @@
     <string name="settings_ha_section">Home Assistant</string>
     <string name="settings_firebase_section">Firebase</string>
     <string name="settings_read_only_message">Stop chat to modify settings</string>
+
+    <!-- Profile Management -->
+    <string name="profile_management_title">Manage Profiles</string>
+    <string name="profile_create_new">Create New Profile</string>
+    <string name="profile_edit">Edit</string>
+    <string name="profile_duplicate">Duplicate</string>
+    <string name="profile_delete">Delete</string>
+    <string name="profile_delete_confirm">Delete this profile?</string>
+    <string name="profile_delete_last_error">Cannot delete the last profile. Create another profile first.</string>
+    <string name="profile_default_badge">DEFAULT</string>
+    <string name="profile_switch_during_chat_error">Stop chat to switch profiles</string>
+
+    <!-- Profile Editor -->
+    <string name="profile_editor_title_create">Create Profile</string>
+    <string name="profile_editor_title_edit">Edit Profile</string>
+    <string name="profile_editor_name_hint">Profile name</string>
+    <string name="profile_editor_prompt_hint">System prompt…</string>
+    <string name="profile_editor_save">Save</string>
+    <string name="profile_editor_cancel">Cancel</string>
+    <string name="profile_editor_duplicate_name_error">A profile with this name already exists</string>
+    <string name="profile_editor_blank_name_error">Profile name cannot be blank</string>
 </resources>

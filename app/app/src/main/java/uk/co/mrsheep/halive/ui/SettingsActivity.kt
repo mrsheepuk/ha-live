@@ -64,7 +64,8 @@ class SettingsActivity : AppCompatActivity() {
         profileSummaryText = findViewById(R.id.profileSummaryText)
 
         manageProfilesButton.setOnClickListener {
-            // TODO: Phase 3 - Launch ProfileManagementActivity
+            val intent = Intent(this, ProfileManagementActivity::class.java)
+            startActivity(intent)
         }
 
         // HA section
@@ -110,6 +111,12 @@ class SettingsActivity : AppCompatActivity() {
                 haTokenText.text = "••••••••" // Masked token
                 firebaseProjectIdText.text = state.firebaseProjectId
                 profileSummaryText.text = "${state.profileCount} profile(s) configured"
+
+                // Enable/disable buttons based on read-only state
+                manageProfilesButton.isEnabled = !state.isReadOnly
+                haEditButton.isEnabled = !state.isReadOnly
+                haTestButton.isEnabled = !state.isReadOnly
+                firebaseChangeButton.isEnabled = !state.isReadOnly
 
                 // Show/hide read-only overlay
                 if (state.isReadOnly) {

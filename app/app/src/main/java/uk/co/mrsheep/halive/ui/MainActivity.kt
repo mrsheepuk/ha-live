@@ -8,9 +8,13 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -19,15 +23,19 @@ import androidx.lifecycle.lifecycleScope
 import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.HAConfig
+import uk.co.mrsheep.halive.core.Profile
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    private lateinit var profileSpinner: Spinner
     private lateinit var statusText: TextView
     private lateinit var mainButton: Button
     private lateinit var toolLogText: TextView
+
+    private var isInitialSpinnerSetup = true
 
     private fun checkConfigurationAndLaunch() {
         // Check if app is configured
@@ -69,6 +77,7 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_main)
 
+        profileSpinner = findViewById(R.id.profileSpinner)
         statusText = findViewById(R.id.statusText)
         mainButton = findViewById(R.id.mainButton)
         toolLogText = findViewById(R.id.toolLogText)
@@ -84,6 +93,13 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             viewModel.toolLogs.collect { logs ->
                 updateToolLogs(logs)
+            }
+        }
+
+        // Observe profiles and update spinner
+        lifecycleScope.launch {
+            viewModel.profiles.collect { profiles ->
+                updateProfileSpinner(profiles)
             }
         }
     }
@@ -123,6 +139,7 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Please complete onboarding"
             }
             UiState.ReadyToTalk -> {
+                profileSpinner.isEnabled = true
                 mainButton.visibility = View.VISIBLE
                 mainButton.text = "Start Chat"
                 statusText.text = "Ready to chat"
@@ -130,18 +147,21 @@ class MainActivity : AppCompatActivity() {
                 mainButton.setOnClickListener(chatButtonClickListener)
             }
             UiState.ChatActive -> {
+                profileSpinner.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Chat active - listening..."
                 // Listener is already active
             }
             UiState.Listening -> {
+                profileSpinner.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Listening..."
                 // Listener is already active
             }
             UiState.ExecutingAction -> {
+                profileSpinner.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Executing action..."
@@ -151,6 +171,51 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.GONE
                 statusText.text = state.message
             }
+        }
+    }
+
+    private fun updateProfileSpinner(profiles: List<Profile>) {
+        val adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            profiles.map { it.name }
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        profileSpinner.adapter = adapter
+
+        // Select the active profile
+        val activeIndex = profiles.indexOfFirst { it.id == viewModel.currentProfileId }
+        if (activeIndex >= 0) {
+            profileSpinner.setSelection(activeIndex)
+        }
+
+        // Handle selection changes
+        profileSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (isInitialSpinnerSetup) {
+                    isInitialSpinnerSetup = false
+                    return
+                }
+                val selectedProfile = profiles[position]
+
+                // Check if chat is active before switching
+                if (viewModel.isSessionActive()) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        R.string.profile_switch_during_chat_error,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    // Revert to the current profile
+                    val currentIndex = profiles.indexOfFirst { it.id == viewModel.currentProfileId }
+                    if (currentIndex >= 0) {
+                        profileSpinner.setSelection(currentIndex)
+                    }
+                    return
+                }
+
+                viewModel.switchProfile(selectedProfile.id)
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
     }
 

@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.HAConfig
+import uk.co.mrsheep.halive.core.Profile
+import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.services.GeminiService
 import com.google.firebase.FirebaseApp
@@ -41,6 +43,9 @@ data class ToolCallLog(
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
+    var currentProfileId: String = ""
+    val profiles = ProfileManager.profiles // Expose for UI
+
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState
 
@@ -57,8 +62,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var isSessionActive = false
 
     init {
-        // Load the system prompt from config
-        _systemPrompt.value = SystemPromptConfig.getSystemPrompt(getApplication())
+        // Load the active profile
+        val activeProfile = ProfileManager.getLastUsedOrDefaultProfile()
+        if (activeProfile != null) {
+            currentProfileId = activeProfile.id
+            _systemPrompt.value = activeProfile.systemPrompt
+        }
+
         checkConfiguration()
     }
 
@@ -149,8 +159,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Fetch and transform tools from Home Assistant MCP server
             val tools = app.haRepository?.getTools() ?: emptyList()
 
-            // Use the system prompt from config
-            val systemPrompt = SystemPromptConfig.getSystemPrompt(getApplication())
+            // Use the system prompt from the current profile
+            val profile = ProfileManager.getProfileById(currentProfileId)
+            val systemPrompt = profile?.systemPrompt ?: SystemPromptConfig.getSystemPrompt(getApplication())
 
             // Initialize the Gemini model
             geminiService.initializeModel(tools, systemPrompt)
@@ -289,6 +300,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!isSessionActive) {
             SystemPromptConfig.resetToDefault(getApplication())
             _systemPrompt.value = SystemPromptConfig.getSystemPrompt(getApplication())
+        }
+    }
+
+    /**
+     * Switch to a different profile
+     */
+    fun switchProfile(profileId: String) {
+        if (isSessionActive) {
+            // Show toast in UI
+            return
+        }
+
+        val profile = ProfileManager.getProfileById(profileId) ?: return
+        currentProfileId = profileId
+        _systemPrompt.value = profile.systemPrompt
+        ProfileManager.markProfileAsUsed(profileId)
+
+        // Reinitialize Gemini with new prompt
+        viewModelScope.launch {
+            try {
+                val tools = app.haRepository?.getTools() ?: emptyList()
+                geminiService.initializeModel(tools, profile.systemPrompt)
+            } catch (e: Exception) {
+                // Handle error
+            }
         }
     }
 

@@ -33,6 +33,16 @@
             android:name=".ui.SettingsActivity"
             android:exported="false"
             android:parentActivityName=".ui.MainActivity" />
+
+        <activity
+            android:name=".ui.ProfileManagementActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.SettingsActivity" />
+
+        <activity
+            android:name=".ui.ProfileEditorActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.ProfileManagementActivity" />
     </application>
 
 </manifest>
