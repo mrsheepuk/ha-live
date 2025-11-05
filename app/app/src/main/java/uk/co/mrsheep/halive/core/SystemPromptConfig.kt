@@ -7,7 +7,7 @@ object SystemPromptConfig {
     private const val PREFS_NAME = "system_prompt_config"
     private const val KEY_SYSTEM_PROMPT = "system_prompt"
 
-    private val DEFAULT_SYSTEM_PROMPT = """
+    val DEFAULT_SYSTEM_PROMPT = """
 <system_prompt>
 You are a helpful assistant integrated with Home Assistant.
 

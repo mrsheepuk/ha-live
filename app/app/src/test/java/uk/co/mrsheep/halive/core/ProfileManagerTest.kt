@@ -12,18 +12,38 @@ class ProfileManagerTest {
     private lateinit var context: Context
     private lateinit var prefs: SharedPreferences
     private lateinit var editor: SharedPreferences.Editor
+    private val mockStorage = mutableMapOf<String, String>()
 
     @Before
     fun setup() {
         context = mock(Context::class.java)
         prefs = mock(SharedPreferences::class.java)
         editor = mock(SharedPreferences.Editor::class.java)
+        mockStorage.clear()
 
         `when`(context.getSharedPreferences(anyString(), anyInt())).thenReturn(prefs)
         `when`(prefs.edit()).thenReturn(editor)
-        `when`(editor.putString(anyString(), anyString())).thenReturn(editor)
+
+        // Mock editor to store values in our map
+        `when`(editor.putString(anyString(), anyString())).thenAnswer { invocation ->
+            val key = invocation.getArgument<String>(0)
+            val value = invocation.getArgument<String>(1)
+            mockStorage[key] = value
+            editor
+        }
         `when`(editor.putBoolean(anyString(), anyBoolean())).thenReturn(editor)
-        `when`(editor.remove(anyString())).thenReturn(editor)
+        `when`(editor.remove(anyString())).thenAnswer { invocation ->
+            val key = invocation.getArgument<String>(0)
+            mockStorage.remove(key)
+            editor
+        }
+
+        // Mock getString to return values from our map (handles nullable default)
+        `when`(prefs.getString(anyString(), nullable(String::class.java))).thenAnswer { invocation ->
+            val key = invocation.getArgument<String>(0)
+            val defaultValue = invocation.getArgument<String?>(1)
+            mockStorage[key] ?: defaultValue
+        }
 
         ProfileManager.initialize(context)
     }
