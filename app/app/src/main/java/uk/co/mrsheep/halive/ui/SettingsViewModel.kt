@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.HAConfig
+import uk.co.mrsheep.halive.core.ProfileManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -28,7 +29,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val (haUrl, haToken) = HAConfig.loadConfig(getApplication()) ?: Pair("Not configured", "")
             val projectId = FirebaseConfig.getProjectId(getApplication()) ?: "Not configured"
-            val profileCount = 0 // TODO: Phase 2
+            val profileCount = ProfileManager.getAllProfiles().size
 
             _settingsState.value = SettingsState.Loaded(
                 haUrl = haUrl,

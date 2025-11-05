@@ -109,7 +109,7 @@ class SettingsActivity : AppCompatActivity() {
                 haUrlText.text = state.haUrl
                 haTokenText.text = "••••••••" // Masked token
                 firebaseProjectIdText.text = state.firebaseProjectId
-                profileSummaryText.text = "Profile management coming in Phase 2"
+                profileSummaryText.text = "${state.profileCount} profile(s) configured"
 
                 // Show/hide read-only overlay
                 if (state.isReadOnly) {

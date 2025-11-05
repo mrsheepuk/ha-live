@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.HAConfig
+import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
 import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,9 +84,8 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
             // Save the validated config
             HAConfig.saveConfig(getApplication(), currentHAUrl, currentHAToken)
 
-            // Create default profile (if not exists)
-            // TODO: This will be implemented in Phase 2
-            // For now, just ensure SystemPromptConfig has default
+            // Create default profile (NEW)
+            ProfileManager.ensureDefaultProfileExists()
 
             // Move to final step
             _onboardingState.value = OnboardingState.Step3Complete
