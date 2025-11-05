@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.HAConfig
+import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.services.GeminiService
 import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.type.FunctionCallPart
@@ -46,6 +47,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _toolLogs = MutableStateFlow<List<ToolCallLog>>(emptyList())
     val toolLogs: StateFlow<List<ToolCallLog>> = _toolLogs
 
+    private val _systemPrompt = MutableStateFlow("")
+    val systemPrompt: StateFlow<String> = _systemPrompt
+
     private val app = application as HAGeminiApp
     private val geminiService = GeminiService()
 
@@ -53,6 +57,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var isSessionActive = false
 
     init {
+        // Load the system prompt from config
+        _systemPrompt.value = SystemPromptConfig.getSystemPrompt(getApplication())
         checkConfiguration()
     }
 
@@ -143,46 +149,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Fetch and transform tools from Home Assistant MCP server
             val tools = app.haRepository?.getTools() ?: emptyList()
 
-            val systemPrompt = """
-            <system_prompt>
-            You are a helpful assistant integrated with Home Assistant. 
-            
-            ALWAYS start the conversation by saying 'Hello', do not wait for the user to speak.
-            
-            Your job is to help the user, answering questions and calling the tools provided to perform actions requested.
-            
-            You are equipped to answer questions about the current state of the home using the `GetLiveContext` tool. This is a primary function. 
-
-            If the user asks about the CURRENT state, value, or mode (e.g., "Is the lock locked?", "Is the fan on?", "What mode is the thermostat in?", "What is the temperature outside?"):
-                1.  Recognize this requires live data.
-                2.  You MUST call `GetLiveContext`. This tool will provide the needed real-time information (like temperature from the local weather, lock status, etc.).
-                3.  Use the tool's response to answer the user accurately (e.g., "The temperature outside is [value from tool].").
-
-            You can control many aspects of the home using the other tools provided. When calling tools to control things, prefer passing just name and domain parameters. 
-            Use `GetLiveContext` to determine the names, domains, to use to control devices.
-
-            When taking an action, **always**:
-            - Decide what action or actions you're going to take
-            - Call the tool or tools to perform the actions
-            - Confirm the action taken, or what error occurred if failed.
-            </system_prompt>
-            
-            <personality>
-            You are 'House Lizard' (also called 'Lizzy H'), a helpful voice assistant for Home Assistant for Mark and Audrey. 
-            Behave like the ship's computer from Star Trek: The Next Generation. 
-            </personality>
-            
-            <background_info>
-            You are currently speaking with Mark.
-            </background_info>                  
-            """.trimIndent()
-
-//            Specific actions to take when we say certain things:
-//            - 'Good morning': run 'Set house state' to 'Day', report house battery level, solar forecast, outside temperature.
-//            - 'Good night', 'Time for bed', 'We're done downstairs': run 'Set house state' to 'Sleep', {report house battery level, outside temperature, wake up time, solar forecast.
-//            - 'We're going out': turn on 'Away mode'
-//            - 'We're home': turn off 'Away mode' and choose one random statistic from the house to tell us about
-
+            // Use the system prompt from config
+            val systemPrompt = SystemPromptConfig.getSystemPrompt(getApplication())
 
             // Initialize the Gemini model
             geminiService.initializeModel(tools, systemPrompt)
@@ -296,6 +264,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun addToolLog(log: ToolCallLog) {
         _toolLogs.value = _toolLogs.value + log
+    }
+
+    /**
+     * Update the system prompt (only allowed when chat is not active)
+     */
+    fun updateSystemPrompt(newPrompt: String) {
+        if (!isSessionActive) {
+            _systemPrompt.value = newPrompt
+        }
+    }
+
+    /**
+     * Save the current system prompt to config
+     */
+    fun saveSystemPrompt() {
+        SystemPromptConfig.saveSystemPrompt(getApplication(), _systemPrompt.value)
+    }
+
+    /**
+     * Reset system prompt to default
+     */
+    fun resetSystemPromptToDefault() {
+        if (!isSessionActive) {
+            SystemPromptConfig.resetToDefault(getApplication())
+            _systemPrompt.value = SystemPromptConfig.getSystemPrompt(getApplication())
+        }
     }
 
     override fun onCleared() {

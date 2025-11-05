@@ -25,6 +25,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var haUrlInput: EditText
     private lateinit var haTokenInput: EditText
     private lateinit var haConfigContainer: View
+    private lateinit var systemPromptContainer: View
+    private lateinit var systemPromptInput: EditText
+    private lateinit var savePromptButton: Button
+    private lateinit var resetPromptButton: Button
     private lateinit var toolLogText: TextView
 
     // Activity Result Launcher for the file picker
@@ -57,6 +61,10 @@ class MainActivity : AppCompatActivity() {
         haUrlInput = findViewById(R.id.haUrlInput)
         haTokenInput = findViewById(R.id.haTokenInput)
         haConfigContainer = findViewById(R.id.haConfigContainer)
+        systemPromptContainer = findViewById(R.id.systemPromptContainer)
+        systemPromptInput = findViewById(R.id.systemPromptInput)
+        savePromptButton = findViewById(R.id.savePromptButton)
+        resetPromptButton = findViewById(R.id.resetPromptButton)
         toolLogText = findViewById(R.id.toolLogText)
 
         // Observe the UI state from the ViewModel
@@ -72,6 +80,35 @@ class MainActivity : AppCompatActivity() {
                 updateToolLogs(logs)
             }
         }
+
+        // Observe system prompt from the ViewModel
+        lifecycleScope.launch {
+            viewModel.systemPrompt.collect { prompt ->
+                // Only update the EditText if it's different to avoid cursor jumping
+                if (systemPromptInput.text.toString() != prompt) {
+                    systemPromptInput.setText(prompt)
+                }
+            }
+        }
+
+        // Set up system prompt button listeners
+        savePromptButton.setOnClickListener {
+            viewModel.updateSystemPrompt(systemPromptInput.text.toString())
+            viewModel.saveSystemPrompt()
+        }
+
+        resetPromptButton.setOnClickListener {
+            viewModel.resetSystemPromptToDefault()
+        }
+
+        // Listen for text changes to update ViewModel (but don't save yet)
+        systemPromptInput.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                viewModel.updateSystemPrompt(s.toString())
+            }
+        })
     }
 
     private fun updateUiForState(state: UiState) {
@@ -79,11 +116,13 @@ class MainActivity : AppCompatActivity() {
             UiState.Loading -> {
                 mainButton.visibility = View.GONE
                 haConfigContainer.visibility = View.GONE
+                systemPromptContainer.visibility = View.GONE
                 statusText.text = "Loading..."
             }
             UiState.FirebaseConfigNeeded -> {
                 mainButton.visibility = View.VISIBLE
                 haConfigContainer.visibility = View.GONE
+                systemPromptContainer.visibility = View.GONE
                 mainButton.text = "Import google-services.json"
                 statusText.text = "Firebase configuration needed"
                 mainButton.setOnClickListener {
@@ -95,6 +134,7 @@ class MainActivity : AppCompatActivity() {
             UiState.HAConfigNeeded -> {
                 mainButton.visibility = View.VISIBLE
                 haConfigContainer.visibility = View.VISIBLE
+                systemPromptContainer.visibility = View.GONE
                 mainButton.text = "Save HA Config"
                 statusText.text = "Home Assistant configuration needed"
                 mainButton.setOnClickListener {
@@ -107,6 +147,10 @@ class MainActivity : AppCompatActivity() {
             UiState.ReadyToTalk -> {
                 mainButton.visibility = View.VISIBLE
                 haConfigContainer.visibility = View.GONE
+                systemPromptContainer.visibility = View.VISIBLE
+                systemPromptInput.isEnabled = true
+                savePromptButton.isEnabled = true
+                resetPromptButton.isEnabled = true
                 mainButton.text = "Start Chat"
                 statusText.text = "Ready to chat"
                 mainButton.setOnTouchListener(null) // Remove touch listener
@@ -115,6 +159,10 @@ class MainActivity : AppCompatActivity() {
             UiState.ChatActive -> {
                 mainButton.visibility = View.VISIBLE
                 haConfigContainer.visibility = View.GONE
+                systemPromptContainer.visibility = View.VISIBLE
+                systemPromptInput.isEnabled = false
+                savePromptButton.isEnabled = false
+                resetPromptButton.isEnabled = false
                 mainButton.text = "Stop Chat"
                 statusText.text = "Chat active - listening..."
                 // Listener is already active
@@ -122,6 +170,10 @@ class MainActivity : AppCompatActivity() {
             UiState.Listening -> {
                 mainButton.visibility = View.VISIBLE
                 haConfigContainer.visibility = View.GONE
+                systemPromptContainer.visibility = View.VISIBLE
+                systemPromptInput.isEnabled = false
+                savePromptButton.isEnabled = false
+                resetPromptButton.isEnabled = false
                 mainButton.text = "Stop Chat"
                 statusText.text = "Listening..."
                 // Listener is already active
@@ -129,6 +181,10 @@ class MainActivity : AppCompatActivity() {
             UiState.ExecutingAction -> {
                 mainButton.visibility = View.VISIBLE
                 haConfigContainer.visibility = View.GONE
+                systemPromptContainer.visibility = View.VISIBLE
+                systemPromptInput.isEnabled = false
+                savePromptButton.isEnabled = false
+                resetPromptButton.isEnabled = false
                 mainButton.text = "Stop Chat"
                 statusText.text = "Executing action..."
                 // Keep button active but show execution status
@@ -136,6 +192,7 @@ class MainActivity : AppCompatActivity() {
             is UiState.Error -> {
                 mainButton.visibility = View.GONE
                 haConfigContainer.visibility = View.GONE
+                systemPromptContainer.visibility = View.GONE
                 statusText.text = state.message
             }
         }
