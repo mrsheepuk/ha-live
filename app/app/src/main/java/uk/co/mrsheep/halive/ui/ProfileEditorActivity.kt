@@ -27,6 +27,10 @@ class ProfileEditorActivity : AppCompatActivity() {
     private lateinit var profileNameInput: TextInputEditText
     private lateinit var systemPromptLayout: TextInputLayout
     private lateinit var systemPromptInput: TextInputEditText
+    private lateinit var personalityLayout: TextInputLayout
+    private lateinit var personalityInput: TextInputEditText
+    private lateinit var backgroundInfoLayout: TextInputLayout
+    private lateinit var backgroundInfoInput: TextInputEditText
     private lateinit var saveButton: Button
     private lateinit var cancelButton: Button
 
@@ -77,13 +81,19 @@ class ProfileEditorActivity : AppCompatActivity() {
         profileNameInput = findViewById(R.id.profileNameInput)
         systemPromptLayout = findViewById(R.id.systemPromptLayout)
         systemPromptInput = findViewById(R.id.systemPromptInput)
+        personalityLayout = findViewById(R.id.personalityLayout)
+        personalityInput = findViewById(R.id.personalityInput)
+        backgroundInfoLayout = findViewById(R.id.backgroundInfoLayout)
+        backgroundInfoInput = findViewById(R.id.backgroundInfoInput)
         saveButton = findViewById(R.id.saveButton)
         cancelButton = findViewById(R.id.cancelButton)
 
         saveButton.setOnClickListener {
             val name = profileNameInput.text?.toString() ?: ""
             val prompt = systemPromptInput.text?.toString() ?: ""
-            viewModel.saveProfile(name, prompt, editingProfileId)
+            val personality = personalityInput.text?.toString() ?: ""
+            val backgroundInfo = backgroundInfoInput.text?.toString() ?: ""
+            viewModel.saveProfile(name, prompt, personality, backgroundInfo, editingProfileId)
         }
 
         cancelButton.setOnClickListener {
@@ -109,6 +119,8 @@ class ProfileEditorActivity : AppCompatActivity() {
                 // Populate fields with loaded profile
                 profileNameInput.setText(state.profile.name)
                 systemPromptInput.setText(state.profile.systemPrompt)
+                personalityInput.setText(state.profile.personality)
+                backgroundInfoInput.setText(state.profile.backgroundInfo)
                 saveButton.isEnabled = true
             }
             is ProfileEditorState.Saving -> {

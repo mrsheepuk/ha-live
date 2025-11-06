@@ -32,7 +32,9 @@
     <string name="profile_editor_title_create">Create Profile</string>
     <string name="profile_editor_title_edit">Edit Profile</string>
     <string name="profile_editor_name_hint">Profile name</string>
-    <string name="profile_editor_prompt_hint">System prompt…</string>
+    <string name="profile_editor_system_prompt_hint">System Prompt</string>
+    <string name="profile_editor_personality_hint">Personality</string>
+    <string name="profile_editor_background_info_hint">Background Info</string>
     <string name="profile_editor_save">Save</string>
     <string name="profile_editor_cancel">Cancel</string>
     <string name="profile_editor_duplicate_name_error">A profile with this name already exists</string>
