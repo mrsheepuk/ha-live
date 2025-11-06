@@ -145,13 +145,55 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showHAEditDialog() {
-        // TODO: Create custom dialog layout with EditTexts
-        // For now, placeholder
-        AlertDialog.Builder(this)
+        // Create custom layout with two EditTexts
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ha_config, null)
+        val urlInput = dialogView.findViewById<android.widget.EditText>(R.id.haUrlInput)
+        val tokenInput = dialogView.findViewById<android.widget.EditText>(R.id.haTokenInput)
+
+        // Load current config
+        val (currentUrl, currentToken) = uk.co.mrsheep.halive.core.HAConfig.loadConfig(this) ?: Pair("", "")
+        urlInput.setText(currentUrl)
+        tokenInput.setText(currentToken)
+
+        val dialog = AlertDialog.Builder(this)
             .setTitle("Edit Home Assistant Config")
-            .setMessage("Dialog implementation coming...")
-            .setPositiveButton("OK", null)
-            .show()
+            .setView(dialogView)
+            .setPositiveButton("Test & Save", null) // Set to null, we'll override below
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            saveButton.setOnClickListener {
+                val newUrl = urlInput.text.toString().trim()
+                val newToken = tokenInput.text.toString().trim()
+
+                // Validate inputs
+                if (newUrl.isBlank()) {
+                    urlInput.error = "URL is required"
+                    return@setOnClickListener
+                }
+                if (newToken.isBlank()) {
+                    tokenInput.error = "Token is required"
+                    return@setOnClickListener
+                }
+
+                // Save temporarily and test
+                saveButton.isEnabled = false
+                saveButton.text = "Testing..."
+
+                // Save config
+                uk.co.mrsheep.halive.core.HAConfig.saveConfig(this, newUrl, newToken)
+
+                // Test connection
+                viewModel.testHAConnection()
+
+                // Close dialog
+                dialog.dismiss()
+            }
+        }
+
+        dialog.show()
     }
 
     private fun showFirebaseChangeDialog() {

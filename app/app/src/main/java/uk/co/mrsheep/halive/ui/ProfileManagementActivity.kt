@@ -73,12 +73,12 @@ class ProfileManagementActivity : AppCompatActivity() {
             },
             onEdit = { profile ->
                 val intent = Intent(this, ProfileEditorActivity::class.java)
-                intent.putExtra("EXTRA_PROFILE_ID", profile.id)
+                intent.putExtra(ProfileEditorActivity.EXTRA_PROFILE_ID, profile.id)
                 startActivity(intent)
             },
             onDuplicate = { profile ->
                 val intent = Intent(this, ProfileEditorActivity::class.java)
-                intent.putExtra("EXTRA_DUPLICATE_FROM_ID", profile.id)
+                intent.putExtra(ProfileEditorActivity.EXTRA_DUPLICATE_FROM_ID, profile.id)
                 startActivity(intent)
             },
             onDelete = { profile ->

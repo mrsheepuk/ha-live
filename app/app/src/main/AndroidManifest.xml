@@ -13,7 +13,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.Light.DarkActionBar"
+        android:theme="@style/Theme.MyApplication"
         android:usesCleartextTraffic="true">
 
         <activity
@@ -42,7 +42,8 @@
         <activity
             android:name=".ui.ProfileEditorActivity"
             android:exported="false"
-            android:parentActivityName=".ui.ProfileManagementActivity" />
+            android:parentActivityName=".ui.ProfileManagementActivity"
+            android:windowSoftInputMode="adjustResize" />
     </application>
 
 </manifest>

@@ -27,8 +27,7 @@ sealed class UiState {
     object HAConfigNeeded : UiState()        // Need HA URL + token
     object ReadyToTalk : UiState()           // Everything initialized, ready to start chat
     object ChatActive : UiState()            // Chat session is active (listening or executing)
-    object Listening : UiState()
-    object ExecutingAction : UiState()       // Executing a Home Assistant action
+    data class ExecutingAction(val tool: String) : UiState()       // Executing a Home Assistant action
     data class Error(val message: String) : UiState()
 }
 
@@ -199,7 +198,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun stopChat() {
-        geminiService.stopSession()
+        try {
+            geminiService.stopSession()
+        } catch (e: Exception) {
+            _uiState.value = UiState.Error("Failed to stop session: ${e.message}")
+        }
         isSessionActive = false
         _uiState.value = UiState.ReadyToTalk
     }
@@ -216,7 +219,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * It directly connects the Gemini `functionCall` to the MCP executor.
      */
     private suspend fun executeHomeAssistantTool(call: FunctionCallPart): FunctionResponsePart {
-        _uiState.value = UiState.ExecutingAction
+        _uiState.value = UiState.ExecutingAction(call.name)
 
         // Prepare parameters string for logging
         val paramsString = call.args.toString()
@@ -269,7 +272,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             errorResponse
         }
 
-        _uiState.value = UiState.Listening // Return to listening state
+        _uiState.value = UiState.ChatActive // Return to normal chat-active state
         return result
     }
 

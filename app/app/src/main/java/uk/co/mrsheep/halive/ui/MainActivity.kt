@@ -35,8 +35,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mainButton: Button
     private lateinit var toolLogText: TextView
 
-    private var isInitialSpinnerSetup = true
-
     private fun checkConfigurationAndLaunch() {
         // Check if app is configured
         if (FirebaseApp.getApps(this).isEmpty() || !HAConfig.isConfigured(this)) {
@@ -153,19 +151,11 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Chat active - listening..."
                 // Listener is already active
             }
-            UiState.Listening -> {
+            is UiState.ExecutingAction -> {
                 profileSpinner.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 mainButton.text = "Stop Chat"
-                statusText.text = "Listening..."
-                // Listener is already active
-            }
-            UiState.ExecutingAction -> {
-                profileSpinner.isEnabled = false
-                mainButton.visibility = View.VISIBLE
-                mainButton.text = "Stop Chat"
-                statusText.text = "Executing action..."
-                // Keep button active but show execution status
+                statusText.text = "Executing ${state.tool}..."
             }
             is UiState.Error -> {
                 mainButton.visibility = View.GONE
@@ -185,18 +175,16 @@ class MainActivity : AppCompatActivity() {
 
         // Select the active profile
         val activeIndex = profiles.indexOfFirst { it.id == viewModel.currentProfileId }
-        if (activeIndex >= 0) {
-            profileSpinner.setSelection(activeIndex)
-        }
 
         // Handle selection changes
         profileSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (isInitialSpinnerSetup) {
-                    isInitialSpinnerSetup = false
+                val selectedProfile = profiles[position]
+
+                // Ignore if this is the currently selected profile (happens on initial setup)
+                if (selectedProfile.id == viewModel.currentProfileId) {
                     return
                 }
-                val selectedProfile = profiles[position]
 
                 // Check if chat is active before switching
                 if (viewModel.isSessionActive()) {
@@ -216,6 +204,11 @@ class MainActivity : AppCompatActivity() {
                 viewModel.switchProfile(selectedProfile.id)
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Set selection after listener is attached
+        if (activeIndex >= 0) {
+            profileSpinner.setSelection(activeIndex)
         }
     }
 
