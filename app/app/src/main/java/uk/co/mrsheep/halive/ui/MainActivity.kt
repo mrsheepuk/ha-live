@@ -1,35 +1,50 @@
 package uk.co.mrsheep.halive.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
+import uk.co.mrsheep.halive.core.HAConfig
+import uk.co.mrsheep.halive.core.Profile
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    private lateinit var profileSpinner: Spinner
     private lateinit var statusText: TextView
     private lateinit var mainButton: Button
-    private lateinit var haUrlInput: EditText
-    private lateinit var haTokenInput: EditText
-    private lateinit var haConfigContainer: View
-    private lateinit var systemPromptContainer: View
-    private lateinit var systemPromptInput: EditText
-    private lateinit var savePromptButton: Button
-    private lateinit var resetPromptButton: Button
     private lateinit var toolLogText: TextView
+
+    private fun checkConfigurationAndLaunch() {
+        // Check if app is configured
+        if (FirebaseApp.getApps(this).isEmpty() || !HAConfig.isConfigured(this)) {
+            // Launch onboarding
+            val intent = Intent(this, OnboardingActivity::class.java)
+            startActivity(intent)
+            finish()
+            return
+        }
+    }
 
     // Activity Result Launcher for the file picker
     private val selectConfigFileLauncher = registerForActivityResult(
@@ -54,17 +69,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Check configuration first
+        checkConfigurationAndLaunch()
+
         setContentView(R.layout.activity_main)
 
+        profileSpinner = findViewById(R.id.profileSpinner)
         statusText = findViewById(R.id.statusText)
         mainButton = findViewById(R.id.mainButton)
-        haUrlInput = findViewById(R.id.haUrlInput)
-        haTokenInput = findViewById(R.id.haTokenInput)
-        haConfigContainer = findViewById(R.id.haConfigContainer)
-        systemPromptContainer = findViewById(R.id.systemPromptContainer)
-        systemPromptInput = findViewById(R.id.systemPromptInput)
-        savePromptButton = findViewById(R.id.savePromptButton)
-        resetPromptButton = findViewById(R.id.resetPromptButton)
         toolLogText = findViewById(R.id.toolLogText)
 
         // Observe the UI state from the ViewModel
@@ -81,120 +94,121 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Observe system prompt from the ViewModel
+        // Observe profiles and update spinner
         lifecycleScope.launch {
-            viewModel.systemPrompt.collect { prompt ->
-                // Only update the EditText if it's different to avoid cursor jumping
-                if (systemPromptInput.text.toString() != prompt) {
-                    systemPromptInput.setText(prompt)
-                }
+            viewModel.profiles.collect { profiles ->
+                updateProfileSpinner(profiles)
             }
         }
+    }
 
-        // Set up system prompt button listeners
-        savePromptButton.setOnClickListener {
-            viewModel.updateSystemPrompt(systemPromptInput.text.toString())
-            viewModel.saveSystemPrompt()
-        }
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
 
-        resetPromptButton.setOnClickListener {
-            viewModel.resetSystemPromptToDefault()
-        }
-
-        // Listen for text changes to update ViewModel (but don't save yet)
-        systemPromptInput.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) {
-                viewModel.updateSystemPrompt(s.toString())
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_settings -> {
+                val intent = Intent(this, SettingsActivity::class.java)
+                // Pass chat active state
+                intent.putExtra("isChatActive", viewModel.isSessionActive())
+                startActivity(intent)
+                true
             }
-        })
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     private fun updateUiForState(state: UiState) {
         when (state) {
             UiState.Loading -> {
                 mainButton.visibility = View.GONE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.GONE
                 statusText.text = "Loading..."
             }
             UiState.FirebaseConfigNeeded -> {
-                mainButton.visibility = View.VISIBLE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.GONE
-                mainButton.text = "Import google-services.json"
-                statusText.text = "Firebase configuration needed"
-                mainButton.setOnClickListener {
-                    // Launch file picker
-                    selectConfigFileLauncher.launch(arrayOf("application/json"))
-                }
-                mainButton.setOnTouchListener(null) // Remove talk listener
+                // Should not reach here - handled by OnboardingActivity
+                mainButton.visibility = View.GONE
+                statusText.text = "Please complete onboarding"
             }
             UiState.HAConfigNeeded -> {
-                mainButton.visibility = View.VISIBLE
-                haConfigContainer.visibility = View.VISIBLE
-                systemPromptContainer.visibility = View.GONE
-                mainButton.text = "Save HA Config"
-                statusText.text = "Home Assistant configuration needed"
-                mainButton.setOnClickListener {
-                    val url = haUrlInput.text.toString()
-                    val token = haTokenInput.text.toString()
-                    viewModel.saveHAConfig(url, token)
-                }
-                mainButton.setOnTouchListener(null) // Remove talk listener
+                // Should not reach here - handled by OnboardingActivity
+                mainButton.visibility = View.GONE
+                statusText.text = "Please complete onboarding"
             }
             UiState.ReadyToTalk -> {
+                profileSpinner.isEnabled = true
                 mainButton.visibility = View.VISIBLE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.VISIBLE
-                systemPromptInput.isEnabled = true
-                savePromptButton.isEnabled = true
-                resetPromptButton.isEnabled = true
                 mainButton.text = "Start Chat"
                 statusText.text = "Ready to chat"
                 mainButton.setOnTouchListener(null) // Remove touch listener
                 mainButton.setOnClickListener(chatButtonClickListener)
             }
             UiState.ChatActive -> {
+                profileSpinner.isEnabled = false
                 mainButton.visibility = View.VISIBLE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.VISIBLE
-                systemPromptInput.isEnabled = false
-                savePromptButton.isEnabled = false
-                resetPromptButton.isEnabled = false
                 mainButton.text = "Stop Chat"
                 statusText.text = "Chat active - listening..."
                 // Listener is already active
             }
-            UiState.Listening -> {
+            is UiState.ExecutingAction -> {
+                profileSpinner.isEnabled = false
                 mainButton.visibility = View.VISIBLE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.VISIBLE
-                systemPromptInput.isEnabled = false
-                savePromptButton.isEnabled = false
-                resetPromptButton.isEnabled = false
                 mainButton.text = "Stop Chat"
-                statusText.text = "Listening..."
-                // Listener is already active
-            }
-            UiState.ExecutingAction -> {
-                mainButton.visibility = View.VISIBLE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.VISIBLE
-                systemPromptInput.isEnabled = false
-                savePromptButton.isEnabled = false
-                resetPromptButton.isEnabled = false
-                mainButton.text = "Stop Chat"
-                statusText.text = "Executing action..."
-                // Keep button active but show execution status
+                statusText.text = "Executing ${state.tool}..."
             }
             is UiState.Error -> {
                 mainButton.visibility = View.GONE
-                haConfigContainer.visibility = View.GONE
-                systemPromptContainer.visibility = View.GONE
                 statusText.text = state.message
             }
+        }
+    }
+
+    private fun updateProfileSpinner(profiles: List<Profile>) {
+        val adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            profiles.map { it.name }
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        profileSpinner.adapter = adapter
+
+        // Select the active profile
+        val activeIndex = profiles.indexOfFirst { it.id == viewModel.currentProfileId }
+
+        // Handle selection changes
+        profileSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val selectedProfile = profiles[position]
+
+                // Ignore if this is the currently selected profile (happens on initial setup)
+                if (selectedProfile.id == viewModel.currentProfileId) {
+                    return
+                }
+
+                // Check if chat is active before switching
+                if (viewModel.isSessionActive()) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        R.string.profile_switch_during_chat_error,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    // Revert to the current profile
+                    val currentIndex = profiles.indexOfFirst { it.id == viewModel.currentProfileId }
+                    if (currentIndex >= 0) {
+                        profileSpinner.setSelection(currentIndex)
+                    }
+                    return
+                }
+
+                viewModel.switchProfile(selectedProfile.id)
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Set selection after listener is attached
+        if (activeIndex >= 0) {
+            profileSpinner.setSelection(activeIndex)
         }
     }
 

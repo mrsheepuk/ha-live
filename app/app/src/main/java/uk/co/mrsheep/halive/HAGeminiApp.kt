@@ -2,6 +2,7 @@ package uk.co.mrsheep.halive
 
 import android.app.Application
 import uk.co.mrsheep.halive.core.FirebaseConfig
+import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.services.McpClientManager
 import uk.co.mrsheep.halive.services.HomeAssistantRepository
 
@@ -15,6 +16,15 @@ class HAGeminiApp : Application() {
 
         // Try to initialize Firebase on launch
         FirebaseConfig.initializeFirebase(this)
+
+        // Initialize ProfileManager (NEW)
+        ProfileManager.initialize(this)
+
+        // Run migration from SystemPromptConfig to profiles (NEW)
+        ProfileManager.runMigrationIfNeeded(this)
+
+        // Ensure at least one profile exists (NEW)
+        ProfileManager.ensureDefaultProfileExists()
 
         // Note: MCP connection is NOT established here
         // It will be established in MainActivity after user configures HA

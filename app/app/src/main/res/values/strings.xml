@@ -1,3 +1,40 @@
 <resources>
     <string name="app_name">Home Assistant Live</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_title">Welcome to HA Gemini</string>
+    <string name="onboarding_step_1_title">Step 1: Firebase Configuration</string>
+    <string name="onboarding_step_1_desc">Import your google-services.json file to enable Gemini AI.</string>
+    <string name="onboarding_step_2_title">Step 2: Home Assistant</string>
+    <string name="onboarding_step_2_desc">Enter your Home Assistant URL and access token.</string>
+    <string name="onboarding_step_3_title">Setup Complete!</string>
+    <string name="onboarding_step_3_desc">Your app is now configured and ready to use.\\n\\nA default profile has been created. You can customize it later in Settings.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_profiles_section">Profiles</string>
+    <string name="settings_ha_section">Home Assistant</string>
+    <string name="settings_firebase_section">Firebase</string>
+    <string name="settings_read_only_message">Stop chat to modify settings</string>
+
+    <!-- Profile Management -->
+    <string name="profile_management_title">Manage Profiles</string>
+    <string name="profile_create_new">Create New Profile</string>
+    <string name="profile_edit">Edit</string>
+    <string name="profile_duplicate">Duplicate</string>
+    <string name="profile_delete">Delete</string>
+    <string name="profile_delete_confirm">Delete this profile?</string>
+    <string name="profile_delete_last_error">Cannot delete the last profile. Create another profile first.</string>
+    <string name="profile_default_badge">DEFAULT</string>
+    <string name="profile_switch_during_chat_error">Stop chat to switch profiles</string>
+
+    <!-- Profile Editor -->
+    <string name="profile_editor_title_create">Create Profile</string>
+    <string name="profile_editor_title_edit">Edit Profile</string>
+    <string name="profile_editor_name_hint">Profile name</string>
+    <string name="profile_editor_prompt_hint">System prompt…</string>
+    <string name="profile_editor_save">Save</string>
+    <string name="profile_editor_cancel">Cancel</string>
+    <string name="profile_editor_duplicate_name_error">A profile with this name already exists</string>
+    <string name="profile_editor_blank_name_error">Profile name cannot be blank</string>
 </resources>

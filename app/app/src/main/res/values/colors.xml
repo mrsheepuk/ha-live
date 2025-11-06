@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Deep green color scheme - British Racing Green inspired -->
+    <color name="green_200">#81C784</color>
+    <color name="green_500">#1B5E20</color>
+    <color name="green_700">#0D3D15</color>
+    <color name="green_800">#052A0A</color>
+    <color name="light_green_200">#A5D6A7</color>
+    <color name="light_green_700">#2E7D32</color>
+
+    <!-- Legacy colors (kept for compatibility) -->
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>

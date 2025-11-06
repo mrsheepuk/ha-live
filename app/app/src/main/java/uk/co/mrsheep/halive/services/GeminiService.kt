@@ -86,9 +86,8 @@ class GeminiService {
     @OptIn(PublicPreviewAPI::class)
     fun stopSession() {
         try {
-            // Stop the audio conversation and close the session
-            liveSession?.stopAudioConversation()
-            liveSession?.stopReceiving()
+            // Stop the audio conversation by closing the session
+            runBlocking { liveSession?.close() }
             liveSession = null
 
             Log.d(TAG, "Session stopped")

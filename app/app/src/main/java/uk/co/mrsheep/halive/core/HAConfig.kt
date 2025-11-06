@@ -40,4 +40,18 @@ object HAConfig {
     fun clearConfig(context: Context) {
         getPrefs(context).edit().clear().apply()
     }
+
+    fun isValidUrl(url: String): Boolean {
+        if (url.isBlank()) return false
+        return try {
+            val normalizedUrl = url.trim()
+            normalizedUrl.startsWith("http://") || normalizedUrl.startsWith("https://")
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun isValidToken(token: String): Boolean {
+        return token.isNotBlank()
+    }
 }

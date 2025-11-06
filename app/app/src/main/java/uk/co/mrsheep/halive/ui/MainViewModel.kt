@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.HAConfig
+import uk.co.mrsheep.halive.core.Profile
+import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.services.GeminiService
 import com.google.firebase.FirebaseApp
@@ -25,8 +27,7 @@ sealed class UiState {
     object HAConfigNeeded : UiState()        // Need HA URL + token
     object ReadyToTalk : UiState()           // Everything initialized, ready to start chat
     object ChatActive : UiState()            // Chat session is active (listening or executing)
-    object Listening : UiState()
-    object ExecutingAction : UiState()       // Executing a Home Assistant action
+    data class ExecutingAction(val tool: String) : UiState()       // Executing a Home Assistant action
     data class Error(val message: String) : UiState()
 }
 
@@ -40,6 +41,9 @@ data class ToolCallLog(
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
+
+    var currentProfileId: String = ""
+    val profiles = ProfileManager.profiles // Expose for UI
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState
@@ -57,8 +61,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var isSessionActive = false
 
     init {
-        // Load the system prompt from config
-        _systemPrompt.value = SystemPromptConfig.getSystemPrompt(getApplication())
+        // Load the active profile
+        val activeProfile = ProfileManager.getLastUsedOrDefaultProfile()
+        if (activeProfile != null) {
+            currentProfileId = activeProfile.id
+            _systemPrompt.value = activeProfile.systemPrompt
+        }
+
         checkConfiguration()
     }
 
@@ -149,8 +158,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Fetch and transform tools from Home Assistant MCP server
             val tools = app.haRepository?.getTools() ?: emptyList()
 
-            // Use the system prompt from config
-            val systemPrompt = SystemPromptConfig.getSystemPrompt(getApplication())
+            // Use the system prompt from the current profile
+            val profile = ProfileManager.getProfileById(currentProfileId)
+            val systemPrompt = profile?.systemPrompt ?: SystemPromptConfig.getSystemPrompt(getApplication())
 
             // Initialize the Gemini model
             geminiService.initializeModel(tools, systemPrompt)
@@ -188,7 +198,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun stopChat() {
-        geminiService.stopSession()
+        try {
+            geminiService.stopSession()
+        } catch (e: Exception) {
+            _uiState.value = UiState.Error("Failed to stop session: ${e.message}")
+        }
         isSessionActive = false
         _uiState.value = UiState.ReadyToTalk
     }
@@ -205,7 +219,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * It directly connects the Gemini `functionCall` to the MCP executor.
      */
     private suspend fun executeHomeAssistantTool(call: FunctionCallPart): FunctionResponsePart {
-        _uiState.value = UiState.ExecutingAction
+        _uiState.value = UiState.ExecutingAction(call.name)
 
         // Prepare parameters string for logging
         val paramsString = call.args.toString()
@@ -258,7 +272,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             errorResponse
         }
 
-        _uiState.value = UiState.Listening // Return to listening state
+        _uiState.value = UiState.ChatActive // Return to normal chat-active state
         return result
     }
 
@@ -291,6 +305,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _systemPrompt.value = SystemPromptConfig.getSystemPrompt(getApplication())
         }
     }
+
+    /**
+     * Switch to a different profile
+     */
+    fun switchProfile(profileId: String) {
+        if (isSessionActive) {
+            // Show toast in UI
+            return
+        }
+
+        val profile = ProfileManager.getProfileById(profileId) ?: return
+        currentProfileId = profileId
+        _systemPrompt.value = profile.systemPrompt
+        ProfileManager.markProfileAsUsed(profileId)
+
+        // Reinitialize Gemini with new prompt
+        viewModelScope.launch {
+            try {
+                val tools = app.haRepository?.getTools() ?: emptyList()
+                geminiService.initializeModel(tools, profile.systemPrompt)
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+    }
+
+    /**
+     * Public method to expose session state
+     */
+    fun isSessionActive(): Boolean = isSessionActive
 
     override fun onCleared() {
         super.onCleared()
