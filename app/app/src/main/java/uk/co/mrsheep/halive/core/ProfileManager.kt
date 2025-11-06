@@ -262,6 +262,8 @@ object ProfileManager {
         val duplicate = Profile(
             name = newName,
             systemPrompt = original.systemPrompt,
+            personality = original.personality,
+            backgroundInfo = original.backgroundInfo,
             isDefault = false // Duplicates are never default
         )
 

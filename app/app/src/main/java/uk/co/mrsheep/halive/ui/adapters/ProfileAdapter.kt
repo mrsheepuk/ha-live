@@ -58,7 +58,7 @@ class ProfileAdapter(
 
         fun bind(profile: Profile) {
             profileNameText.text = profile.name
-            promptPreviewText.text = profile.systemPrompt
+            promptPreviewText.text = profile.getCombinedPrompt()
 
             // Show/hide default badge
             defaultBadge.visibility = if (profile.isDefault) View.VISIBLE else View.GONE

@@ -53,9 +53,11 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      *
      * @param name The profile name
      * @param systemPrompt The system prompt text
+     * @param personality The personality prompt text
+     * @param backgroundInfo The background information text
      * @param existingId The ID of existing profile (null for create)
      */
-    fun saveProfile(name: String, systemPrompt: String, existingId: String?) {
+    fun saveProfile(name: String, systemPrompt: String, personality: String, backgroundInfo: String, existingId: String?) {
         viewModelScope.launch {
             _editorState.value = ProfileEditorState.Saving
 
@@ -76,7 +78,9 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
 
                     val updated = existing.copy(
                         name = name.trim(),
-                        systemPrompt = systemPrompt
+                        systemPrompt = systemPrompt,
+                        personality = personality,
+                        backgroundInfo = backgroundInfo
                     )
 
                     ProfileManager.updateProfile(updated)
@@ -85,6 +89,8 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                     val newProfile = Profile(
                         name = name.trim(),
                         systemPrompt = systemPrompt,
+                        personality = personality,
+                        backgroundInfo = backgroundInfo,
                         isDefault = false
                     )
 

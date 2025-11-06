@@ -65,7 +65,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val activeProfile = ProfileManager.getLastUsedOrDefaultProfile()
         if (activeProfile != null) {
             currentProfileId = activeProfile.id
-            _systemPrompt.value = activeProfile.systemPrompt
+            _systemPrompt.value = activeProfile.getCombinedPrompt()
         }
 
         checkConfiguration()
@@ -160,7 +160,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             // Use the system prompt from the current profile
             val profile = ProfileManager.getProfileById(currentProfileId)
-            val systemPrompt = profile?.systemPrompt ?: SystemPromptConfig.getSystemPrompt(getApplication())
+            val systemPrompt = profile?.getCombinedPrompt() ?: SystemPromptConfig.getSystemPrompt(getApplication())
 
             // Initialize the Gemini model
             geminiService.initializeModel(tools, systemPrompt)
@@ -317,14 +317,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val profile = ProfileManager.getProfileById(profileId) ?: return
         currentProfileId = profileId
-        _systemPrompt.value = profile.systemPrompt
+        _systemPrompt.value = profile.getCombinedPrompt()
         ProfileManager.markProfileAsUsed(profileId)
 
         // Reinitialize Gemini with new prompt
         viewModelScope.launch {
             try {
                 val tools = app.haRepository?.getTools() ?: emptyList()
-                geminiService.initializeModel(tools, profile.systemPrompt)
+                geminiService.initializeModel(tools, profile.getCombinedPrompt())
             } catch (e: Exception) {
                 // Handle error
             }
