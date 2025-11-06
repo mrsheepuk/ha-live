@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:paddingTop="72dp">
 
         <!-- Profile Name Input -->
         <com.google.android.material.textfield.TextInputLayout
