@@ -167,10 +167,10 @@ class MainActivity : AppCompatActivity() {
     private fun updateProfileSpinner(profiles: List<Profile>) {
         val adapter = ArrayAdapter(
             this,
-            android.R.layout.simple_spinner_item,
+            R.layout.spinner_item,
             profiles.map { it.name }
         )
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        adapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
         profileSpinner.adapter = adapter
 
         // Select the active profile
