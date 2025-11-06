@@ -87,7 +87,7 @@ class GeminiService {
     fun stopSession() {
         try {
             // Stop the audio conversation by closing the session
-            liveSession?.close()
+            runBlocking { liveSession?.close() }
             liveSession = null
 
             Log.d(TAG, "Session stopped")
