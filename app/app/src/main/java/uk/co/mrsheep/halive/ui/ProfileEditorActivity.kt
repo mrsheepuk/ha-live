@@ -1,12 +1,18 @@
 package uk.co.mrsheep.halive.ui
 
 import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import android.view.animation.Animation
+import android.view.animation.Transformation
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import uk.co.mrsheep.halive.R
@@ -23,16 +29,36 @@ class ProfileEditorActivity : AppCompatActivity() {
     }
 
     // UI components
+    // Profile name (unchanged)
     private lateinit var profileNameLayout: TextInputLayout
     private lateinit var profileNameInput: TextInputEditText
-    private lateinit var systemPromptLayout: TextInputLayout
+
+    // System Prompt expansion panel
+    private lateinit var systemPromptHeader: View
+    private lateinit var systemPromptContent: View
+    private lateinit var systemPromptExpandIcon: ImageView
     private lateinit var systemPromptInput: TextInputEditText
-    private lateinit var personalityLayout: TextInputLayout
+
+    // Personality expansion panel
+    private lateinit var personalityHeader: View
+    private lateinit var personalityContent: View
+    private lateinit var personalityExpandIcon: ImageView
     private lateinit var personalityInput: TextInputEditText
-    private lateinit var backgroundInfoLayout: TextInputLayout
+
+    // Background Info expansion panel
+    private lateinit var backgroundInfoHeader: View
+    private lateinit var backgroundInfoContent: View
+    private lateinit var backgroundInfoExpandIcon: ImageView
     private lateinit var backgroundInfoInput: TextInputEditText
+
+    // Buttons (unchanged)
     private lateinit var saveButton: Button
     private lateinit var cancelButton: Button
+
+    // Expansion state
+    private var isSystemPromptExpanded = true
+    private var isPersonalityExpanded = false
+    private var isBackgroundInfoExpanded = false
 
     // Mode tracking
     private var editingProfileId: String? = null
@@ -79,12 +105,22 @@ class ProfileEditorActivity : AppCompatActivity() {
     private fun initViews() {
         profileNameLayout = findViewById(R.id.profileNameLayout)
         profileNameInput = findViewById(R.id.profileNameInput)
-        systemPromptLayout = findViewById(R.id.systemPromptLayout)
+
+        systemPromptHeader = findViewById(R.id.systemPromptHeader)
+        systemPromptContent = findViewById(R.id.systemPromptContent)
+        systemPromptExpandIcon = findViewById(R.id.systemPromptExpandIcon)
         systemPromptInput = findViewById(R.id.systemPromptInput)
-        personalityLayout = findViewById(R.id.personalityLayout)
+
+        personalityHeader = findViewById(R.id.personalityHeader)
+        personalityContent = findViewById(R.id.personalityContent)
+        personalityExpandIcon = findViewById(R.id.personalityExpandIcon)
         personalityInput = findViewById(R.id.personalityInput)
-        backgroundInfoLayout = findViewById(R.id.backgroundInfoLayout)
+
+        backgroundInfoHeader = findViewById(R.id.backgroundInfoHeader)
+        backgroundInfoContent = findViewById(R.id.backgroundInfoContent)
+        backgroundInfoExpandIcon = findViewById(R.id.backgroundInfoExpandIcon)
         backgroundInfoInput = findViewById(R.id.backgroundInfoInput)
+
         saveButton = findViewById(R.id.saveButton)
         cancelButton = findViewById(R.id.cancelButton)
 
@@ -98,6 +134,43 @@ class ProfileEditorActivity : AppCompatActivity() {
 
         cancelButton.setOnClickListener {
             finish()
+        }
+
+        // Setup expansion panels
+        setupExpansionPanel(systemPromptHeader, systemPromptContent, systemPromptExpandIcon, isSystemPromptExpanded)
+            { isSystemPromptExpanded = it }
+        setupExpansionPanel(personalityHeader, personalityContent, personalityExpandIcon, isPersonalityExpanded)
+            { isPersonalityExpanded = it }
+        setupExpansionPanel(backgroundInfoHeader, backgroundInfoContent, backgroundInfoExpandIcon, isBackgroundInfoExpanded)
+            { isBackgroundInfoExpanded = it }
+    }
+
+    private fun setupExpansionPanel(
+        headerView: View,
+        contentView: View,
+        iconView: ImageView,
+        initiallyExpanded: Boolean,
+        onToggle: (Boolean) -> Unit
+    ) {
+        // Set initial icon rotation
+        iconView.rotation = if (initiallyExpanded) 180f else 0f
+
+        headerView.setOnClickListener {
+            val isExpanding = contentView.visibility != View.VISIBLE
+
+            if (isExpanding) {
+                contentView.visibility = View.VISIBLE
+            } else {
+                contentView.visibility = View.GONE
+            }
+
+            // Animate icon rotation
+            iconView.animate()
+                .rotation(if (isExpanding) 180f else 0f)
+                .setDuration(200)
+                .start()
+
+            onToggle(isExpanding)
         }
     }
 
@@ -128,7 +201,6 @@ class ProfileEditorActivity : AppCompatActivity() {
                 saveButton.isEnabled = false
                 saveButton.text = "Saving..."
                 profileNameLayout.error = null
-                systemPromptLayout.error = null
             }
             is ProfileEditorState.SaveSuccess -> {
                 // Show success and finish

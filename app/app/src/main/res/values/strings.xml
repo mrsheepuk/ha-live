@@ -39,4 +39,10 @@
     <string name="profile_editor_cancel">Cancel</string>
     <string name="profile_editor_duplicate_name_error">A profile with this name already exists</string>
     <string name="profile_editor_blank_name_error">Profile name cannot be blank</string>
+    <string name="profile_editor_system_prompt_title">System Prompt</string>
+    <string name="profile_editor_personality_title">Personality</string>
+    <string name="profile_editor_background_info_title">Background Info</string>
+    <string name="expand_collapse_system_prompt">Expand or collapse system prompt section</string>
+    <string name="expand_collapse_personality">Expand or collapse personality section</string>
+    <string name="expand_collapse_background_info">Expand or collapse background info section</string>
 </resources>
