@@ -214,23 +214,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     // Build combined prompt manually with live context in its own section
-                    """
-                    <system_prompt>
-                    ${profile.systemPrompt}
-                    </system_prompt>
+                    """<system_prompt>
+${profile.systemPrompt}
+</system_prompt>
 
-                    <personality>
-                    ${profile.personality}
-                    </personality>
+<personality>
+${profile.personality}
+</personality>
 
-                    <background_info>
-                    ${profile.backgroundInfo}
-                    </background_info>
+<background_info>
+${profile.backgroundInfo}
+</background_info>
 
-                    <initial_live_context>
-                    $liveContextText
-                    </initial_live_context>
-                    """.trimIndent()
+<initial_live_context>
+$liveContextText
+</initial_live_context>""".trimIndent()
                 } else {
                     // Use profile's standard combined prompt
                     profile.getCombinedPrompt()
@@ -442,3 +440,4 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         geminiService.cleanup()
     }
 }
+
