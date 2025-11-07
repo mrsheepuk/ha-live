@@ -43,13 +43,18 @@ jobs:
         working-directory: ./app
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug
+          echo "Verifying keystore one last time, right before build..."
+          ls -l ~/.android/debug.keystore
+          
+          echo "Running Gradle build with --info and --stacktrace..."
+          ./gradlew assembleDebug --info --stacktrace
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v5
         with:
           name: app-debug-apk
           path: ./app/app/build/outputs/apk/debug/app-debug.apk
+
 
 
 
