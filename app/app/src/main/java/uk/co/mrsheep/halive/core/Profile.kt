@@ -13,11 +13,11 @@ import java.util.UUID
 data class Profile(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
-    val systemPrompt: String,
-    val personality: String,
-    val backgroundInfo: String,
-    val model: String,
-    val voice: String,
+    val systemPrompt: String = SystemPromptConfig.DEFAULT_SYSTEM_PROMPT,
+    val personality: String = SystemPromptConfig.DEFAULT_PERSONALITY,
+    val backgroundInfo: String = SystemPromptConfig.DEFAULT_BACKGROUND_INFO,
+    val model: String = SystemPromptConfig.DEFAULT_MODEL,
+    val voice: String = SystemPromptConfig.DEFAULT_VOICE,
     val isDefault: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val lastUsedAt: Long = System.currentTimeMillis()
