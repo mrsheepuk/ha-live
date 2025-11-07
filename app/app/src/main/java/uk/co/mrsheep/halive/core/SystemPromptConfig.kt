@@ -39,6 +39,9 @@ Behave like the ship's computer from Star Trek: The Next Generation.
 You are currently speaking with User.
 """.trimIndent()
 
+    const val DEFAULT_MODEL = "gemini-live-2.5-flash-preview"
+    const val DEFAULT_VOICE = "Aoede"
+
     val DEFAULT_COMBINED_PROMPT = """
 <system_prompt>
 You are a helpful, conversational, assistant integrated with Home Assistant.

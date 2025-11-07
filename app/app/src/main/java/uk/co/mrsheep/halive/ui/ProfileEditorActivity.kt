@@ -5,6 +5,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.Animation
 import android.view.animation.Transformation
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.Toast
@@ -32,6 +34,10 @@ class ProfileEditorActivity : AppCompatActivity() {
     // Profile name (unchanged)
     private lateinit var profileNameLayout: TextInputLayout
     private lateinit var profileNameInput: TextInputEditText
+    private lateinit var modelLayout: TextInputLayout
+    private lateinit var modelInput: AutoCompleteTextView
+    private lateinit var voiceLayout: TextInputLayout
+    private lateinit var voiceInput: AutoCompleteTextView
 
     // System Prompt expansion panel
     private lateinit var systemPromptHeader: View
@@ -105,6 +111,22 @@ class ProfileEditorActivity : AppCompatActivity() {
     private fun initViews() {
         profileNameLayout = findViewById(R.id.profileNameLayout)
         profileNameInput = findViewById(R.id.profileNameInput)
+        modelLayout = findViewById(R.id.modelLayout)
+        modelInput = findViewById(R.id.modelInput)
+        voiceLayout = findViewById(R.id.voiceLayout)
+        voiceInput = findViewById(R.id.voiceInput)
+
+        // Setup model dropdown - hardcoded single option for now
+        val modelOptions = arrayOf("gemini-live-2.5-flash-preview")
+        val modelAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, modelOptions)
+        modelInput.setAdapter(modelAdapter)
+        modelInput.setText(modelOptions[0], false) // Set default
+
+        // Setup voice dropdown - hardcoded two options
+        val voiceOptions = arrayOf("Aoede", "Leda")
+        val voiceAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, voiceOptions)
+        voiceInput.setAdapter(voiceAdapter)
+        voiceInput.setText(voiceOptions[0], false) // Set default to Aoede
 
         systemPromptHeader = findViewById(R.id.systemPromptHeader)
         systemPromptContent = findViewById(R.id.systemPromptContent)
@@ -129,7 +151,9 @@ class ProfileEditorActivity : AppCompatActivity() {
             val prompt = systemPromptInput.text?.toString() ?: ""
             val personality = personalityInput.text?.toString() ?: ""
             val backgroundInfo = backgroundInfoInput.text?.toString() ?: ""
-            viewModel.saveProfile(name, prompt, personality, backgroundInfo, editingProfileId)
+            val model = modelInput.text?.toString() ?: ""
+            val voice = voiceInput.text?.toString() ?: ""
+            viewModel.saveProfile(name, prompt, personality, backgroundInfo, model, voice, editingProfileId)
         }
 
         cancelButton.setOnClickListener {
@@ -194,6 +218,8 @@ class ProfileEditorActivity : AppCompatActivity() {
                 systemPromptInput.setText(state.profile.systemPrompt)
                 personalityInput.setText(state.profile.personality)
                 backgroundInfoInput.setText(state.profile.backgroundInfo)
+                modelInput.setText(state.profile.model, false)
+                voiceInput.setText(state.profile.voice, false)
                 saveButton.isEnabled = true
             }
             is ProfileEditorState.Saving -> {

@@ -16,6 +16,8 @@ data class Profile(
     val systemPrompt: String,
     val personality: String,
     val backgroundInfo: String,
+    val model: String,
+    val voice: String,
     val isDefault: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val lastUsedAt: Long = System.currentTimeMillis()
@@ -30,6 +32,8 @@ data class Profile(
                 systemPrompt = SystemPromptConfig.DEFAULT_SYSTEM_PROMPT,
                 personality = SystemPromptConfig.DEFAULT_PERSONALITY,
                 backgroundInfo = SystemPromptConfig.DEFAULT_BACKGROUND_INFO,
+                model = SystemPromptConfig.DEFAULT_MODEL,
+                voice = SystemPromptConfig.DEFAULT_VOICE,
                 isDefault = true
             )
         }
@@ -70,7 +74,9 @@ data class Profile(
             "name": "$name",
             "systemPrompt": "${systemPrompt.replace("\"", "\\\"")}",
             "personality": "${personality.replace("\"", "\\\"")}",
-            "backgroundInfo": "${backgroundInfo.replace("\"", "\\\"")}"
+            "backgroundInfo": "${backgroundInfo.replace("\"", "\\\"")}",
+            "model": "${model.replace("\"", "\\\"")}",
+            "voice": "${voice.replace("\"", "\\\"")}"
         }
         """.trimIndent()
     }

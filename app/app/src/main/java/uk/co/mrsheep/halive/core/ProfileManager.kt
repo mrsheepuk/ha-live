@@ -264,6 +264,8 @@ object ProfileManager {
             systemPrompt = original.systemPrompt,
             personality = original.personality,
             backgroundInfo = original.backgroundInfo,
+            model = original.model,
+            voice = original.voice,
             isDefault = false // Duplicates are never default
         )
 

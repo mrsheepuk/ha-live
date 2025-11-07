@@ -55,9 +55,19 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      * @param systemPrompt The system prompt text
      * @param personality The personality prompt text
      * @param backgroundInfo The background information text
+     * @param model The AI model to use
+     * @param voice The voice to use for audio responses
      * @param existingId The ID of existing profile (null for create)
      */
-    fun saveProfile(name: String, systemPrompt: String, personality: String, backgroundInfo: String, existingId: String?) {
+    fun saveProfile(
+        name: String,
+        systemPrompt: String,
+        personality: String,
+        backgroundInfo: String,
+        model: String,
+        voice: String,
+        existingId: String?
+    ) {
         viewModelScope.launch {
             _editorState.value = ProfileEditorState.Saving
 
@@ -80,7 +90,9 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         name = name.trim(),
                         systemPrompt = systemPrompt,
                         personality = personality,
-                        backgroundInfo = backgroundInfo
+                        backgroundInfo = backgroundInfo,
+                        model = model,
+                        voice = voice
                     )
 
                     ProfileManager.updateProfile(updated)
@@ -91,6 +103,8 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         systemPrompt = systemPrompt,
                         personality = personality,
                         backgroundInfo = backgroundInfo,
+                        model = model,
+                        voice = voice,
                         isDefault = false
                     )
 
