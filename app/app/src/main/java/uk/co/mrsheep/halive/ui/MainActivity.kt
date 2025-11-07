@@ -18,6 +18,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.firebase.FirebaseApp
@@ -30,6 +31,7 @@ class MainActivity : AppCompatActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    private lateinit var toolbar: Toolbar
     private lateinit var profileSpinner: Spinner
     private lateinit var statusText: TextView
     private lateinit var mainButton: Button
@@ -75,6 +77,9 @@ class MainActivity : AppCompatActivity() {
         checkConfigurationAndLaunch()
 
         setContentView(R.layout.activity_main)
+
+        toolbar = findViewById(R.id.toolbar)
+        setSupportActionBar(toolbar)
 
         profileSpinner = findViewById(R.id.profileSpinner)
         statusText = findViewById(R.id.statusText)
