@@ -84,7 +84,6 @@
             app:cardElevation="2dp"
             app:cardCornerRadius="12dp"
             app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutline"
             android:layout_marginBottom="8dp">
 
             <LinearLayout
@@ -118,8 +117,7 @@
                         android:layout_width="24dp"
                         android:layout_height="24dp"
                         android:src="@drawable/ic_expand_more"
-                        android:contentDescription="@string/expand_collapse_system_prompt"
-                        app:tint="?attr/colorOnSurfaceVariant" />
+                        android:contentDescription="@string/expand_collapse_system_prompt" />
 
                 </LinearLayout>
 
@@ -164,7 +162,6 @@
             app:cardElevation="2dp"
             app:cardCornerRadius="12dp"
             app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutline"
             android:layout_marginBottom="8dp">
 
             <LinearLayout
@@ -198,8 +195,7 @@
                         android:layout_width="24dp"
                         android:layout_height="24dp"
                         android:src="@drawable/ic_expand_more"
-                        android:contentDescription="@string/expand_collapse_personality"
-                        app:tint="?attr/colorOnSurfaceVariant" />
+                        android:contentDescription="@string/expand_collapse_personality" />
 
                 </LinearLayout>
 
@@ -244,7 +240,6 @@
             app:cardElevation="2dp"
             app:cardCornerRadius="12dp"
             app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutline"
             android:layout_marginBottom="8dp">
 
             <LinearLayout
@@ -278,8 +273,7 @@
                         android:layout_width="24dp"
                         android:layout_height="24dp"
                         android:src="@drawable/ic_expand_more"
-                        android:contentDescription="@string/expand_collapse_background_info"
-                        app:tint="?attr/colorOnSurfaceVariant" />
+                        android:contentDescription="@string/expand_collapse_background_info" />
 
                 </LinearLayout>
 
