@@ -18,6 +18,7 @@ data class Profile(
     val backgroundInfo: String = SystemPromptConfig.DEFAULT_BACKGROUND_INFO,
     val model: String = SystemPromptConfig.DEFAULT_MODEL,
     val voice: String = SystemPromptConfig.DEFAULT_VOICE,
+    val includeLiveContext: Boolean = SystemPromptConfig.DEFAULT_INCLUDE_LIVE_CONTEXT,
     val isDefault: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val lastUsedAt: Long = System.currentTimeMillis()
@@ -34,6 +35,7 @@ data class Profile(
                 backgroundInfo = SystemPromptConfig.DEFAULT_BACKGROUND_INFO,
                 model = SystemPromptConfig.DEFAULT_MODEL,
                 voice = SystemPromptConfig.DEFAULT_VOICE,
+                includeLiveContext = SystemPromptConfig.DEFAULT_INCLUDE_LIVE_CONTEXT,
                 isDefault = true
             )
         }
@@ -76,7 +78,8 @@ data class Profile(
             "personality": "${personality.replace("\"", "\\\"")}",
             "backgroundInfo": "${backgroundInfo.replace("\"", "\\\"")}",
             "model": "${model.replace("\"", "\\\"")}",
-            "voice": "${voice.replace("\"", "\\\"")}"
+            "voice": "${voice.replace("\"", "\\\"")}",
+            "includeLiveContext": $includeLiveContext
         }
         """.trimIndent()
     }

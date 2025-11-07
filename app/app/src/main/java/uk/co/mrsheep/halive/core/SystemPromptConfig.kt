@@ -41,6 +41,7 @@ You are currently speaking with User.
 
     const val DEFAULT_MODEL = "gemini-live-2.5-flash-preview"
     const val DEFAULT_VOICE = "Aoede"
+    const val DEFAULT_INCLUDE_LIVE_CONTEXT = true
 
     val DEFAULT_COMBINED_PROMPT = """
 <system_prompt>

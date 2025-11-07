@@ -57,6 +57,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      * @param backgroundInfo The background information text
      * @param model The AI model to use
      * @param voice The voice to use for audio responses
+     * @param includeLiveContext Whether to include live context with system prompt
      * @param existingId The ID of existing profile (null for create)
      */
     fun saveProfile(
@@ -66,6 +67,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
         backgroundInfo: String,
         model: String,
         voice: String,
+        includeLiveContext: Boolean,
         existingId: String?
     ) {
         viewModelScope.launch {
@@ -92,7 +94,8 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         personality = personality,
                         backgroundInfo = backgroundInfo,
                         model = model,
-                        voice = voice
+                        voice = voice,
+                        includeLiveContext = includeLiveContext
                     )
 
                     ProfileManager.updateProfile(updated)
@@ -105,6 +108,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         backgroundInfo = backgroundInfo,
                         model = model,
                         voice = voice,
+                        includeLiveContext = includeLiveContext,
                         isDefault = false
                     )
 

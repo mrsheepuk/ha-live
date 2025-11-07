@@ -2,6 +2,7 @@ package uk.co.mrsheep.halive.ui
 
 import android.app.Application
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
@@ -41,6 +42,10 @@ data class ToolCallLog(
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
+
+    companion object {
+        private const val TAG = "MainViewModel"
+    }
 
     var currentProfileId: String = ""
     val profiles = ProfileManager.profiles // Expose for UI
@@ -168,7 +173,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             // Use the system prompt from the current profile
             val profile = ProfileManager.getProfileById(currentProfileId)
-            val systemPrompt = profile?.getCombinedPrompt() ?: SystemPromptConfig.getSystemPrompt(getApplication())
+
+            // Determine the system prompt to use
+            val systemPrompt = if (profile != null) {
+                // Check if we should include live context
+                if (profile.includeLiveContext) {
+                    // Fetch live context from Home Assistant
+                    val liveContextResponse = try {
+                        // Create a FunctionCallPart for GetLiveContext
+                        val getLiveContextCall = FunctionCallPart(
+                            name = "GetLiveContext",
+                            args = emptyMap()
+                        )
+                        val response = app.haRepository?.executeTool(getLiveContextCall)
+                        response?.response?.toString() ?: ""
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to fetch live context: ${e.message}")
+                        "" // Continue without live context on error
+                    }
+
+                    // Create a modified profile with live context appended to background info
+                    val enhancedBackgroundInfo = if (liveContextResponse.isNotEmpty()) {
+                        "${profile.backgroundInfo}\n\nCurrent Home State:\n$liveContextResponse"
+                    } else {
+                        profile.backgroundInfo
+                    }
+
+                    // Build combined prompt manually with enhanced background info
+                    """
+                    <system_prompt>
+                    ${profile.systemPrompt}
+                    </system_prompt>
+
+                    <personality>
+                    ${profile.personality}
+                    </personality>
+
+                    <background_info>
+                    $enhancedBackgroundInfo
+                    </background_info>
+                    """.trimIndent()
+                } else {
+                    // Use profile's standard combined prompt
+                    profile.getCombinedPrompt()
+                }
+            } else {
+                SystemPromptConfig.getSystemPrompt(getApplication())
+            }
+
             val model = profile?.model ?: SystemPromptConfig.DEFAULT_MODEL
             val voice = profile?.voice ?: SystemPromptConfig.DEFAULT_VOICE
 

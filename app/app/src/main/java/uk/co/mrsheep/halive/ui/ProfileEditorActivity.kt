@@ -15,6 +15,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import uk.co.mrsheep.halive.R
@@ -56,6 +57,8 @@ class ProfileEditorActivity : AppCompatActivity() {
     private lateinit var backgroundInfoContent: View
     private lateinit var backgroundInfoExpandIcon: ImageView
     private lateinit var backgroundInfoInput: TextInputEditText
+
+    private lateinit var includeLiveContextCheckbox: MaterialCheckBox
 
     // Buttons (unchanged)
     private lateinit var saveButton: Button
@@ -143,6 +146,8 @@ class ProfileEditorActivity : AppCompatActivity() {
         backgroundInfoExpandIcon = findViewById(R.id.backgroundInfoExpandIcon)
         backgroundInfoInput = findViewById(R.id.backgroundInfoInput)
 
+        includeLiveContextCheckbox = findViewById(R.id.includeLiveContextCheckbox)
+
         saveButton = findViewById(R.id.saveButton)
         cancelButton = findViewById(R.id.cancelButton)
 
@@ -153,7 +158,8 @@ class ProfileEditorActivity : AppCompatActivity() {
             val backgroundInfo = backgroundInfoInput.text?.toString() ?: ""
             val model = modelInput.text?.toString() ?: ""
             val voice = voiceInput.text?.toString() ?: ""
-            viewModel.saveProfile(name, prompt, personality, backgroundInfo, model, voice, editingProfileId)
+            val includeLiveContext = includeLiveContextCheckbox.isChecked
+            viewModel.saveProfile(name, prompt, personality, backgroundInfo, model, voice, includeLiveContext, editingProfileId)
         }
 
         cancelButton.setOnClickListener {
@@ -220,6 +226,7 @@ class ProfileEditorActivity : AppCompatActivity() {
                 backgroundInfoInput.setText(state.profile.backgroundInfo)
                 modelInput.setText(state.profile.model, false)
                 voiceInput.setText(state.profile.voice, false)
+                includeLiveContextCheckbox.isChecked = state.profile.includeLiveContext
                 saveButton.isEnabled = true
             }
             is ProfileEditorState.Saving -> {
