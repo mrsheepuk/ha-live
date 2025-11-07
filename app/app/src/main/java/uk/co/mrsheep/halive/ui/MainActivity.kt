@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var mainButton: Button
     private lateinit var toolLogText: TextView
+    private lateinit var retryButton: Button
 
     private fun checkConfigurationAndLaunch() {
         // Check if app is configured
@@ -79,6 +80,11 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         mainButton = findViewById(R.id.mainButton)
         toolLogText = findViewById(R.id.toolLogText)
+        retryButton = findViewById(R.id.retryButton)
+
+        retryButton.setOnClickListener {
+            viewModel.retryInitialization()
+        }
 
         // Observe the UI state from the ViewModel
         lifecycleScope.launch {
@@ -124,6 +130,7 @@ class MainActivity : AppCompatActivity() {
         when (state) {
             UiState.Loading -> {
                 mainButton.visibility = View.GONE
+                retryButton.visibility = View.GONE
                 statusText.text = "Loading..."
             }
             UiState.FirebaseConfigNeeded -> {
@@ -139,6 +146,7 @@ class MainActivity : AppCompatActivity() {
             UiState.ReadyToTalk -> {
                 profileSpinner.isEnabled = true
                 mainButton.visibility = View.VISIBLE
+                retryButton.visibility = View.GONE
                 mainButton.text = "Start Chat"
                 statusText.text = "Ready to chat"
                 mainButton.setOnTouchListener(null) // Remove touch listener
@@ -147,6 +155,7 @@ class MainActivity : AppCompatActivity() {
             UiState.ChatActive -> {
                 profileSpinner.isEnabled = false
                 mainButton.visibility = View.VISIBLE
+                retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Chat active - listening..."
                 // Listener is already active
@@ -154,11 +163,13 @@ class MainActivity : AppCompatActivity() {
             is UiState.ExecutingAction -> {
                 profileSpinner.isEnabled = false
                 mainButton.visibility = View.VISIBLE
+                retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Executing ${state.tool}..."
             }
             is UiState.Error -> {
                 mainButton.visibility = View.GONE
+                retryButton.visibility = View.VISIBLE
                 statusText.text = state.message
             }
         }
