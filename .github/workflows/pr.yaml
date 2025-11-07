@@ -24,6 +24,8 @@ jobs:
         with:
           distribution: 'temurin' # See 'Supported distributions' for available options
           java-version: '21'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
       - name: Run debug gradle build
         working-directory: ./app
         run: |
