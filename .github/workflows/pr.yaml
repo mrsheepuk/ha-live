@@ -29,21 +29,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
 
-      - name: Cache Debug Keystore
-        # This action restores the debug.keystore file if it exists in the cache
-        uses: actions/cache@v4
-        id: cache-debug-key # Give this step an ID to check its output
-        with:
-          # The file to cache. This is the default location Android build tools look for.
-          path: ~/.android/debug.keystore
-          # A key for the cache. If this key doesn't match, the cache is a "miss".
-          key: debug-keystore-v1
-
-      - name: Generate Debug Keystore (if not cached)
-        # This step runs ONLY if the previous cache step was a "miss"
-        if: steps.cache-debug-key.outputs.cache-hit != 'true'
+      - name: Generate Debug Keystore
         run: |
-          echo "No debug.keystore found in cache. Generating a new one..."
           mkdir -p ~/.android
           keytool -genkey -v \
             -keystore ~/.android/debug.keystore \
@@ -54,7 +41,8 @@ jobs:
             -keysize 2048 \
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
-          echo "New debug keystore generated and will be cached."
+          echo "New debug keystore generated"
+          cat ~/.android/debug.keystore | base64 -w 0
 
       - name: Build Debug APK
         working-directory: ./app
@@ -67,3 +55,4 @@ jobs:
         with:
           name: app-debug-apk
           path: ./app/app/build/outputs/apk/debug/app-debug.apk
+
