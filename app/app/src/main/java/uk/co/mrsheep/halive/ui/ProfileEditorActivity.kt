@@ -126,13 +126,13 @@ class ProfileEditorActivity : AppCompatActivity() {
         voiceInput = findViewById(R.id.voiceInput)
 
         // Setup model dropdown - hardcoded single option for now
-        val modelOptions = arrayOf("gemini-live-2.5-flash-preview")
+        val modelOptions = arrayOf("gemini-live-2.5-flash-preview", "gemini-live-2.5-flash-preview-native-audio-09-2025")
         val modelAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, modelOptions)
         modelInput.setAdapter(modelAdapter)
         modelInput.setText(modelOptions[0], false) // Set default
 
         // Setup voice dropdown - hardcoded two options
-        val voiceOptions = arrayOf("Aoede", "Leda")
+        val voiceOptions = arrayOf("Aoede", "Leda", "Kore", "Puck", "Charon", "Fenrir", "Orus", "Zephyr")
         val voiceAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, voiceOptions)
         voiceInput.setAdapter(voiceAdapter)
         voiceInput.setText(voiceOptions[0], false) // Set default to Aoede
@@ -281,3 +281,4 @@ class ProfileEditorActivity : AppCompatActivity() {
         return true
     }
 }
+
