@@ -9,8 +9,6 @@ permissions:
   statuses: write # Set commit statuses as tests pass or fail
   pull-requests: write # Get/comment the PR itself
 
-env:
-
 # Cancel whole workflow if another push is made to this branch
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
