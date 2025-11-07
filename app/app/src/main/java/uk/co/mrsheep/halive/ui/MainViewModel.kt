@@ -167,6 +167,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Initialize the Gemini model with tools from MCP.
      */
     private suspend fun initializeGemini() {
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+            .format(java.util.Date())
+
         try {
             // Fetch and transform tools from Home Assistant MCP server
             val tools = app.haRepository?.getTools() ?: emptyList()
@@ -189,6 +192,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         response?.response?.toString() ?: ""
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to fetch live context: ${e.message}")
+                        // Log the error to the tool log
+                        addToolLog(
+                            ToolCallLog(
+                                timestamp = timestamp,
+                                toolName = "System Startup",
+                                parameters = "GetLiveContext",
+                                success = false,
+                                result = "Failed to fetch live context: ${e.message}"
+                            )
+                        )
                         "" // Continue without live context on error
                     }
 
@@ -224,11 +237,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val model = profile?.model ?: SystemPromptConfig.DEFAULT_MODEL
             val voice = profile?.voice ?: SystemPromptConfig.DEFAULT_VOICE
 
+            // Log the full generated system prompt to the tool log
+            addToolLog(
+                ToolCallLog(
+                    timestamp = timestamp,
+                    toolName = "System Startup",
+                    parameters = "Model: $model, Voice: $voice",
+                    success = true,
+                    result = "Generated System Prompt:\n\n$systemPrompt"
+                )
+            )
+
             // Initialize the Gemini model
             geminiService.initializeModel(tools, systemPrompt, model, voice)
 
             _uiState.value = UiState.ReadyToTalk
         } catch (e: Exception) {
+            // Log initialization error to tool log
+            addToolLog(
+                ToolCallLog(
+                    timestamp = timestamp,
+                    toolName = "System Startup",
+                    parameters = "Gemini Initialization",
+                    success = false,
+                    result = "Failed to initialize Gemini: ${e.message}\n${e.stackTraceToString()}"
+                )
+            )
             _uiState.value = UiState.Error("Failed to initialize Gemini: ${e.message}")
         }
     }
