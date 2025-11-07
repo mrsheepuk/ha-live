@@ -45,4 +45,9 @@
     <string name="expand_collapse_system_prompt">Expand or collapse system prompt section</string>
     <string name="expand_collapse_personality">Expand or collapse personality section</string>
     <string name="expand_collapse_background_info">Expand or collapse background info section</string>
+    <string name="profile_editor_model_label">Model</string>
+    <string name="profile_editor_voice_label">Voice</string>
+    <string name="model_gemini_live_flash">Gemini Live 2.5 Flash</string>
+    <string name="voice_aoede">Aoede</string>
+    <string name="voice_leda">Leda</string>
 </resources>

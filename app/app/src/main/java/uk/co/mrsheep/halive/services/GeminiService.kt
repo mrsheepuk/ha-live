@@ -33,16 +33,16 @@ class GeminiService {
      * Called by ViewModel on app launch, *after* Task 1 is complete.
      */
     @OptIn(PublicPreviewAPI::class)
-    fun initializeModel(tools: List<Tool>, systemPrompt: String) {
+    fun initializeModel(tools: List<Tool>, systemPrompt: String, modelName: String, voiceName: String) {
         // 1. Configure the model
         generativeModel = Firebase.ai.liveModel(
-            modelName = "gemini-live-2.5-flash-preview",
+            modelName = modelName,
             systemInstruction = content { text(systemPrompt) },
             tools = tools,
             generationConfig = liveGenerationConfig {
                 responseModality = ResponseModality.AUDIO
                 // Good voices: 'Leda', 'Aoede'
-                speechConfig = SpeechConfig(voice = Voice("Aoede"))
+                speechConfig = SpeechConfig(voice = Voice(voiceName))
 
             }
         )

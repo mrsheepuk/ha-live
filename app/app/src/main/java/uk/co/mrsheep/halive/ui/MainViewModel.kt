@@ -161,9 +161,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Use the system prompt from the current profile
             val profile = ProfileManager.getProfileById(currentProfileId)
             val systemPrompt = profile?.getCombinedPrompt() ?: SystemPromptConfig.getSystemPrompt(getApplication())
+            val model = profile?.model ?: SystemPromptConfig.DEFAULT_MODEL
+            val voice = profile?.voice ?: SystemPromptConfig.DEFAULT_VOICE
 
             // Initialize the Gemini model
-            geminiService.initializeModel(tools, systemPrompt)
+            geminiService.initializeModel(tools, systemPrompt, model, voice)
 
             _uiState.value = UiState.ReadyToTalk
         } catch (e: Exception) {
@@ -324,7 +326,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val tools = app.haRepository?.getTools() ?: emptyList()
-                geminiService.initializeModel(tools, profile.getCombinedPrompt())
+                geminiService.initializeModel(tools, profile.getCombinedPrompt(), profile.model, profile.voice)
             } catch (e: Exception) {
                 // Handle error
             }
