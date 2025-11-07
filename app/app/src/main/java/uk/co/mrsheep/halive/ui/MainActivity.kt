@@ -148,6 +148,12 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.GONE
                 statusText.text = "Please complete onboarding"
             }
+            UiState.Initializing -> {
+                profileSpinner.isEnabled = false
+                mainButton.visibility = View.GONE
+                retryButton.visibility = View.GONE
+                statusText.text = "Initializing..."
+            }
             UiState.ReadyToTalk -> {
                 profileSpinner.isEnabled = true
                 mainButton.visibility = View.VISIBLE

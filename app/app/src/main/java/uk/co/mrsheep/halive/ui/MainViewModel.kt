@@ -27,6 +27,7 @@ sealed class UiState {
     object FirebaseConfigNeeded : UiState()  // Need google-services.json
     object HAConfigNeeded : UiState()        // Need HA URL + token
     object ReadyToTalk : UiState()           // Everything initialized, ready to start chat
+    object Initializing : UiState()          // Initializing Gemini model when starting chat
     object ChatActive : UiState()            // Chat session is active (listening or executing)
     data class ExecutingAction(val tool: String) : UiState()       // Executing a Home Assistant action
     data class Error(val message: String) : UiState()
@@ -95,11 +96,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            // Step 3: Initialize MCP connection and Gemini
+            // Step 3: Initialize MCP connection (Gemini will be initialized when user starts chat)
             try {
                 val (haUrl, haToken) = HAConfig.loadConfig(getApplication())!!
                 app.initializeHomeAssistant(haUrl, haToken)
-                initializeGemini()
+                _uiState.value = UiState.ReadyToTalk
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to connect to HA: ${e.message}")
             }
@@ -150,11 +151,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Save config
                 HAConfig.saveConfig(getApplication(), baseUrl, token)
 
-                // Try to initialize MCP connection
+                // Try to initialize MCP connection (Gemini will be initialized when user starts chat)
                 app.initializeHomeAssistant(baseUrl, token)
 
-                // Initialize Gemini
-                initializeGemini()
+                // Ready for user to start chat (Gemini initialization will happen on Start Chat)
+                _uiState.value = UiState.ReadyToTalk
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to connect: ${e.message}")
                 // Clear bad config
@@ -250,8 +251,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             // Initialize the Gemini model
             geminiService.initializeModel(tools, systemPrompt, model, voice)
-
-            _uiState.value = UiState.ReadyToTalk
+            // Note: UI state is managed by the caller (e.g., startChat)
         } catch (e: Exception) {
             // Log initialization error to tool log
             addToolLog(
@@ -263,7 +263,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     result = "Failed to initialize Gemini: ${e.message}\n${e.stackTraceToString()}"
                 )
             )
-            _uiState.value = UiState.Error("Failed to initialize Gemini: ${e.message}")
+            // Throw exception for caller to handle
+            throw e
         }
     }
 
@@ -278,10 +279,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun startChat() {
-        isSessionActive = true
-        _uiState.value = UiState.ChatActive
         viewModelScope.launch {
             try {
+                // Set state to Initializing while preparing the model
+                _uiState.value = UiState.Initializing
+
+                // Initialize Gemini with fresh tools and system prompt
+                initializeGemini()
+
+                // Only proceed to chat if initialization succeeded
+                isSessionActive = true
+                _uiState.value = UiState.ChatActive
+
                 // Start the session, passing our Task 2 executor as the handler
                 geminiService.startSession(
                     functionCallHandler = ::executeHomeAssistantTool
@@ -416,15 +425,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _systemPrompt.value = profile.getCombinedPrompt()
         ProfileManager.markProfileAsUsed(profileId)
 
-        // Reinitialize Gemini with new prompt
-        viewModelScope.launch {
-            try {
-                val tools = app.haRepository?.getTools() ?: emptyList()
-                geminiService.initializeModel(tools, profile.getCombinedPrompt(), profile.model, profile.voice)
-            } catch (e: Exception) {
-                // Handle error
-            }
-        }
+        // Model will be initialized fresh when user clicks Start Chat
     }
 
     /**
