@@ -54,6 +54,33 @@ The app was developed following a risk-first strategy, prioritizing validation o
     * Tool execution with proper request/response correlation
     * Complex schema handling (anyOf, arrays, enums)
 
+### Session Initialization Flow
+The app uses a deferred initialization strategy to ensure maximum freshness of system context:
+
+1.  **App Launch (`checkConfiguration()`):**
+    * Establishes MCP connection to Home Assistant
+    * Transitions directly to `UiState.ReadyToTalk` without initializing Gemini
+    * User sees "Ready to chat" immediately after MCP connection
+
+2.  **Button Press (`startChat()`):**
+    * User clicks "Start Chat" button
+    * App transitions to `UiState.Initializing` (shows "Initializing..." status)
+    * Executes `initializeGemini()`:
+        - Fetches current tools from Home Assistant MCP server via `getTools()`
+        - Retrieves system prompt from active profile
+        - Optionally fetches live context via `GetLiveContext` tool (if profile enabled)
+        - Combines profile settings (system prompt, personality, background info, live context)
+        - Initializes Gemini Live model with fresh tools, prompt, model name, and voice
+        - Logs full system prompt to tool log for debugging
+    * If initialization succeeds, starts audio conversation session
+    * Transitions to `UiState.ChatActive`
+
+3.  **Benefits:**
+    * System prompt reflects current Home Assistant state (fresh live context)
+    * Tools reflect latest available Home Assistant capabilities
+    * Faster app launch (no waiting for Gemini initialization)
+    * Profile switching is simpler (no pre-initialization needed)
+
 ## 5. Key Components
 * **ui/MainActivity.kt**: Main activity handling UI states, permissions, and user interactions
 * **ui/MainViewModel.kt**: ViewModel managing app state, configuration flow, and tool execution logging
