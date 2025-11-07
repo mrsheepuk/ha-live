@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import androidx.lifecycle.lifecycleScope
 import uk.co.mrsheep.halive.R
 import kotlinx.coroutines.launch
@@ -17,6 +18,8 @@ import kotlinx.coroutines.launch
 class SettingsActivity : AppCompatActivity() {
 
     private val viewModel: SettingsViewModel by viewModels()
+
+    private lateinit var toolbar: Toolbar
 
     // Profile section
     private lateinit var manageProfilesButton: Button
@@ -45,6 +48,9 @@ class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
+
+        toolbar = findViewById(R.id.toolbar)
+        setSupportActionBar(toolbar)
 
         // Enable back button
         supportActionBar?.setDisplayHomeAsUpEnabled(true)

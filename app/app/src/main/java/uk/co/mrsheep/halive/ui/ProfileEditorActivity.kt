@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.checkbox.MaterialCheckBox
@@ -30,6 +31,8 @@ class ProfileEditorActivity : AppCompatActivity() {
         const val EXTRA_PROFILE_ID = "profile_id"
         const val EXTRA_DUPLICATE_FROM_ID = "duplicate_from_id"
     }
+
+    private lateinit var toolbar: Toolbar
 
     // UI components
     // Profile name (unchanged)
@@ -76,6 +79,9 @@ class ProfileEditorActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_profile_editor)
+
+        toolbar = findViewById(R.id.toolbar)
+        setSupportActionBar(toolbar)
 
         // Enable back button
         supportActionBar?.setDisplayHomeAsUpEnabled(true)

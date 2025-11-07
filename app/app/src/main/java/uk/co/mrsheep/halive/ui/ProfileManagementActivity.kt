@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -32,6 +33,7 @@ class ProfileManagementActivity : AppCompatActivity() {
 
     private val viewModel: ProfileManagementViewModel by viewModels()
 
+    private lateinit var toolbar: androidx.appcompat.widget.Toolbar
     private lateinit var profilesRecyclerView: RecyclerView
     private lateinit var fabCreateProfile: FloatingActionButton
     private lateinit var loadingIndicator: ProgressBar
@@ -42,6 +44,9 @@ class ProfileManagementActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_profile_management)
+
+        toolbar = findViewById(R.id.toolbar)
+        setSupportActionBar(toolbar)
 
         // Enable back button
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
