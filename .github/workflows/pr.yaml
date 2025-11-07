@@ -33,7 +33,7 @@ jobs:
           echo "Decoding and installing debug keystore..."
           mkdir -p ~/.config/.android
           
-          echo "${DEBUG_KEYSTORE_B64}" | base64 --decode > ~/.android/debug.keystore
+          echo "${DEBUG_KEYSTORE_B64}" | base64 --decode > ~/.config/.android/debug.keystore
           ls -l ~/.config/.android/debug.keystore
           echo "Debug keystore installed."
         env:
@@ -52,6 +52,7 @@ jobs:
         with:
           name: app-debug-apk
           path: ./app/app/build/outputs/apk/debug/app-debug.apk
+
 
 
 
