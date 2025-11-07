@@ -28,12 +28,13 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
-
       - name: Decode Debug Keystore
         run: |
           echo "Decoding and installing debug keystore..."
           mkdir -p ~/.android
-          echo "${{ secrets.DEBUG_KEYSTORE_B64 }}" | base64 --decode > ~/.android/debug.keystore
+          
+          echo "${DEBUG_KEYSTORE_B64}" | base64 --decode > ~/.android/debug.keystore
+          ls -l ~/.android/debug.keystore
           echo "Debug keystore installed."
         env:
           DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
@@ -49,5 +50,6 @@ jobs:
         with:
           name: app-debug-apk
           path: ./app/app/build/outputs/apk/debug/app-debug.apk
+
 
 
