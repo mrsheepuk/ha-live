@@ -31,10 +31,10 @@ jobs:
       - name: Decode Debug Keystore
         run: |
           echo "Decoding and installing debug keystore..."
-          mkdir -p ~/.android
+          mkdir -p ~/.config/.android
           
           echo "${DEBUG_KEYSTORE_B64}" | base64 --decode > ~/.android/debug.keystore
-          ls -l ~/.android/debug.keystore
+          ls -l ~/.config/.android/debug.keystore
           echo "Debug keystore installed."
         env:
           DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
@@ -43,8 +43,6 @@ jobs:
         working-directory: ./app
         run: |
           chmod +x ./gradlew
-          echo "Verifying keystore one last time, right before build..."
-          ls -l ~/.android/debug.keystore
           
           echo "Running Gradle build with --info and --stacktrace..."
           ./gradlew assembleDebug --info --stacktrace
@@ -54,6 +52,7 @@ jobs:
         with:
           name: app-debug-apk
           path: ./app/app/build/outputs/apk/debug/app-debug.apk
+
 
 
 
