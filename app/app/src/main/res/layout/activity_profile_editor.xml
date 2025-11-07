@@ -34,7 +34,7 @@
         <!-- Model Selection -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/modelLayout"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/profile_editor_model_label"
@@ -52,7 +52,7 @@
         <!-- Voice Selection -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/voiceLayout"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/profile_editor_voice_label"
