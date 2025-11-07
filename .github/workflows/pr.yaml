@@ -1,0 +1,41 @@
+name: Pull Request
+on:
+  pull_request:
+
+permissions:
+  contents: read # Required for actions/checkout
+  checks: write # Set status of checks
+  issues: write # Comment the PR as we go
+  statuses: write # Set commit statuses as tests pass or fail
+  pull-requests: write # Get/comment the PR itself
+
+env:
+
+# Cancel whole workflow if another push is made to this branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin' # See 'Supported distributions' for available options
+          java-version: '21'
+      - name: Run debug gradle build
+        working-directory: ./app
+        run: |
+          chmod +x ./gradlew
+          ./gradlew build
+      - name: Build Debug APK
+        working-directory: ./app
+        run: ./gradlew assembleDebug
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-debug-apk
+          path: ./app/app/build/outputs/apk/debug/app-debug.apk
