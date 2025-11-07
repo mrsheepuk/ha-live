@@ -266,6 +266,7 @@ object ProfileManager {
             backgroundInfo = original.backgroundInfo,
             model = original.model,
             voice = original.voice,
+            includeLiveContext = original.includeLiveContext,
             isDefault = false // Duplicates are never default
         )
 

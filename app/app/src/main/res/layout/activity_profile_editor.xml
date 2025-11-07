@@ -67,6 +67,15 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Include Live Context Checkbox -->
+        <com.google.android.material.checkbox.MaterialCheckBox
+            android:id="@+id/includeLiveContextCheckbox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/profile_editor_include_live_context"
+            android:checked="true"
+            android:layout_marginBottom="16dp" />
+
         <!-- System Prompt Expansion Panel -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/systemPromptCard"
