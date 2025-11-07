@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 // Define the different states our UI can be in
@@ -183,14 +185,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Check if we should include live context
                 if (profile.includeLiveContext) {
                     // Fetch live context from Home Assistant
-                    val liveContextResponse = try {
+                    val liveContextText = try {
                         // Create a FunctionCallPart for GetLiveContext
                         val getLiveContextCall = FunctionCallPart(
                             name = "GetLiveContext",
                             args = emptyMap()
                         )
                         val response = app.haRepository?.executeTool(getLiveContextCall)
-                        response?.response?.toString() ?: ""
+                        response?.response?.let { jsonObj ->
+                            // Navigate: outer "result" -> inner "result" -> text content
+                            jsonObj.jsonObject["result"]
+                                ?.jsonObject?.get("result")
+                                ?.jsonPrimitive?.content ?: ""
+                        } ?: ""
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to fetch live context: ${e.message}")
                         // Log the error to the tool log
@@ -206,14 +213,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         "" // Continue without live context on error
                     }
 
-                    // Create a modified profile with live context appended to background info
-                    val enhancedBackgroundInfo = if (liveContextResponse.isNotEmpty()) {
-                        "${profile.backgroundInfo}\n\nCurrent Home State:\n$liveContextResponse"
-                    } else {
-                        profile.backgroundInfo
-                    }
-
-                    // Build combined prompt manually with enhanced background info
+                    // Build combined prompt manually with live context in its own section
                     """
                     <system_prompt>
                     ${profile.systemPrompt}
@@ -224,8 +224,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     </personality>
 
                     <background_info>
-                    $enhancedBackgroundInfo
+                    ${profile.backgroundInfo}
                     </background_info>
+
+                    <initial_live_context>
+                    $liveContextText
+                    </initial_live_context>
                     """.trimIndent()
                 } else {
                     // Use profile's standard combined prompt
