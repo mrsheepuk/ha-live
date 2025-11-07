@@ -102,6 +102,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Retry initialization after a failure.
+     * Called by the UI when the user taps the retry button.
+     */
+    fun retryInitialization() {
+        checkConfiguration()
+    }
+
+    /**
      * Called by MainActivity when the user selects a Firebase config file.
      */
     fun saveFirebaseConfigFile(uri: Uri) {
