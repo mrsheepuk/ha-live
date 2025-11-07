@@ -109,7 +109,6 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="@string/profile_editor_system_prompt_title"
-                        android:textAppearance="?attr/textAppearanceTitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <ImageView
@@ -187,7 +186,6 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="@string/profile_editor_personality_title"
-                        android:textAppearance="?attr/textAppearanceTitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <ImageView
@@ -265,7 +263,6 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="@string/profile_editor_background_info_title"
-                        android:textAppearance="?attr/textAppearanceTitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <ImageView
