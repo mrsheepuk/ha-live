@@ -66,7 +66,7 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
                 app.initializeHomeAssistant(url, token)
 
                 // Try to fetch tools
-                val tools = app.haRepository?.getTools()
+                val tools = app.mcpClient?.getTools()
 
                 if (tools != null && tools.isNotEmpty()) {
                     _onboardingState.value = OnboardingState.ConnectionSuccess("Connected successfully!")
