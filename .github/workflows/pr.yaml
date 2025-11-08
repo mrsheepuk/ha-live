@@ -43,15 +43,14 @@ jobs:
         working-directory: ./app
         run: |
           chmod +x ./gradlew
-          
-          echo "Running Gradle build with --info and --stacktrace..."
-          ./gradlew assembleDebug --info --stacktrace
+          ./gradlew assembleDebug
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v5
         with:
           name: app-debug-apk
           path: ./app/app/build/outputs/apk/debug/app-debug.apk
+
 
 
 
