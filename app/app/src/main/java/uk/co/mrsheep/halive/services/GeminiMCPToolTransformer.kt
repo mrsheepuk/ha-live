@@ -13,7 +13,7 @@ object GeminiMCPToolTransformer {
     /**
      * Transforms MCP tools result into Gemini Tool format.
      */
-    fun transform(mcpToolsResult: McpToolsResult): List<Tool> {
+    fun transform(mcpToolsResult: McpToolsListResult): List<Tool> {
         Log.d(TAG, "Transforming ${mcpToolsResult.tools.size} MCP tools to Gemini format")
 
         // Transform each McpTool into a Gemini FunctionDeclaration
