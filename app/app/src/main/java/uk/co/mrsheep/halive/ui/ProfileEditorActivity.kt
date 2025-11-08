@@ -61,6 +61,12 @@ class ProfileEditorActivity : AppCompatActivity() {
     private lateinit var backgroundInfoExpandIcon: ImageView
     private lateinit var backgroundInfoInput: TextInputEditText
 
+    // Initial Message expansion panel
+    private lateinit var initialMessageHeader: View
+    private lateinit var initialMessageContent: View
+    private lateinit var initialMessageExpandIcon: ImageView
+    private lateinit var initialMessageInput: TextInputEditText
+
     private lateinit var includeLiveContextCheckbox: MaterialCheckBox
 
     // Buttons (unchanged)
@@ -71,6 +77,7 @@ class ProfileEditorActivity : AppCompatActivity() {
     private var isSystemPromptExpanded = true
     private var isPersonalityExpanded = false
     private var isBackgroundInfoExpanded = false
+    private var isInitialMessageExpanded = false
 
     // Mode tracking
     private var editingProfileId: String? = null
@@ -152,6 +159,11 @@ class ProfileEditorActivity : AppCompatActivity() {
         backgroundInfoExpandIcon = findViewById(R.id.backgroundInfoExpandIcon)
         backgroundInfoInput = findViewById(R.id.backgroundInfoInput)
 
+        initialMessageHeader = findViewById(R.id.initialMessageHeader)
+        initialMessageContent = findViewById(R.id.initialMessageContent)
+        initialMessageExpandIcon = findViewById(R.id.initialMessageExpandIcon)
+        initialMessageInput = findViewById(R.id.initialMessageInput)
+
         includeLiveContextCheckbox = findViewById(R.id.includeLiveContextCheckbox)
 
         saveButton = findViewById(R.id.saveButton)
@@ -162,10 +174,11 @@ class ProfileEditorActivity : AppCompatActivity() {
             val prompt = systemPromptInput.text?.toString() ?: ""
             val personality = personalityInput.text?.toString() ?: ""
             val backgroundInfo = backgroundInfoInput.text?.toString() ?: ""
+            val initialMessageToAgent = initialMessageInput.text?.toString() ?: ""
             val model = modelInput.text?.toString() ?: ""
             val voice = voiceInput.text?.toString() ?: ""
             val includeLiveContext = includeLiveContextCheckbox.isChecked
-            viewModel.saveProfile(name, prompt, personality, backgroundInfo, model, voice, includeLiveContext, editingProfileId)
+            viewModel.saveProfile(name, prompt, personality, backgroundInfo, initialMessageToAgent, model, voice, includeLiveContext, editingProfileId)
         }
 
         cancelButton.setOnClickListener {
@@ -179,6 +192,8 @@ class ProfileEditorActivity : AppCompatActivity() {
             { isPersonalityExpanded = it }
         setupExpansionPanel(backgroundInfoHeader, backgroundInfoContent, backgroundInfoExpandIcon, isBackgroundInfoExpanded)
             { isBackgroundInfoExpanded = it }
+        setupExpansionPanel(initialMessageHeader, initialMessageContent, initialMessageExpandIcon, isInitialMessageExpanded)
+            { isInitialMessageExpanded = it }
     }
 
     private fun setupExpansionPanel(
@@ -230,6 +245,7 @@ class ProfileEditorActivity : AppCompatActivity() {
                 systemPromptInput.setText(state.profile.systemPrompt)
                 personalityInput.setText(state.profile.personality)
                 backgroundInfoInput.setText(state.profile.backgroundInfo)
+                initialMessageInput.setText(state.profile.initialMessageToAgent)
                 modelInput.setText(state.profile.model, false)
                 voiceInput.setText(state.profile.voice, false)
                 includeLiveContextCheckbox.isChecked = state.profile.includeLiveContext
