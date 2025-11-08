@@ -12,6 +12,7 @@ import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.services.GeminiService
+import uk.co.mrsheep.halive.services.GeminiMCPToolTransformer
 import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.type.FunctionCallPart
 import com.google.firebase.ai.type.FunctionResponsePart
@@ -174,8 +175,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .format(java.util.Date())
 
         try {
-            // Fetch and transform tools from Home Assistant MCP server
-            val tools = app.haRepository?.getTools() ?: emptyList()
+            // Fetch raw MCP tools
+            val mcpToolsResult = app.mcpClient?.getTools()
+
+            // Transform to Gemini format
+            val tools = mcpToolsResult?.let {
+                GeminiMCPToolTransformer.transform(it)
+            } ?: emptyList()
+
+            // Extract tool names for logging (from MCP, not Firebase!)
+            val toolNames = mcpToolsResult?.tools
+                ?.map { it.name }
+                ?.sorted()
+                ?: emptyList()
 
             // Use the system prompt from the current profile
             val profile = ProfileManager.getProfileById(currentProfileId)
@@ -191,7 +203,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             name = "GetLiveContext",
                             args = emptyMap()
                         )
-                        val response = app.haRepository?.executeTool(getLiveContextCall)
+                        val response = app.toolExecutor?.executeTool(getLiveContextCall)
                         response?.response?.let { jsonObj ->
                             // Navigate: outer "result" -> inner "result" -> text content
                             jsonObj.jsonObject["result"]
@@ -239,13 +251,6 @@ $liveContextText
 
             val model = profile?.model ?: SystemPromptConfig.DEFAULT_MODEL
             val voice = profile?.voice ?: SystemPromptConfig.DEFAULT_VOICE
-
-            // Extract and format tool names for logging
-            val toolNames = tools.firstOrNull()
-                ?.functionDeclarations
-                ?.map { it.name }
-                ?.sorted()
-                ?: emptyList()
 
             val toolsSection = if (toolNames.isNotEmpty()) {
                 "Available Tools (${toolNames.size}):\n" +
@@ -349,7 +354,7 @@ $liveContextText
 
         // Execute the tool via MCP
         val result = try {
-            val response = app.haRepository?.executeTool(call) ?: FunctionResponsePart(
+            val response = app.toolExecutor?.executeTool(call) ?: FunctionResponsePart(
                 name = call.name,
                 response = buildJsonObject {
                     put("error", "Repository not initialized")
