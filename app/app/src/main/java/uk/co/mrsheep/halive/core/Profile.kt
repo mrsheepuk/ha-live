@@ -16,6 +16,7 @@ data class Profile(
     val systemPrompt: String = SystemPromptConfig.DEFAULT_SYSTEM_PROMPT,
     val personality: String = SystemPromptConfig.DEFAULT_PERSONALITY,
     val backgroundInfo: String = SystemPromptConfig.DEFAULT_BACKGROUND_INFO,
+    val initialMessageToAgent: String = "",
     val model: String = SystemPromptConfig.DEFAULT_MODEL,
     val voice: String = SystemPromptConfig.DEFAULT_VOICE,
     val includeLiveContext: Boolean = SystemPromptConfig.DEFAULT_INCLUDE_LIVE_CONTEXT,
@@ -33,6 +34,7 @@ data class Profile(
                 systemPrompt = SystemPromptConfig.DEFAULT_SYSTEM_PROMPT,
                 personality = SystemPromptConfig.DEFAULT_PERSONALITY,
                 backgroundInfo = SystemPromptConfig.DEFAULT_BACKGROUND_INFO,
+                initialMessageToAgent = SystemPromptConfig.DEFAULT_INITIAL_MESSAGE_TO_AGENT,
                 model = SystemPromptConfig.DEFAULT_MODEL,
                 voice = SystemPromptConfig.DEFAULT_VOICE,
                 includeLiveContext = SystemPromptConfig.DEFAULT_INCLUDE_LIVE_CONTEXT,
@@ -77,6 +79,7 @@ data class Profile(
             "systemPrompt": "${systemPrompt.replace("\"", "\\\"")}",
             "personality": "${personality.replace("\"", "\\\"")}",
             "backgroundInfo": "${backgroundInfo.replace("\"", "\\\"")}",
+            "initialMessageToAgent": "${initialMessageToAgent.replace("\"", "\\\"")}",
             "model": "${model.replace("\"", "\\\"")}",
             "voice": "${voice.replace("\"", "\\\"")}",
             "includeLiveContext": $includeLiveContext

@@ -81,6 +81,17 @@ class GeminiService {
     }
 
     /**
+     * Send a text message to the active session.
+     * Can be used to send initial conversation prompts.
+     */
+    @OptIn(PublicPreviewAPI::class)
+    suspend fun sendTextMessage(text: String) {
+        val session = liveSession ?: throw IllegalStateException("Session not active")
+        session.sendTextRealtime(text)
+        Log.d(TAG, "Sent text message: $text")
+    }
+
+    /**
      * Called by ViewModel when the user releases the "talk" button.
      */
     @OptIn(PublicPreviewAPI::class)

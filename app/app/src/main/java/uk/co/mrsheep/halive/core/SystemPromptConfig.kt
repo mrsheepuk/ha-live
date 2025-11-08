@@ -39,6 +39,8 @@ Behave like the ship's computer from Star Trek: The Next Generation.
 You are currently speaking with User.
 """.trimIndent()
 
+    const val DEFAULT_INITIAL_MESSAGE_TO_AGENT = ""
+
     const val DEFAULT_MODEL = "gemini-live-2.5-flash-preview"
     const val DEFAULT_VOICE = "Aoede"
     const val DEFAULT_INCLUDE_LIVE_CONTEXT = true

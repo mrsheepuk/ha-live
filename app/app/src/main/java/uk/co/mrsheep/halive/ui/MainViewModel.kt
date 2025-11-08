@@ -334,6 +334,44 @@ $renderedBackgroundInfo
                 geminiService.startSession(
                     functionCallHandler = ::executeHomeAssistantTool
                 )
+
+                // Send initial message to agent if configured
+                val profile = ProfileManager.getProfileById(currentProfileId)
+                profile?.initialMessageToAgent?.let { initialText ->
+                    if (initialText.isNotBlank()) {
+                        try {
+                            geminiService.sendTextMessage(initialText)
+
+                            val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                                .format(java.util.Date())
+
+                            // Log it to tool logs
+                            addToolLog(
+                                ToolCallLog(
+                                    timestamp = timestamp,
+                                    toolName = "System Startup",
+                                    parameters = "Initial Message to Agent",
+                                    success = true,
+                                    result = "Sent: $initialText"
+                                )
+                            )
+                        } catch (e: Exception) {
+                            val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                                .format(java.util.Date())
+
+                            addToolLog(
+                                ToolCallLog(
+                                    timestamp = timestamp,
+                                    toolName = "System Startup",
+                                    parameters = "Initial Message to Agent",
+                                    success = false,
+                                    result = "Failed to send: ${e.message}"
+                                )
+                            )
+                            // Don't fail the session, just log it
+                        }
+                    }
+                }
             } catch (e: Exception) {
                 isSessionActive = false
                 _uiState.value = UiState.Error("Failed to start session: ${e.message}")

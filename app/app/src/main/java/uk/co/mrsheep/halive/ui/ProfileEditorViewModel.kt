@@ -55,6 +55,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      * @param systemPrompt The system prompt text
      * @param personality The personality prompt text
      * @param backgroundInfo The background information text
+     * @param initialMessageToAgent The initial message to send to the agent
      * @param model The AI model to use
      * @param voice The voice to use for audio responses
      * @param includeLiveContext Whether to include live context with system prompt
@@ -65,6 +66,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
         systemPrompt: String,
         personality: String,
         backgroundInfo: String,
+        initialMessageToAgent: String,
         model: String,
         voice: String,
         includeLiveContext: Boolean,
@@ -95,7 +97,8 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         backgroundInfo = backgroundInfo,
                         model = model,
                         voice = voice,
-                        includeLiveContext = includeLiveContext
+                        includeLiveContext = includeLiveContext,
+                        initialMessageToAgent = initialMessageToAgent
                     )
 
                     ProfileManager.updateProfile(updated)
@@ -109,6 +112,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         model = model,
                         voice = voice,
                         includeLiveContext = includeLiveContext,
+                        initialMessageToAgent = initialMessageToAgent,
                         isDefault = false
                     )
 

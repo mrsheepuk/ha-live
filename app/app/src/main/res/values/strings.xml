@@ -42,9 +42,11 @@
     <string name="profile_editor_system_prompt_title">System Prompt</string>
     <string name="profile_editor_personality_title">Personality</string>
     <string name="profile_editor_background_info_title">Background Info</string>
+    <string name="profile_editor_initial_message_title">Initial message to the agent</string>
     <string name="expand_collapse_system_prompt">Expand or collapse system prompt section</string>
     <string name="expand_collapse_personality">Expand or collapse personality section</string>
     <string name="expand_collapse_background_info">Expand or collapse background info section</string>
+    <string name="expand_collapse_initial_message">Expand or collapse initial message section</string>
     <string name="profile_editor_model_label">Model</string>
     <string name="profile_editor_voice_label">Voice</string>
     <string name="model_gemini_live_flash">Gemini Live 2.5 Flash</string>
