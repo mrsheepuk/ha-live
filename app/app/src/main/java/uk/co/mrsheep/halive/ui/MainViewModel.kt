@@ -240,6 +240,20 @@ $liveContextText
             val model = profile?.model ?: SystemPromptConfig.DEFAULT_MODEL
             val voice = profile?.voice ?: SystemPromptConfig.DEFAULT_VOICE
 
+            // Extract and format tool names for logging
+            val toolNames = tools.firstOrNull()
+                ?.functionDeclarations
+                ?.map { it.name }
+                ?.sorted()
+                ?: emptyList()
+
+            val toolsSection = if (toolNames.isNotEmpty()) {
+                "Available Tools (${toolNames.size}):\n" +
+                toolNames.joinToString("\n") { "- $it" }
+            } else {
+                "No tools available"
+            }
+
             // Log the full generated system prompt to the tool log
             addToolLog(
                 ToolCallLog(
@@ -247,7 +261,7 @@ $liveContextText
                     toolName = "System Startup",
                     parameters = "Model: $model, Voice: $voice",
                     success = true,
-                    result = "Generated System Prompt:\n\n$systemPrompt"
+                    result = "$toolsSection\n\nGenerated System Prompt:\n\n$systemPrompt"
                 )
             )
 
