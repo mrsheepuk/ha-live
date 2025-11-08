@@ -68,7 +68,7 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
                 // Try to fetch tools
                 val tools = app.mcpClient?.getTools()
 
-                if (tools != null && tools.isNotEmpty()) {
+                if (tools != null && tools.tools.isNotEmpty()) {
                     _onboardingState.value = OnboardingState.ConnectionSuccess("Connected successfully!")
                 } else {
                     _onboardingState.value = OnboardingState.ConnectionFailed("No tools found")
