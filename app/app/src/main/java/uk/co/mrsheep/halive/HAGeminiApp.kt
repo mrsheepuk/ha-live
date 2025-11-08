@@ -5,11 +5,13 @@ import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.services.McpClientManager
 import uk.co.mrsheep.halive.services.GeminiMCPToolExecutor
+import uk.co.mrsheep.halive.services.HomeAssistantApiClient
 
 class HAGeminiApp : Application() {
     // Global MCP client - will be initialized after HA config
     var mcpClient: McpClientManager? = null
     var toolExecutor: GeminiMCPToolExecutor? = null
+    var haApiClient: HomeAssistantApiClient? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -38,6 +40,7 @@ class HAGeminiApp : Application() {
         mcpClient = McpClientManager(haUrl, haToken)
         mcpClient?.initialize() // SSE connection + MCP handshake
         toolExecutor = GeminiMCPToolExecutor(mcpClient!!)
+        haApiClient = HomeAssistantApiClient(haUrl, haToken)
     }
 
     /**
@@ -47,5 +50,6 @@ class HAGeminiApp : Application() {
         mcpClient?.shutdown()
         mcpClient = null
         toolExecutor = null
+        haApiClient = null
     }
 }
