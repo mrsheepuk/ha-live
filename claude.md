@@ -190,7 +190,7 @@ FunctionResponsePart ← toolExecutor
 Gemini Live API (confirms action via audio)
 ```
 
-## Recent Significant Changes (2025-01)
+## Recent Improvements
 
 ### Deferred Initialization
 - **Moved** Gemini model initialization from app launch to "Start Chat" button press
@@ -243,27 +243,6 @@ app/app/src/main/java/uk/co/mrsheep/halive/
 └── HAGeminiApp.kt               # Application class (dependency container)
 ```
 
-## Testing the App
-
-1. **First Launch:** Import `google-services.json` (BYOFP)
-2. **Configure HA:** Enter URL + long-lived access token
-3. **Create Profile:** Customize system prompt, personality, background info
-4. **Background Info Template Example:**
-   ```
-   Current time: {{ now() }}
-   Sun: {{ states('sun.sun') }}
-   Temperature: {{ states('sensor.living_room_temperature') }}°C
-   ```
-5. **Enable Live Context:** Checkbox in profile for dynamic HA state overview
-6. **Start Chat:** Click button → see tool log → speak with assistant
-
-## Debugging
-
-- **Tool Log:** Real-time display of tool calls, system startup, errors
-- **System Startup Entry:** Shows available tools (count + sorted list) and full system prompt
-- **Template Errors:** Clear error messages if Jinja2 syntax is invalid
-- **MCP Connection:** Logs in `McpClientManager` show SSE events and JSON-RPC messages
-
 ## Dependencies
 
 - **Kotlin Coroutines:** Async operations, SSE handling
@@ -275,9 +254,6 @@ app/app/src/main/java/uk/co/mrsheep/halive/
 
 ## Next Steps / Future Enhancements
 
-- [ ] Error recovery for failed template rendering mid-session
-- [ ] Cache rendered templates per session (optional optimization)
 - [ ] Profile import/export for sharing configurations
-- [ ] Multi-language support for UI
-- [ ] Conversation history persistence
 - [ ] Wake word detection for hands-free usage
+
