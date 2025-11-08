@@ -1,0 +1,69 @@
+package uk.co.mrsheep.halive.services
+
+import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
+
+@Serializable
+data class TemplateRequest(val template: String)
+
+class HomeAssistantApiClient(
+    private val baseUrl: String,
+    private val token: String
+) {
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .build()
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    /**
+     * Renders a Jinja2 template using Home Assistant's template API.
+     * @param template The template string to render
+     * @return The rendered template as a string
+     * @throws Exception if rendering fails
+     */
+    suspend fun renderTemplate(template: String): String = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Rendering template: ${template.take(100)}...")
+
+        // Build request body
+        val requestBody = json.encodeToString(
+            TemplateRequest.serializer(),
+            TemplateRequest(template)
+        )
+
+        // Build HTTP request
+        val request = Request.Builder()
+            .url("$baseUrl/api/template")
+            .addHeader("Authorization", "Bearer $token")
+            .addHeader("Content-Type", "application/json")
+            .post(requestBody.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        // Execute request
+        val response = client.newCall(request).execute()
+
+        if (!response.isSuccessful) {
+            val errorBody = response.body?.string() ?: "Unknown error"
+            throw Exception("Template rendering failed: ${response.code} - $errorBody")
+        }
+
+        val renderedText = response.body?.string()
+            ?: throw Exception("Empty response from template API")
+
+        Log.d(TAG, "Template rendered successfully: ${renderedText.take(100)}...")
+        renderedText
+    }
+
+    companion object {
+        private const val TAG = "HomeAssistantApiClient"
+    }
+}

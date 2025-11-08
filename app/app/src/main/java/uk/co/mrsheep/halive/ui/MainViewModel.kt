@@ -192,6 +192,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Use the system prompt from the current profile
             val profile = ProfileManager.getProfileById(currentProfileId)
 
+            // Render background info template if present
+            val renderedBackgroundInfo = if (profile?.backgroundInfo?.isNotBlank() == true) {
+                app.haApiClient?.renderTemplate(profile.backgroundInfo)
+                    ?: throw Exception("HA API client not initialized")
+            } else {
+                profile?.backgroundInfo ?: ""
+            }
+
             // Determine the system prompt to use
             val systemPrompt = if (profile != null) {
                 // Check if we should include live context
@@ -235,15 +243,25 @@ ${profile.personality}
 </personality>
 
 <background_info>
-${profile.backgroundInfo}
+$renderedBackgroundInfo
 </background_info>
 
 <initial_live_context>
 $liveContextText
 </initial_live_context>""".trimIndent()
                 } else {
-                    // Use profile's standard combined prompt
-                    profile.getCombinedPrompt()
+                    // Build combined prompt with rendered background info
+                    """<system_prompt>
+${profile.systemPrompt}
+</system_prompt>
+
+<personality>
+${profile.personality}
+</personality>
+
+<background_info>
+$renderedBackgroundInfo
+</background_info>""".trimIndent()
                 }
             } else {
                 SystemPromptConfig.getSystemPrompt(getApplication())
