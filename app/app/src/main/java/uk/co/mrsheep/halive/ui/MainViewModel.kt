@@ -11,6 +11,7 @@ import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
+import uk.co.mrsheep.halive.services.BeepHelper
 import uk.co.mrsheep.halive.services.GeminiService
 import uk.co.mrsheep.halive.services.GeminiMCPToolTransformer
 import com.google.firebase.FirebaseApp
@@ -334,6 +335,9 @@ $renderedBackgroundInfo
                 geminiService.startSession(
                     functionCallHandler = ::executeHomeAssistantTool
                 )
+
+                // Play ready beep to indicate session is active
+                BeepHelper.playReadyBeep(getApplication())
 
                 // Send initial message to agent if configured
                 val profile = ProfileManager.getProfileById(currentProfileId)
