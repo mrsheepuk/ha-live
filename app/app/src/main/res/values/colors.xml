@@ -1,32 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Conversational Teal - Modern Tech Assistant Theme -->
+    <!-- Warm Aqua & Coral - Modern Tech Assistant Theme (Warmer Version) -->
 
-    <!-- Light Mode Primary (Teal) -->
-    <color name="teal_primary">#00897B</color>          <!-- Rich teal - main brand -->
-    <color name="teal_primary_dark">#00695C</color>     <!-- Deeper teal - depth/emphasis -->
-    <color name="teal_primary_light">#4DB6AC</color>    <!-- Lighter teal - hover states -->
+    <!-- Light Mode Primary (Warm Teal/Aqua) -->
+    <color name="teal_primary">#00BCD4</color>          <!-- Bright cyan-teal - warm & inviting -->
+    <color name="teal_primary_dark">#0097A7</color>     <!-- Deeper cyan-teal -->
+    <color name="teal_primary_light">#4DD0E1</color>    <!-- Lighter aqua - hover states -->
 
-    <!-- Dark Mode Primary (Lighter Teal for contrast) -->
-    <color name="teal_primary_night">#4DB6AC</color>    <!-- Vibrant light teal -->
-    <color name="teal_primary_dark_night">#26A69A</color> <!-- Medium teal -->
+    <!-- Dark Mode Primary (Glowing Aqua) -->
+    <color name="teal_primary_night">#4DD0E1</color>    <!-- Vibrant glowing aqua -->
+    <color name="teal_primary_dark_night">#26C6DA</color> <!-- Medium bright aqua -->
 
-    <!-- Secondary (Cyan - responsive/active feel) -->
-    <color name="cyan_secondary">#26C6DA</color>        <!-- Bright cyan - light mode -->
-    <color name="cyan_secondary_dark">#0097A7</color>   <!-- Deeper cyan -->
-    <color name="cyan_secondary_night">#80DEEA</color>  <!-- Soft cyan glow - dark mode -->
+    <!-- Secondary (Warm Teal - deeper complement) -->
+    <color name="cyan_secondary">#26A69A</color>        <!-- Warm teal - light mode -->
+    <color name="cyan_secondary_dark">#00897B</color>   <!-- Deeper warm teal -->
+    <color name="cyan_secondary_night">#80CBC4</color>  <!-- Soft warm teal glow - dark mode -->
 
-    <!-- Accent (Warm Orange - inviting actions) -->
-    <color name="orange_accent">#FF9800</color>         <!-- Warm orange - light mode -->
-    <color name="orange_accent_dark">#F57C00</color>    <!-- Deeper orange -->
-    <color name="orange_accent_night">#FFB74D</color>   <!-- Warm glow - dark mode -->
+    <!-- Accent (Vibrant Coral/Orange - the star of the show) -->
+    <color name="orange_accent">#FF6F00</color>         <!-- Deep vibrant orange - light mode -->
+    <color name="orange_accent_dark">#F57C00</color>    <!-- Rich orange -->
+    <color name="orange_accent_night">#FFB74D</color>   <!-- Warm golden glow - dark mode -->
 
-    <!-- Backgrounds & Surfaces -->
-    <color name="background_light">#FAFAFA</color>      <!-- Soft white -->
+    <!-- Backgrounds & Surfaces (with warm undertones) -->
+    <color name="background_light">#FFFBF7</color>      <!-- Soft warm white -->
     <color name="surface_light">#FFFFFF</color>         <!-- Pure white -->
     <color name="background_dark">#121212</color>       <!-- True dark -->
     <color name="surface_dark">#1E1E1E</color>          <!-- Elevated surface -->
-    <color name="surface_variant_light">#F5F5F5</color> <!-- Light grey container -->
+    <color name="surface_variant_light">#FFF3E0</color> <!-- Warm peach-tinted container -->
     <color name="surface_variant_dark">#2C2C2C</color>  <!-- Dark grey container -->
 
     <!-- Text Colors -->
