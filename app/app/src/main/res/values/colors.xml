@@ -8,6 +8,10 @@
     <color name="light_green_200">#A5D6A7</color>
     <color name="light_green_700">#2E7D32</color>
 
+    <!-- Error colors -->
+    <color name="error_container">#FFEBEE</color>
+    <color name="error">#C62828</color>
+
     <!-- Legacy colors (kept for compatibility) -->
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>

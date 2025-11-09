@@ -446,9 +446,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="⚠️ Tool list may be outdated (not connected to Home Assistant)"
-                android:textColor="?attr/colorError"
+                android:textColor="@color/error"
                 android:padding="8dp"
-                android:background="?attr/colorErrorContainer"
+                android:background="@color/error_container"
                 android:visibility="gone"
                 android:layout_marginBottom="8dp" />
 
