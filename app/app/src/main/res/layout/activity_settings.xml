@@ -57,10 +57,9 @@
                 android:layout_marginBottom="24dp" />
 
             <!-- Divider -->
-            <View
+            <com.google.android.material.divider.MaterialDivider
                 android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#CCCCCC"
+                android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp" />
 
             <!-- Home Assistant Section -->
@@ -126,10 +125,9 @@
             </LinearLayout>
 
             <!-- Divider -->
-            <View
+            <com.google.android.material.divider.MaterialDivider
                 android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#CCCCCC"
+                android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp" />
 
             <!-- Firebase Section -->
