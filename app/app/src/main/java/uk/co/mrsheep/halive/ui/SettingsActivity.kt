@@ -5,14 +5,17 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import uk.co.mrsheep.halive.R
+import uk.co.mrsheep.halive.core.CrashLogger
 import kotlinx.coroutines.launch
 
 class SettingsActivity : AppCompatActivity() {
@@ -34,6 +37,10 @@ class SettingsActivity : AppCompatActivity() {
     // Firebase section
     private lateinit var firebaseProjectIdText: TextView
     private lateinit var firebaseChangeButton: Button
+
+    // Debug section
+    private lateinit var viewCrashLogsButton: Button
+    private lateinit var shareCrashLogsButton: Button
 
     // Read-only overlay
     private lateinit var readOnlyOverlay: View
@@ -95,6 +102,18 @@ class SettingsActivity : AppCompatActivity() {
 
         firebaseChangeButton.setOnClickListener {
             showFirebaseChangeDialog()
+        }
+
+        // Debug section
+        viewCrashLogsButton = findViewById(R.id.viewCrashLogsButton)
+        shareCrashLogsButton = findViewById(R.id.shareCrashLogsButton)
+
+        viewCrashLogsButton.setOnClickListener {
+            showCrashLogsDialog()
+        }
+
+        shareCrashLogsButton.setOnClickListener {
+            shareCrashLogs()
         }
 
         // Read-only overlay
@@ -227,6 +246,58 @@ class SettingsActivity : AppCompatActivity() {
             .setMessage(error)
             .setPositiveButton("OK", null)
             .show()
+    }
+
+    private fun showCrashLogsDialog() {
+        val logContent = CrashLogger.readLog(this)
+
+        // Create a scrollable TextView for the log content
+        val scrollView = ScrollView(this)
+        val textView = TextView(this)
+        textView.text = logContent
+        textView.textSize = 10f
+        textView.setPadding(16, 16, 16, 16)
+        textView.setTextIsSelectable(true)
+        scrollView.addView(textView)
+
+        AlertDialog.Builder(this)
+            .setTitle("Crash Logs")
+            .setView(scrollView)
+            .setPositiveButton("Close", null)
+            .setNeutralButton("Clear Logs") { _, _ ->
+                CrashLogger.clearLog(this)
+                showSuccessDialog("Crash logs cleared")
+            }
+            .show()
+    }
+
+    private fun shareCrashLogs() {
+        try {
+            val logFile = CrashLogger.getLogFile(this)
+
+            if (!logFile.exists() || logFile.length() == 0L) {
+                showErrorDialog("No crash logs to share")
+                return
+            }
+
+            val uri = FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                logFile
+            )
+
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "HA Live Crash Logs")
+                putExtra(Intent.EXTRA_TEXT, "Attached are the crash logs from HA Live")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            startActivity(Intent.createChooser(shareIntent, "Share crash logs"))
+        } catch (e: Exception) {
+            showErrorDialog("Failed to share logs: ${e.message}")
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {

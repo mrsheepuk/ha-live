@@ -163,6 +163,27 @@ suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
 - Live context fetching: **Graceful degradation** (continue without it)
 - Tool execution: **Log and return error** (don't crash the session)
 
+### Material Library Version Consistency
+- App uses **Material Components 2** (`Theme.MaterialComponents.*` in `themes.xml`)
+- **DO NOT** use Material3 styles, attributes, or text appearances
+
+**Styles - Use Material Components 2:**
+- **Correct:** `@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox`
+- **Incorrect:** `@style/Widget.Material3.TextInputLayout.OutlinedBox` (causes crashes)
+
+**Theme Attributes - Material3-only (DO NOT USE):**
+- ❌ `?attr/colorErrorContainer` → Use `@color/error_container` or define in theme
+- ❌ `?attr/colorSurfaceVariant` → Use direct color value (e.g., `#F5F5F5`)
+- ✅ `?attr/colorPrimary`, `?attr/colorOnSurface` are safe (Material Components 2)
+
+**Text Appearances - Use Material Components 2:**
+- ❌ `textAppearanceTitleMedium` → ✅ `textAppearanceSubtitle1`
+- ❌ `textAppearanceBodySmall` → ✅ `textAppearanceCaption`
+- ❌ `textAppearanceLabelLarge` → ✅ `textAppearanceButton`
+- Safe: `textAppearanceHeadline1-6`, `textAppearanceBody1-2`, `textAppearanceCaption`, `textAppearanceButton`
+
+**Before adding any layout attribute, verify compatibility with Material Components 2**
+
 ### Code Review Checklist
 1. Search for all references to modified/deleted classes
 2. Check return type names match actual definitions
