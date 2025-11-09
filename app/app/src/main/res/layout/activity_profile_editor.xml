@@ -408,7 +408,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Available Tools"
-            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:textAppearance="?attr/textAppearanceSubtitle1"
             android:layout_marginTop="24dp"
             android:layout_marginBottom="8dp" />
 
@@ -472,7 +472,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="0 tools selected"
-                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textAppearance="?attr/textAppearanceCaption"
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="8dp" />
 
@@ -480,7 +480,7 @@
                 android:id="@+id/toolsRecyclerView"
                 android:layout_width="match_parent"
                 android:layout_height="200dp"
-                android:background="?attr/colorSurfaceVariant"
+                android:background="#F5F5F5"
                 android:padding="4dp" />
         </LinearLayout>
 
