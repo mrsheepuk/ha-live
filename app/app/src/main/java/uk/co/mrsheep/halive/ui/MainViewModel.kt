@@ -176,22 +176,62 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .format(java.util.Date())
 
         try {
+            // Use the system prompt from the current profile
+            val profile = ProfileManager.getProfileById(currentProfileId)
+
             // Fetch raw MCP tools
             val mcpToolsResult = app.mcpClient?.getTools()
 
-            // Transform to Gemini format
-            val tools = mcpToolsResult?.let {
-                GeminiMCPToolTransformer.transform(it)
+            // Update tool cache for profile editor
+            mcpToolsResult?.let { app.updateToolCache(it.tools) }
+
+            // Apply profile-based tool filtering
+            val filteredTools = mcpToolsResult?.let { result ->
+                when (profile?.toolFilterMode) {
+                    uk.co.mrsheep.halive.core.ToolFilterMode.SELECTED -> {
+                        val selected = profile.selectedToolNames
+                        val available = result.tools.filter { it.name in selected }
+
+                        // Log warning if some selected tools are missing from HA
+                        val missing = selected - available.map { it.name }.toSet()
+                        if (missing.isNotEmpty()) {
+                            addToolLog(
+                                ToolCallLog(
+                                    timestamp = timestamp,
+                                    toolName = "System Startup",
+                                    parameters = "Tool Filtering",
+                                    success = false,
+                                    result = "Selected tools not available in Home Assistant: ${missing.joinToString(", ")}"
+                                )
+                            )
+                        }
+
+                        available
+                    }
+                    else -> result.tools // ToolFilterMode.ALL or null
+                }
+            }
+
+            // Transform filtered tools to Gemini format
+            val tools = filteredTools?.let {
+                GeminiMCPToolTransformer.transform(
+                    uk.co.mrsheep.halive.services.mcp.McpToolsListResult(it)
+                )
             } ?: emptyList()
 
-            // Extract tool names for logging (from MCP, not Firebase!)
-            val toolNames = mcpToolsResult?.tools
+            // Extract tool names for logging (use FILTERED tools, not all MCP tools!)
+            val toolNames = filteredTools
                 ?.map { it.name }
                 ?.sorted()
                 ?: emptyList()
 
-            // Use the system prompt from the current profile
-            val profile = ProfileManager.getProfileById(currentProfileId)
+            // Log filtering information if in SELECTED mode
+            val filterInfo = if (profile?.toolFilterMode == uk.co.mrsheep.halive.core.ToolFilterMode.SELECTED) {
+                val totalAvailable = mcpToolsResult?.tools?.size ?: 0
+                "Filter Mode: SELECTED (${toolNames.size}/$totalAvailable tools enabled)"
+            } else {
+                "Filter Mode: ALL"
+            }
 
             // Render background info template if present
             val renderedBackgroundInfo = if (profile?.backgroundInfo?.isNotBlank() == true) {
@@ -272,10 +312,10 @@ $renderedBackgroundInfo
             val voice = profile?.voice ?: SystemPromptConfig.DEFAULT_VOICE
 
             val toolsSection = if (toolNames.isNotEmpty()) {
-                "Available Tools (${toolNames.size}):\n" +
+                "$filterInfo\nAvailable Tools (${toolNames.size}):\n" +
                 toolNames.joinToString("\n") { "- $it" }
             } else {
-                "No tools available"
+                "$filterInfo\nNo tools available"
             }
 
             // Log the full generated system prompt to the tool log

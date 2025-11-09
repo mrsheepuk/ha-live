@@ -20,6 +20,7 @@ object ProfileManager {
     private const val KEY_PROFILES = "profiles_list"
     private const val KEY_LAST_USED_ID = "last_used_profile_id"
     private const val KEY_MIGRATION_DONE = "migration_v1_done"
+    private const val KEY_MIGRATION_V2_DONE = "migration_v2_tool_filter"
 
     private val json = Json {
         prettyPrint = true
@@ -68,6 +69,20 @@ object ProfileManager {
 
         createProfile(defaultProfile)
         prefs.edit().putBoolean(KEY_MIGRATION_DONE, true).apply()
+    }
+
+    /**
+     * Migrates profiles to include tool filtering fields.
+     * Only runs once. Safe to call multiple times.
+     * Uses ignoreUnknownKeys to handle new fields in existing profiles.
+     */
+    fun runToolFilterMigrationIfNeeded() {
+        if (prefs.getBoolean(KEY_MIGRATION_V2_DONE, false)) return
+
+        // kotlinx.serialization with ignoreUnknownKeys handles this automatically
+        // Existing profiles will get default values: toolFilterMode = ALL, selectedToolNames = emptySet()
+
+        prefs.edit().putBoolean(KEY_MIGRATION_V2_DONE, true).apply()
     }
 
     /**

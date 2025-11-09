@@ -4,6 +4,15 @@ import kotlinx.serialization.Serializable
 import java.util.UUID
 
 /**
+ * Defines the mode for filtering tools in a profile.
+ */
+@Serializable
+enum class ToolFilterMode {
+    ALL,
+    SELECTED
+}
+
+/**
  * Represents a profile with a custom system prompt.
  *
  * Each profile defines a unique "personality" for the AI assistant.
@@ -22,7 +31,9 @@ data class Profile(
     val includeLiveContext: Boolean = SystemPromptConfig.DEFAULT_INCLUDE_LIVE_CONTEXT,
     val isDefault: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-    val lastUsedAt: Long = System.currentTimeMillis()
+    val lastUsedAt: Long = System.currentTimeMillis(),
+    val toolFilterMode: ToolFilterMode = ToolFilterMode.ALL,
+    val selectedToolNames: Set<String> = emptySet()
 ) {
     companion object {
         /**
@@ -38,7 +49,9 @@ data class Profile(
                 model = SystemPromptConfig.DEFAULT_MODEL,
                 voice = SystemPromptConfig.DEFAULT_VOICE,
                 includeLiveContext = SystemPromptConfig.DEFAULT_INCLUDE_LIVE_CONTEXT,
-                isDefault = true
+                isDefault = true,
+                toolFilterMode = ToolFilterMode.ALL,
+                selectedToolNames = emptySet()
             )
         }
     }
@@ -73,6 +86,7 @@ data class Profile(
      * Returns a JSON string suitable for clipboard sharing.
      */
     fun toJsonString(): String {
+        val toolNamesJson = selectedToolNames.joinToString(",") { "\"$it\"" }
         return """
         {
             "name": "$name",
@@ -82,7 +96,9 @@ data class Profile(
             "initialMessageToAgent": "${initialMessageToAgent.replace("\"", "\\\"")}",
             "model": "${model.replace("\"", "\\\"")}",
             "voice": "${voice.replace("\"", "\\\"")}",
-            "includeLiveContext": $includeLiveContext
+            "includeLiveContext": $includeLiveContext,
+            "toolFilterMode": "$toolFilterMode",
+            "selectedToolNames": [$toolNamesJson]
         }
         """.trimIndent()
     }

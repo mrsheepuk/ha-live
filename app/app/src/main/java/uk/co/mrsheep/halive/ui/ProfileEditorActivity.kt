@@ -1,6 +1,8 @@
 package uk.co.mrsheep.halive.ui
 
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.Animation
@@ -9,17 +11,27 @@ import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import uk.co.mrsheep.halive.R
+import uk.co.mrsheep.halive.HAGeminiApp
+import uk.co.mrsheep.halive.core.ToolFilterMode
+import uk.co.mrsheep.halive.ui.adapters.SelectableTool
+import uk.co.mrsheep.halive.ui.adapters.ToolSelectionAdapter
 import kotlinx.coroutines.launch
 
 class ProfileEditorActivity : AppCompatActivity() {
@@ -68,6 +80,22 @@ class ProfileEditorActivity : AppCompatActivity() {
     private lateinit var initialMessageInput: TextInputEditText
 
     private lateinit var includeLiveContextCheckbox: MaterialCheckBox
+
+    // Tool Filtering UI components
+    private lateinit var toolFilterModeGroup: RadioGroup
+    private lateinit var radioAllTools: RadioButton
+    private lateinit var radioSelectedTools: RadioButton
+    private lateinit var toolSelectionContainer: LinearLayout
+    private lateinit var toolCacheWarning: TextView
+    private lateinit var toolSearchBox: TextInputEditText
+    private lateinit var toolCountLabel: TextView
+    private lateinit var toolsRecyclerView: RecyclerView
+    private lateinit var toolAdapter: ToolSelectionAdapter
+
+    // Tool filtering state
+    private var currentToolFilterMode: ToolFilterMode = ToolFilterMode.ALL
+    private var selectedToolNames: MutableSet<String> = mutableSetOf()
+    private var availableTools: List<SelectableTool> = emptyList()
 
     // Buttons (unchanged)
     private lateinit var saveButton: Button
@@ -166,6 +194,51 @@ class ProfileEditorActivity : AppCompatActivity() {
 
         includeLiveContextCheckbox = findViewById(R.id.includeLiveContextCheckbox)
 
+        // Tool Filtering UI
+        toolFilterModeGroup = findViewById(R.id.toolFilterModeGroup)
+        radioAllTools = findViewById(R.id.radioAllTools)
+        radioSelectedTools = findViewById(R.id.radioSelectedTools)
+        toolSelectionContainer = findViewById(R.id.toolSelectionContainer)
+        toolCacheWarning = findViewById(R.id.toolCacheWarning)
+        toolSearchBox = findViewById(R.id.toolSearchBox)
+        toolCountLabel = findViewById(R.id.toolCountLabel)
+        toolsRecyclerView = findViewById(R.id.toolsRecyclerView)
+
+        // Setup tool adapter
+        setupToolAdapter()
+
+        // Load available tools
+        loadAvailableTools()
+
+        // Setup tool filter mode radio buttons
+        toolFilterModeGroup.setOnCheckedChangeListener { _, checkedId ->
+            when (checkedId) {
+                R.id.radioAllTools -> {
+                    currentToolFilterMode = ToolFilterMode.ALL
+                    toolSelectionContainer.visibility = View.GONE
+                }
+                R.id.radioSelectedTools -> {
+                    currentToolFilterMode = ToolFilterMode.SELECTED
+                    toolSelectionContainer.visibility = View.VISIBLE
+                    // When switching to SELECTED, pre-select all available tools if none are selected
+                    if (selectedToolNames.isEmpty()) {
+                        selectedToolNames = availableTools.map { it.name }.toMutableSet()
+                        updateToolSelections()
+                    }
+                }
+            }
+        }
+
+        // Setup search box with text watcher
+        toolSearchBox.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val query = s?.toString() ?: ""
+                toolAdapter.filter(query)
+            }
+        })
+
         saveButton = findViewById(R.id.saveButton)
         cancelButton = findViewById(R.id.cancelButton)
 
@@ -178,7 +251,11 @@ class ProfileEditorActivity : AppCompatActivity() {
             val model = modelInput.text?.toString() ?: ""
             val voice = voiceInput.text?.toString() ?: ""
             val includeLiveContext = includeLiveContextCheckbox.isChecked
-            viewModel.saveProfile(name, prompt, personality, backgroundInfo, initialMessageToAgent, model, voice, includeLiveContext, editingProfileId)
+            viewModel.saveProfile(
+                name, prompt, personality, backgroundInfo, initialMessageToAgent,
+                model, voice, includeLiveContext, currentToolFilterMode,
+                selectedToolNames.toSet(), editingProfileId
+            )
         }
 
         cancelButton.setOnClickListener {
@@ -249,6 +326,25 @@ class ProfileEditorActivity : AppCompatActivity() {
                 modelInput.setText(state.profile.model, false)
                 voiceInput.setText(state.profile.voice, false)
                 includeLiveContextCheckbox.isChecked = state.profile.includeLiveContext
+
+                // Restore tool filter settings
+                currentToolFilterMode = state.profile.toolFilterMode
+                selectedToolNames = state.profile.selectedToolNames.toMutableSet()
+
+                // Update UI to match the loaded settings
+                when (currentToolFilterMode) {
+                    ToolFilterMode.ALL -> {
+                        radioAllTools.isChecked = true
+                        toolSelectionContainer.visibility = View.GONE
+                    }
+                    ToolFilterMode.SELECTED -> {
+                        radioSelectedTools.isChecked = true
+                        toolSelectionContainer.visibility = View.VISIBLE
+                    }
+                }
+
+                // Update tool selections in adapter
+                updateToolSelections()
                 saveButton.isEnabled = true
             }
             is ProfileEditorState.Saving -> {
@@ -282,6 +378,96 @@ class ProfileEditorActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun setupToolAdapter() {
+        toolAdapter = ToolSelectionAdapter { toolName, isSelected ->
+            if (isSelected) {
+                selectedToolNames.add(toolName)
+            } else {
+                selectedToolNames.remove(toolName)
+            }
+            updateToolCountLabel()
+        }
+
+        toolsRecyclerView.layoutManager = LinearLayoutManager(this)
+        toolsRecyclerView.adapter = toolAdapter
+    }
+
+    private fun loadAvailableTools() {
+        lifecycleScope.launch {
+            try {
+                val app = application as HAGeminiApp
+                val mcpClient = app.mcpClient
+
+                // Try to fetch from MCP client, fallback to cache
+                if (mcpClient != null) {
+                    try {
+                        val toolsResult = mcpClient.getTools()
+                        if (toolsResult != null) {
+                            val tools = toolsResult.tools.map { mcpTool ->
+                                SelectableTool(
+                                    name = mcpTool.name,
+                                    description = mcpTool.description,
+                                    isSelected = selectedToolNames.contains(mcpTool.name),
+                                    isAvailable = true
+                                )
+                            }
+                            availableTools = tools.sortedBy { it.name }
+                            toolCacheWarning.visibility = View.GONE
+                            toolAdapter.submitFullList(availableTools)
+                            updateToolCountLabel()
+                        }
+                    } catch (e: Exception) {
+                        // MCP failed, use cache
+                        loadToolsFromCache(app)
+                    }
+                } else {
+                    // No MCP connection, use cache
+                    loadToolsFromCache(app)
+                }
+            } catch (e: Exception) {
+                // Silent fail - just show empty list
+                availableTools = emptyList()
+                toolAdapter.submitFullList(emptyList())
+            }
+        }
+    }
+
+    private fun loadToolsFromCache(app: HAGeminiApp) {
+        val cachedTools = app.lastAvailableTools ?: emptyList()
+        availableTools = cachedTools.map { toolName ->
+            SelectableTool(
+                name = toolName,
+                description = "Tool (from cache)",
+                isSelected = selectedToolNames.contains(toolName),
+                isAvailable = true
+            )
+        }.sortedBy { it.name }
+
+        // Show warning if using cache
+        if (cachedTools.isNotEmpty()) {
+            toolCacheWarning.visibility = View.VISIBLE
+        }
+
+        toolAdapter.submitFullList(availableTools)
+        updateToolCountLabel()
+    }
+
+    private fun updateToolSelections() {
+        // Update adapter with current selections
+        val updatedTools = availableTools.map { tool ->
+            tool.copy(isSelected = selectedToolNames.contains(tool.name))
+        }
+        availableTools = updatedTools
+        toolAdapter.submitFullList(updatedTools)
+        updateToolCountLabel()
+    }
+
+    private fun updateToolCountLabel() {
+        val count = selectedToolNames.size
+        val plural = if (count == 1) "tool" else "tools"
+        toolCountLabel.text = "$count $plural selected"
     }
 
     private fun showErrorDialog(message: String) {

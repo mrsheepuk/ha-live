@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
+import uk.co.mrsheep.halive.core.ToolFilterMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -59,6 +60,8 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      * @param model The AI model to use
      * @param voice The voice to use for audio responses
      * @param includeLiveContext Whether to include live context with system prompt
+     * @param toolFilterMode Whether to use all tools or only selected tools
+     * @param selectedToolNames Set of tool names to use if in SELECTED mode
      * @param existingId The ID of existing profile (null for create)
      */
     fun saveProfile(
@@ -70,6 +73,8 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
         model: String,
         voice: String,
         includeLiveContext: Boolean,
+        toolFilterMode: ToolFilterMode,
+        selectedToolNames: Set<String>,
         existingId: String?
     ) {
         viewModelScope.launch {
@@ -98,7 +103,9 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         model = model,
                         voice = voice,
                         includeLiveContext = includeLiveContext,
-                        initialMessageToAgent = initialMessageToAgent
+                        initialMessageToAgent = initialMessageToAgent,
+                        toolFilterMode = toolFilterMode,
+                        selectedToolNames = selectedToolNames
                     )
 
                     ProfileManager.updateProfile(updated)
@@ -113,6 +120,8 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         voice = voice,
                         includeLiveContext = includeLiveContext,
                         initialMessageToAgent = initialMessageToAgent,
+                        toolFilterMode = toolFilterMode,
+                        selectedToolNames = selectedToolNames,
                         isDefault = false
                     )
 
