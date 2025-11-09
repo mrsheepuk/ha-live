@@ -45,6 +45,17 @@
             android:exported="false"
             android:parentActivityName=".ui.ProfileManagementActivity"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- FileProvider for sharing crash logs -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_provider_paths" />
+        </provider>
     </application>
 
 </manifest>

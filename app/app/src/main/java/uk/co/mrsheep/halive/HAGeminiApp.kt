@@ -1,6 +1,7 @@
 package uk.co.mrsheep.halive
 
 import android.app.Application
+import uk.co.mrsheep.halive.core.CrashLogger
 import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.services.McpClientManager
@@ -17,6 +18,9 @@ class HAGeminiApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Initialize crash logger FIRST to catch any initialization crashes
+        CrashLogger.initialize(this)
 
         // Try to initialize Firebase on launch
         FirebaseConfig.initializeFirebase(this)
