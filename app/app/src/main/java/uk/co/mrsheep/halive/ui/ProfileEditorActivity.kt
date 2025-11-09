@@ -80,6 +80,7 @@ class ProfileEditorActivity : AppCompatActivity() {
     private lateinit var initialMessageInput: TextInputEditText
 
     private lateinit var includeLiveContextCheckbox: MaterialCheckBox
+    private lateinit var autoStartChatCheckbox: MaterialCheckBox
 
     // Tool Filtering UI components
     private lateinit var toolFilterModeGroup: RadioGroup
@@ -193,6 +194,7 @@ class ProfileEditorActivity : AppCompatActivity() {
         initialMessageInput = findViewById(R.id.initialMessageInput)
 
         includeLiveContextCheckbox = findViewById(R.id.includeLiveContextCheckbox)
+        autoStartChatCheckbox = findViewById(R.id.autoStartChatCheckbox)
 
         // Tool Filtering UI
         toolFilterModeGroup = findViewById(R.id.toolFilterModeGroup)
@@ -251,9 +253,10 @@ class ProfileEditorActivity : AppCompatActivity() {
             val model = modelInput.text?.toString() ?: ""
             val voice = voiceInput.text?.toString() ?: ""
             val includeLiveContext = includeLiveContextCheckbox.isChecked
+            val autoStartChat = autoStartChatCheckbox.isChecked
             viewModel.saveProfile(
                 name, prompt, personality, backgroundInfo, initialMessageToAgent,
-                model, voice, includeLiveContext, currentToolFilterMode,
+                model, voice, includeLiveContext, autoStartChat, currentToolFilterMode,
                 selectedToolNames.toSet(), editingProfileId
             )
         }
@@ -326,6 +329,7 @@ class ProfileEditorActivity : AppCompatActivity() {
                 modelInput.setText(state.profile.model, false)
                 voiceInput.setText(state.profile.voice, false)
                 includeLiveContextCheckbox.isChecked = state.profile.includeLiveContext
+                autoStartChatCheckbox.isChecked = state.profile.autoStartChat
 
                 // Restore tool filter settings
                 currentToolFilterMode = state.profile.toolFilterMode

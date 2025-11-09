@@ -33,7 +33,8 @@ data class Profile(
     val createdAt: Long = System.currentTimeMillis(),
     val lastUsedAt: Long = System.currentTimeMillis(),
     val toolFilterMode: ToolFilterMode = ToolFilterMode.ALL,
-    val selectedToolNames: Set<String> = emptySet()
+    val selectedToolNames: Set<String> = emptySet(),
+    val autoStartChat: Boolean = false
 ) {
     companion object {
         /**
@@ -51,7 +52,8 @@ data class Profile(
                 includeLiveContext = SystemPromptConfig.DEFAULT_INCLUDE_LIVE_CONTEXT,
                 isDefault = true,
                 toolFilterMode = ToolFilterMode.ALL,
-                selectedToolNames = emptySet()
+                selectedToolNames = emptySet(),
+                autoStartChat = false
             )
         }
     }
@@ -97,6 +99,7 @@ data class Profile(
             "model": "${model.replace("\"", "\\\"")}",
             "voice": "${voice.replace("\"", "\\\"")}",
             "includeLiveContext": $includeLiveContext,
+            "autoStartChat": $autoStartChat,
             "toolFilterMode": "$toolFilterMode",
             "selectedToolNames": [$toolNamesJson]
         }

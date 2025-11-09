@@ -111,6 +111,16 @@ class MainActivity : AppCompatActivity() {
                 updateProfileSpinner(profiles)
             }
         }
+
+        // Observe auto-start intent
+        lifecycleScope.launch {
+            viewModel.shouldAttemptAutoStart.collect { shouldAutoStart ->
+                if (shouldAutoStart) {
+                    handleAutoStart()
+                    viewModel.consumeAutoStartIntent()
+                }
+            }
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -246,6 +256,33 @@ class MainActivity : AppCompatActivity() {
         } else {
             // Request permission
             requestAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    private fun handleAutoStart() {
+        // Ensure we're in the ready state
+        if (viewModel.uiState.value != UiState.ReadyToTalk) {
+            return
+        }
+
+        // Check microphone permission
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            // Small delay to ensure UI is fully settled
+            lifecycleScope.launch {
+                kotlinx.coroutines.delay(300)
+                viewModel.onChatButtonClicked()
+            }
+        } else {
+            // Don't request permission automatically - just inform user
+            Toast.makeText(
+                this,
+                "Auto-start requires microphone permission. Please grant permission and restart the app.",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
