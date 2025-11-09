@@ -480,7 +480,7 @@
                 android:id="@+id/toolsRecyclerView"
                 android:layout_width="match_parent"
                 android:layout_height="200dp"
-                android:background="#F5F5F5"
+                android:background="@color/surface_variant_light"
                 android:padding="4dp" />
         </LinearLayout>
 

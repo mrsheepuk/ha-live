@@ -1,16 +1,29 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Theme.MyApplication" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
-        <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/purple_200</item>
-        <item name="colorPrimaryVariant">@color/purple_700</item>
+    <!-- Base application theme - Dark Mode -->
+    <style name="Theme.MyApplication" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Primary brand color (Lighter Teal for dark backgrounds) -->
+        <item name="colorPrimary">@color/teal_primary_night</item>
+        <item name="colorPrimaryVariant">@color/teal_primary_dark_night</item>
         <item name="colorOnPrimary">@color/black</item>
-        <!-- Secondary brand color. -->
-        <item name="colorSecondary">@color/teal_200</item>
-        <item name="colorSecondaryVariant">@color/teal_200</item>
+
+        <!-- Secondary brand color (Soft Cyan glow) -->
+        <item name="colorSecondary">@color/cyan_secondary_night</item>
+        <item name="colorSecondaryVariant">@color/cyan_secondary_dark</item>
         <item name="colorOnSecondary">@color/black</item>
-        <!-- Status bar color. -->
+
+        <!-- Accent color (Warm Orange glow) - used for FABs and key actions -->
+        <item name="colorAccent">@color/orange_accent_night</item>
+
+        <!-- Background colors -->
+        <item name="android:colorBackground">@color/background_dark</item>
+        <item name="colorSurface">@color/surface_dark</item>
+        <item name="colorOnSurface">@color/text_primary_dark</item>
+
+        <!-- Error colors -->
+        <item name="colorError">@color/error_dark</item>
+        <item name="colorOnError">@color/black</item>
+
+        <!-- Status bar color -->
         <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
-        <!-- Customize your theme here. -->
     </style>
 </resources>

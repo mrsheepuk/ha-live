@@ -52,7 +52,7 @@
             android:layout_height="wrap_content"
             android:text="Error loading profiles"
             android:textSize="16sp"
-            android:textColor="#CC0000"
+            android:textColor="?attr/colorError"
             android:visibility="gone"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"

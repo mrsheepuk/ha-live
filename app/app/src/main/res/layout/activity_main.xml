@@ -77,7 +77,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginTop="24dp"
-        android:background="#F5F5F5"
+        android:background="@color/surface_variant_light"
         android:padding="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -92,7 +92,7 @@
             android:fontFamily="monospace"
             android:text="Tool call log will appear here..."
             android:textSize="12sp"
-            android:textColor="#333333" />
+            android:textColor="?attr/colorOnSurface" />
     </ScrollView>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
