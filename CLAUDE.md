@@ -163,6 +163,13 @@ suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
 - Live context fetching: **Graceful degradation** (continue without it)
 - Tool execution: **Log and return error** (don't crash the session)
 
+### Material Library Version Consistency
+- App uses **Material Components 2** (`Theme.MaterialComponents.*` in `themes.xml`)
+- **DO NOT** use Material3 styles (e.g., `@style/Widget.Material3.*`) in layouts
+- **Correct:** `@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox`
+- **Incorrect:** `@style/Widget.Material3.TextInputLayout.OutlinedBox` (causes crashes)
+- Always check `themes.xml` to verify which Material library version is in use before adding styles
+
 ### Code Review Checklist
 1. Search for all references to modified/deleted classes
 2. Check return type names match actual definitions
