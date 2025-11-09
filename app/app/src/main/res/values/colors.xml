@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Warm Aqua & Coral - Modern Tech Assistant Theme (Warmer Version) -->
+    <!-- Warm Aqua & Soft Amber - Modern Tech Assistant Theme -->
 
     <!-- Light Mode Primary (Warm Teal/Aqua) -->
     <color name="teal_primary">#00BCD4</color>          <!-- Bright cyan-teal - warm & inviting -->
@@ -16,17 +16,17 @@
     <color name="cyan_secondary_dark">#00897B</color>   <!-- Deeper warm teal -->
     <color name="cyan_secondary_night">#80CBC4</color>  <!-- Soft warm teal glow - dark mode -->
 
-    <!-- Accent (Vibrant Coral/Orange - the star of the show) -->
-    <color name="orange_accent">#FF6F00</color>         <!-- Deep vibrant orange - light mode -->
-    <color name="orange_accent_dark">#F57C00</color>    <!-- Rich orange -->
+    <!-- Accent (Soft Amber - warm & inviting without aggression) -->
+    <color name="orange_accent">#FFA726</color>         <!-- Soft amber - honey in sunlight -->
+    <color name="orange_accent_dark">#FB8C00</color>    <!-- Rich amber -->
     <color name="orange_accent_night">#FFB74D</color>   <!-- Warm golden glow - dark mode -->
 
-    <!-- Backgrounds & Surfaces (with warm undertones) -->
+    <!-- Backgrounds & Surfaces (aqua-tinted for harmony) -->
     <color name="background_light">#FFFBF7</color>      <!-- Soft warm white -->
     <color name="surface_light">#FFFFFF</color>         <!-- Pure white -->
     <color name="background_dark">#121212</color>       <!-- True dark -->
     <color name="surface_dark">#1E1E1E</color>          <!-- Elevated surface -->
-    <color name="surface_variant_light">#FFF3E0</color> <!-- Warm peach-tinted container -->
+    <color name="surface_variant_light">#E0F7FA</color> <!-- Subtle aqua tint - cohesive -->
     <color name="surface_variant_dark">#2C2C2C</color>  <!-- Dark grey container -->
 
     <!-- Text Colors -->
