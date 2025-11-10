@@ -9,6 +9,7 @@ import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -39,12 +40,6 @@ import java.util.Locale
  */
 class ProfileManagementActivity : AppCompatActivity() {
 
-    companion object {
-        private const val REQUEST_EXPORT_SINGLE = 1001
-        private const val REQUEST_EXPORT_ALL = 1002
-        private const val REQUEST_IMPORT = 1003
-    }
-
     private val viewModel: ProfileManagementViewModel by viewModels()
 
     private lateinit var toolbar: androidx.appcompat.widget.Toolbar
@@ -55,6 +50,37 @@ class ProfileManagementActivity : AppCompatActivity() {
 
     private lateinit var profileAdapter: ProfileAdapter
     private var exportingProfileId: String? = null
+
+    // Activity result launchers for file operations
+    private val exportSingleLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                handleExportSingle(uri)
+            }
+        }
+    }
+
+    private val exportAllLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                handleExportAll(uri)
+            }
+        }
+    }
+
+    private val importLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                handleImport(uri)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -105,7 +131,7 @@ class ProfileManagementActivity : AppCompatActivity() {
                 exportingProfileId = profile.id
                 val fileName = getSuggestedExportFileName(profile.name)
                 val intent = FileUtils.createExportIntent(fileName)
-                startActivityForResult(intent, REQUEST_EXPORT_SINGLE)
+                exportSingleLauncher.launch(intent)
             },
             onDelete = { profile ->
                 showDeleteConfirmationDialog(profile)
@@ -189,103 +215,92 @@ class ProfileManagementActivity : AppCompatActivity() {
         return when (item.itemId) {
             R.id.action_import_profiles -> {
                 val intent = FileUtils.createImportIntent()
-                startActivityForResult(intent, REQUEST_IMPORT)
+                importLauncher.launch(intent)
                 true
             }
             R.id.action_export_all_profiles -> {
                 val fileName = getSuggestedExportFileName(null)
                 val intent = FileUtils.createExportIntent(fileName)
-                startActivityForResult(intent, REQUEST_EXPORT_ALL)
+                exportAllLauncher.launch(intent)
                 true
             }
             else -> super.onOptionsItemSelected(item)
         }
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-
-        if (resultCode != RESULT_OK || data?.data == null) {
-            return
+    private fun handleExportSingle(uri: Uri) {
+        val profileId = exportingProfileId ?: return
+        val jsonString = viewModel.exportSingleProfile(profileId)
+        if (jsonString != null) {
+            val result = FileUtils.writeToUri(this, uri, jsonString)
+            if (result.isSuccess) {
+                Toast.makeText(this, getString(R.string.export_single_success), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(
+                    this,
+                    getString(R.string.export_error, result.exceptionOrNull()?.message ?: "Unknown error"),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        } else {
+            Toast.makeText(
+                this,
+                getString(R.string.export_error, "Profile not found"),
+                Toast.LENGTH_SHORT
+            ).show()
         }
+        exportingProfileId = null
+    }
 
-        val uri = data.data ?: return
+    private fun handleExportAll(uri: Uri) {
+        lifecycleScope.launch {
+            val profiles = viewModel.state.value.let { state ->
+                when (state) {
+                    is ProfileManagementState.Loaded -> state.profiles
+                    else -> emptyList()
+                }
+            }
+            val jsonString = viewModel.exportProfiles(profiles)
+            val result = FileUtils.writeToUri(this@ProfileManagementActivity, uri, jsonString)
+            if (result.isSuccess) {
+                Toast.makeText(
+                    this@ProfileManagementActivity,
+                    getString(R.string.export_all_success, profiles.size),
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                Toast.makeText(
+                    this@ProfileManagementActivity,
+                    getString(R.string.export_error, result.exceptionOrNull()?.message ?: "Unknown error"),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
 
-        when (requestCode) {
-            REQUEST_EXPORT_SINGLE -> {
-                val profileId = exportingProfileId ?: return
-                val jsonString = viewModel.exportSingleProfile(profileId)
-                if (jsonString != null) {
-                    val result = FileUtils.writeToUri(this, uri, jsonString)
-                    if (result.isSuccess) {
-                        Toast.makeText(this, getString(R.string.export_single_success), Toast.LENGTH_SHORT).show()
+    private fun handleImport(uri: Uri) {
+        lifecycleScope.launch {
+            val result = FileUtils.readFromUri(this@ProfileManagementActivity, uri)
+            if (result.isSuccess) {
+                val jsonString = result.getOrNull() ?: return@launch
+                viewModel.importProfiles(jsonString) { profileCount, conflictCount ->
+                    val message = if (conflictCount > 0) {
+                        getString(R.string.import_success_with_renames, profileCount, conflictCount)
                     } else {
-                        Toast.makeText(
-                            this,
-                            getString(R.string.export_error, result.exceptionOrNull()?.message ?: "Unknown error"),
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        getString(R.string.import_success, profileCount)
                     }
-                } else {
                     Toast.makeText(
-                        this,
-                        getString(R.string.export_error, "Profile not found"),
-                        Toast.LENGTH_SHORT
+                        this@ProfileManagementActivity,
+                        message,
+                        Toast.LENGTH_LONG
                     ).show()
                 }
-                exportingProfileId = null
-            }
-            REQUEST_EXPORT_ALL -> {
-                lifecycleScope.launch {
-                    val profiles = viewModel.state.value.let { state ->
-                        when (state) {
-                            is ProfileManagementState.Loaded -> state.profiles
-                            else -> emptyList()
-                        }
-                    }
-                    val jsonString = viewModel.exportProfiles(profiles)
-                    val result = FileUtils.writeToUri(this@ProfileManagementActivity, uri, jsonString)
-                    if (result.isSuccess) {
-                        Toast.makeText(
-                            this@ProfileManagementActivity,
-                            getString(R.string.export_all_success, profiles.size),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    } else {
-                        Toast.makeText(
-                            this@ProfileManagementActivity,
-                            getString(R.string.export_error, result.exceptionOrNull()?.message ?: "Unknown error"),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
-            }
-            REQUEST_IMPORT -> {
-                lifecycleScope.launch {
-                    val result = FileUtils.readFromUri(this@ProfileManagementActivity, uri)
-                    if (result.isSuccess) {
-                        val jsonString = result.getOrNull() ?: return@launch
-                        viewModel.importProfiles(jsonString) { profileCount, conflictCount ->
-                            val message = if (conflictCount > 0) {
-                                getString(R.string.import_success_with_renames, profileCount, conflictCount)
-                            } else {
-                                getString(R.string.import_success, profileCount)
-                            }
-                            Toast.makeText(
-                                this@ProfileManagementActivity,
-                                message,
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-                    } else {
-                        Toast.makeText(
-                            this@ProfileManagementActivity,
-                            getString(R.string.import_error, result.exceptionOrNull()?.message ?: "Unknown error"),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
+            } else {
+                Toast.makeText(
+                    this@ProfileManagementActivity,
+                    getString(R.string.import_error, result.exceptionOrNull()?.message ?: "Unknown error"),
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }

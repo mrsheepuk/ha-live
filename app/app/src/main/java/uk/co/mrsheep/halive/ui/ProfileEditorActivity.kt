@@ -408,20 +408,18 @@ class ProfileEditorActivity : AppCompatActivity() {
                 if (mcpClient != null) {
                     try {
                         val toolsResult = mcpClient.getTools()
-                        if (toolsResult != null) {
-                            val tools = toolsResult.tools.map { mcpTool ->
-                                SelectableTool(
-                                    name = mcpTool.name,
-                                    description = mcpTool.description,
-                                    isSelected = selectedToolNames.contains(mcpTool.name),
-                                    isAvailable = true
-                                )
-                            }
-                            availableTools = tools.sortedBy { it.name }
-                            toolCacheWarning.visibility = View.GONE
-                            toolAdapter.submitFullList(availableTools)
-                            updateToolCountLabel()
+                        val tools = toolsResult.tools.map { mcpTool ->
+                            SelectableTool(
+                                name = mcpTool.name,
+                                description = mcpTool.description,
+                                isSelected = selectedToolNames.contains(mcpTool.name),
+                                isAvailable = true
+                            )
                         }
+                        availableTools = tools.sortedBy { it.name }
+                        toolCacheWarning.visibility = View.GONE
+                        toolAdapter.submitFullList(availableTools)
+                        updateToolCountLabel()
                     } catch (e: Exception) {
                         // MCP failed, use cache
                         loadToolsFromCache(app)
