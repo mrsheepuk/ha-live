@@ -25,6 +25,7 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -118,6 +119,7 @@ class ProfileEditorActivity : AppCompatActivity() {
     private lateinit var testToolLogText: TextView
     private var testManager: ProfileTestManager? = null
     private var isTestActive = false
+    private val testLogs = mutableListOf<ToolCallLog>()
 
     // Expansion state
     private var isSystemPromptExpanded = true
@@ -304,7 +306,13 @@ class ProfileEditorActivity : AppCompatActivity() {
         testManager = ProfileTestManager(
             app = application as HAGeminiApp,
             onLogEntry = { log ->
-                Log.d("ProfileTest", "Tool: ${log.toolName}, Result: ${log.result}")
+                // Collect logs in real-time
+                testLogs.add(log)
+
+                // Update display on main thread
+                lifecycleScope.launch {
+                    updateTestLogDisplay()
+                }
             },
             onStatusChange = { status ->
                 lifecycleScope.launch {
@@ -588,6 +596,9 @@ class ProfileEditorActivity : AppCompatActivity() {
                 testStatusText.text = getString(R.string.profile_test_initializing)
                 testToolLogContainer.visibility = View.GONE
                 enableEditing(false)
+
+                // Clear logs from previous test
+                testLogs.clear()
             }
             is ProfileTestManager.TestStatus.Active -> {
                 testButton.text = getString(R.string.profile_test_stop)
@@ -636,6 +647,48 @@ class ProfileEditorActivity : AppCompatActivity() {
                 isTestActive = false
                 enableEditing(true)
             }
+        }
+    }
+
+    private fun updateTestLogDisplay() {
+        if (testLogs.isEmpty()) {
+            testToolLogContainer.visibility = View.GONE
+            return
+        }
+
+        testToolLogContainer.visibility = View.VISIBLE
+
+        // Format logs in detailed multi-line format
+        val formatted = testLogs.joinToString("\n\n") { log ->
+            val status = if (log.success) "✓" else "✗"
+            buildString {
+                append("[$status] ${log.timestamp} ${log.toolName}\n")
+
+                // Show parameters if not empty
+                if (log.parameters.isNotBlank()) {
+                    append("  Args: ${log.parameters}\n")
+                }
+
+                // Show result (truncate if too long)
+                val result = if (log.result.length > 200) {
+                    log.result.take(200) + "..."
+                } else {
+                    log.result
+                }
+                append("  Result: $result")
+            }
+        }
+
+        testToolLogText.text = formatted
+
+        // Auto-scroll to bottom to see latest log entry
+        testToolLogText.post {
+            // Find the parent NestedScrollView and scroll to bottom
+            var parent = testToolLogText.parent
+            while (parent != null && parent !is NestedScrollView) {
+                parent = parent.parent
+            }
+            (parent as? NestedScrollView)?.fullScroll(View.FOCUS_DOWN)
         }
     }
 
