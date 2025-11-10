@@ -68,7 +68,9 @@ class GeminiService {
             // 2. Start audio conversation with function call handler
             // Wrap the suspend function in runBlocking since the SDK expects a regular function
             liveSession?.startAudioConversation(
-                functionCallHandler = { call -> runBlocking { functionCallHandler(call) } }
+                functionCallHandler = { call -> runBlocking { functionCallHandler(call) } },
+                transcriptHandler = null,
+                enableInterruptions = true
             )
 
         } catch (e: SecurityException) {
@@ -118,3 +120,4 @@ class GeminiService {
         private const val TAG = "GeminiService"
     }
 }
+
