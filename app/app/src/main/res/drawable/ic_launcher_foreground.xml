@@ -5,51 +5,51 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- House with integrated microphone -->
+    <!-- House - smaller and positioned higher -->
     <group
         android:translateX="54"
-        android:translateY="54">
+        android:translateY="48">
 
-        <!-- House roof - larger, more prominent -->
+        <!-- House roof - smaller, better proportioned -->
         <path
             android:fillColor="#FFFFFF"
-            android:pathData="M0,-22 L-28,6 L28,6 Z" />
+            android:pathData="M0,-18 L-24,4 L24,4 Z" />
 
-        <!-- House base - fuller, more substantial -->
+        <!-- House base - smaller, better proportioned -->
         <path
             android:fillColor="#FFFFFF"
-            android:pathData="M-24,6 L-24,32 L24,32 L24,6 Z" />
-
-        <!-- Microphone silhouette in center of house (darker aqua for contrast) -->
-        <group
-            android:translateX="0"
-            android:translateY="19">
-
-            <!-- Mic capsule -->
-            <path
-                android:fillColor="#0097A7"
-                android:pathData="M-5,-12 Q-8,-12 -8,-9 L-8,0 Q-8,3 -5,3 L5,3 Q8,3 8,0 L8,-9 Q8,-12 5,-12 Z" />
-
-            <!-- Mic stand arc -->
-            <path
-                android:fillColor="@android:color/transparent"
-                android:strokeWidth="2.5"
-                android:strokeColor="#0097A7"
-                android:pathData="M-10,2 Q-10,10 0,10 Q10,10 10,2" />
-
-            <!-- Mic stand pole -->
-            <path
-                android:fillColor="#0097A7"
-                android:pathData="M-1.5,10 L-1.5,16 L1.5,16 L1.5,10 Z" />
-
-            <!-- Mic base -->
-            <path
-                android:fillColor="#0097A7"
-                android:pathData="M-6,16 L-6,18 L6,18 L6,16 Z" />
-        </group>
+            android:pathData="M-20,4 L-20,26 L20,26 L20,4 Z" />
     </group>
 
-    <!-- Lightning bolt - same position, golden amber accent -->
+    <!-- Microphone silhouette - separate group so it renders ON TOP of house (no clipping) -->
+    <group
+        android:translateX="54"
+        android:translateY="60">
+
+        <!-- Mic capsule -->
+        <path
+            android:fillColor="#0097A7"
+            android:pathData="M-5,-12 Q-8,-12 -8,-9 L-8,0 Q-8,3 -5,3 L5,3 Q8,3 8,0 L8,-9 Q8,-12 5,-12 Z" />
+
+        <!-- Mic stand arc -->
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeWidth="2.5"
+            android:strokeColor="#0097A7"
+            android:pathData="M-10,2 Q-10,10 0,10 Q10,10 10,2" />
+
+        <!-- Mic stand pole -->
+        <path
+            android:fillColor="#0097A7"
+            android:pathData="M-1.5,10 L-1.5,16 L1.5,16 L1.5,10 Z" />
+
+        <!-- Mic base -->
+        <path
+            android:fillColor="#0097A7"
+            android:pathData="M-6,16 L-6,18 L6,18 L6,16 Z" />
+    </group>
+
+    <!-- Lightning bolt - golden amber accent in upper right -->
     <group
         android:translateX="78"
         android:translateY="38">
