@@ -13,7 +13,7 @@ import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.services.BeepHelper
 import uk.co.mrsheep.halive.services.GeminiService
-import uk.co.mrsheep.halive.services.GeminiMCPToolTransformer
+import uk.co.mrsheep.halive.services.GeminiSessionPreparer
 import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.type.FunctionCallPart
 import com.google.firebase.ai.type.FunctionResponsePart
@@ -73,6 +73,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as HAGeminiApp
     private val geminiService = GeminiService()
+    private lateinit var sessionPreparer: GeminiSessionPreparer
 
     // Track whether a chat session is currently active
     private var isSessionActive = false
@@ -111,6 +112,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val (haUrl, haToken) = HAConfig.loadConfig(getApplication())!!
                 app.initializeHomeAssistant(haUrl, haToken)
+                sessionPreparer = GeminiSessionPreparer(
+                    mcpClient = app.mcpClient!!,
+                    haApiClient = app.haApiClient!!,
+                    toolExecutor = app.toolExecutor!!,
+                    onLogEntry = ::addToolLog
+                )
                 _uiState.value = UiState.ReadyToTalk
 
                 // Check if we should auto-start (only on first initialization)
@@ -190,178 +197,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Initialize the Gemini model with tools from MCP.
      */
     private suspend fun initializeGemini() {
-        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-            .format(java.util.Date())
-
         try {
-            // Use the system prompt from the current profile
             val profile = ProfileManager.getProfileById(currentProfileId)
-
-            // Fetch raw MCP tools
-            val mcpToolsResult = app.mcpClient?.getTools()
-
-            // Update tool cache for profile editor
-            mcpToolsResult?.let { app.updateToolCache(it.tools) }
-
-            // Apply profile-based tool filtering
-            val filteredTools = mcpToolsResult?.let { result ->
-                when (profile?.toolFilterMode) {
-                    uk.co.mrsheep.halive.core.ToolFilterMode.SELECTED -> {
-                        val selected = profile.selectedToolNames
-                        val available = result.tools.filter { it.name in selected }
-
-                        // Log warning if some selected tools are missing from HA
-                        val missing = selected - available.map { it.name }.toSet()
-                        if (missing.isNotEmpty()) {
-                            addToolLog(
-                                ToolCallLog(
-                                    timestamp = timestamp,
-                                    toolName = "System Startup",
-                                    parameters = "Tool Filtering",
-                                    success = false,
-                                    result = "Selected tools not available in Home Assistant: ${missing.joinToString(", ")}"
-                                )
-                            )
-                        }
-
-                        available
-                    }
-                    else -> result.tools // ToolFilterMode.ALL or null
-                }
-            }
-
-            // Transform filtered tools to Gemini format
-            val tools = filteredTools?.let {
-                GeminiMCPToolTransformer.transform(
-                    uk.co.mrsheep.halive.services.mcp.McpToolsListResult(it)
-                )
-            } ?: emptyList()
-
-            // Extract tool names for logging (use FILTERED tools, not all MCP tools!)
-            val toolNames = filteredTools
-                ?.map { it.name }
-                ?.sorted()
-                ?: emptyList()
-
-            // Log filtering information if in SELECTED mode
-            val filterInfo = if (profile?.toolFilterMode == uk.co.mrsheep.halive.core.ToolFilterMode.SELECTED) {
-                val totalAvailable = mcpToolsResult?.tools?.size ?: 0
-                "Filter Mode: SELECTED (${toolNames.size}/$totalAvailable tools enabled)"
-            } else {
-                "Filter Mode: ALL"
-            }
-
-            // Render background info template if present
-            val renderedBackgroundInfo = if (profile?.backgroundInfo?.isNotBlank() == true) {
-                app.haApiClient?.renderTemplate(profile.backgroundInfo)
-                    ?: throw Exception("HA API client not initialized")
-            } else {
-                profile?.backgroundInfo ?: ""
-            }
-
-            // Determine the system prompt to use
-            val systemPrompt = if (profile != null) {
-                // Check if we should include live context
-                if (profile.includeLiveContext) {
-                    // Fetch live context from Home Assistant
-                    val liveContextText = try {
-                        // Create a FunctionCallPart for GetLiveContext
-                        val getLiveContextCall = FunctionCallPart(
-                            name = "GetLiveContext",
-                            args = emptyMap()
-                        )
-                        val response = app.toolExecutor?.executeTool(getLiveContextCall)
-                        response?.response?.let { jsonObj ->
-                            // Navigate: outer "result" -> inner "result" -> text content
-                            jsonObj.jsonObject["result"]
-                                ?.jsonObject?.get("result")
-                                ?.jsonPrimitive?.content ?: ""
-                        } ?: ""
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to fetch live context: ${e.message}")
-                        // Log the error to the tool log
-                        addToolLog(
-                            ToolCallLog(
-                                timestamp = timestamp,
-                                toolName = "System Startup",
-                                parameters = "GetLiveContext",
-                                success = false,
-                                result = "Failed to fetch live context: ${e.message}"
-                            )
-                        )
-                        "" // Continue without live context on error
-                    }
-
-                    // Build combined prompt manually with live context in its own section
-                    """<system_prompt>
-${profile.systemPrompt}
-</system_prompt>
-
-<personality>
-${profile.personality}
-</personality>
-
-<background_info>
-$renderedBackgroundInfo
-</background_info>
-
-<initial_live_context>
-$liveContextText
-</initial_live_context>""".trimIndent()
-                } else {
-                    // Build combined prompt with rendered background info
-                    """<system_prompt>
-${profile.systemPrompt}
-</system_prompt>
-
-<personality>
-${profile.personality}
-</personality>
-
-<background_info>
-$renderedBackgroundInfo
-</background_info>""".trimIndent()
-                }
-            } else {
-                SystemPromptConfig.getSystemPrompt(getApplication())
-            }
-
-            val model = profile?.model ?: SystemPromptConfig.DEFAULT_MODEL
-            val voice = profile?.voice ?: SystemPromptConfig.DEFAULT_VOICE
-
-            val toolsSection = if (toolNames.isNotEmpty()) {
-                "$filterInfo\nAvailable Tools (${toolNames.size}):\n" +
-                toolNames.joinToString("\n") { "- $it" }
-            } else {
-                "$filterInfo\nNo tools available"
-            }
-
-            // Log the full generated system prompt to the tool log
-            addToolLog(
-                ToolCallLog(
-                    timestamp = timestamp,
-                    toolName = "System Startup",
-                    parameters = "Model: $model, Voice: $voice",
-                    success = true,
-                    result = "$toolsSection\n\nGenerated System Prompt:\n\n$systemPrompt"
-                )
-            )
-
-            // Initialize the Gemini model
-            geminiService.initializeModel(tools, systemPrompt, model, voice)
-            // Note: UI state is managed by the caller (e.g., startChat)
+            val defaultPrompt = SystemPromptConfig.getSystemPrompt(getApplication())
+            sessionPreparer.prepareAndInitialize(profile, geminiService, defaultPrompt)
         } catch (e: Exception) {
-            // Log initialization error to tool log
-            addToolLog(
-                ToolCallLog(
-                    timestamp = timestamp,
-                    toolName = "System Startup",
-                    parameters = "Gemini Initialization",
-                    success = false,
-                    result = "Failed to initialize Gemini: ${e.message}\n${e.stackTraceToString()}"
-                )
-            )
-            // Throw exception for caller to handle
+            // Error is already logged by preparer
             throw e
         }
     }
