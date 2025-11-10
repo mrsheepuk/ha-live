@@ -60,7 +60,7 @@
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:background="#CCCCCC"
+                android:background="@color/divider_light"
                 android:layout_marginBottom="16dp" />
 
             <!-- Home Assistant Section -->
@@ -129,7 +129,7 @@
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:background="#CCCCCC"
+                android:background="@color/divider_light"
                 android:layout_marginBottom="16dp" />
 
             <!-- Firebase Section -->
@@ -167,7 +167,7 @@
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:background="#CCCCCC"
+                android:background="@color/divider_light"
                 android:layout_marginBottom="16dp" />
 
             <!-- Debug Section -->
@@ -217,7 +217,7 @@
         android:id="@+id/readOnlyOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#80000000"
+        android:background="@color/overlay_background"
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true">
@@ -229,8 +229,8 @@
             android:layout_gravity="center"
             android:text="Stop chat to modify settings"
             android:textSize="18sp"
-            android:textColor="#FFFFFF"
-            android:background="#DD000000"
+            android:textColor="@color/white"
+            android:background="@color/overlay_message_bg"
             android:padding="16dp" />
     </FrameLayout>
 

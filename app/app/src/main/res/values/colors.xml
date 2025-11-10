@@ -1,23 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Deep green color scheme - British Racing Green inspired -->
-    <color name="green_200">#81C784</color>
-    <color name="green_500">#1B5E20</color>
-    <color name="green_700">#0D3D15</color>
-    <color name="green_800">#052A0A</color>
-    <color name="light_green_200">#A5D6A7</color>
-    <color name="light_green_700">#2E7D32</color>
+    <!-- Warm Aqua & Soft Amber - Modern Tech Assistant Theme -->
+
+    <!-- Light Mode Primary (Warm Teal/Aqua) -->
+    <color name="teal_primary">#00BCD4</color>          <!-- Bright cyan-teal - warm & inviting -->
+    <color name="teal_primary_dark">#0097A7</color>     <!-- Deeper cyan-teal -->
+    <color name="teal_primary_light">#4DD0E1</color>    <!-- Lighter aqua - hover states -->
+
+    <!-- Dark Mode Primary (Glowing Aqua) -->
+    <color name="teal_primary_night">#4DD0E1</color>    <!-- Vibrant glowing aqua -->
+    <color name="teal_primary_dark_night">#26C6DA</color> <!-- Medium bright aqua -->
+
+    <!-- Secondary (Warm Teal - deeper complement) -->
+    <color name="cyan_secondary">#26A69A</color>        <!-- Warm teal - light mode -->
+    <color name="cyan_secondary_dark">#00897B</color>   <!-- Deeper warm teal -->
+    <color name="cyan_secondary_night">#80CBC4</color>  <!-- Soft warm teal glow - dark mode -->
+
+    <!-- Accent (Soft Amber - warm & inviting without aggression) -->
+    <color name="orange_accent">#FFA726</color>         <!-- Soft amber - honey in sunlight -->
+    <color name="orange_accent_dark">#FB8C00</color>    <!-- Rich amber -->
+    <color name="orange_accent_night">#FFB74D</color>   <!-- Warm golden glow - dark mode -->
+
+    <!-- Backgrounds & Surfaces (aqua-tinted for harmony) -->
+    <color name="background_light">#FFFBF7</color>      <!-- Soft warm white -->
+    <color name="surface_light">#FFFFFF</color>         <!-- Pure white -->
+    <color name="background_dark">#121212</color>       <!-- True dark -->
+    <color name="surface_dark">#1E1E1E</color>          <!-- Elevated surface -->
+    <color name="surface_variant_light">#E0F7FA</color> <!-- Subtle aqua tint - cohesive -->
+    <color name="surface_variant_dark">#2C2C2C</color>  <!-- Dark grey container -->
+
+    <!-- Text Colors -->
+    <color name="text_primary_light">#212121</color>    <!-- Dark grey text -->
+    <color name="text_secondary_light">#757575</color>  <!-- Medium grey text -->
+    <color name="text_primary_dark">#FFFFFF</color>     <!-- White text -->
+    <color name="text_secondary_dark">#B0B0B0</color>   <!-- Light grey text -->
+
+    <!-- Dividers & Overlays -->
+    <color name="divider_light">#E0E0E0</color>         <!-- Light grey divider -->
+    <color name="divider_dark">#3A3A3A</color>          <!-- Dark grey divider -->
+    <color name="overlay_background">#80000000</color>  <!-- Semi-transparent black -->
+    <color name="overlay_message_bg">#DD000000</color>  <!-- Nearly opaque black -->
 
     <!-- Error colors -->
     <color name="error_container">#FFEBEE</color>
     <color name="error">#C62828</color>
+    <color name="error_dark">#EF5350</color>            <!-- Lighter error for dark mode -->
 
-    <!-- Legacy colors (kept for compatibility) -->
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
+    <!-- Base colors -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 </resources>

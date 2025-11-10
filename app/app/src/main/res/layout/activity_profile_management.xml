@@ -52,7 +52,7 @@
             android:layout_height="wrap_content"
             android:text="Error loading profiles"
             android:textSize="16sp"
-            android:textColor="#CC0000"
+            android:textColor="?attr/colorError"
             android:visibility="gone"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"
@@ -69,6 +69,7 @@
         android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
         android:contentDescription="@string/profile_create_new"
+        app:backgroundTint="?attr/colorAccent"
         app:srcCompat="@android:drawable/ic_input_add" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
