@@ -63,7 +63,7 @@
     <string name="export_single_success">Profile exported</string>
     <string name="export_all_success">%d profiles exported</string>
     <string name="import_success">%d profiles imported</string>
-    <string name="import_success_with_renames">%d profiles imported (%d renamed)</string>
+    <string name="import_success_with_renames">%1$d profiles imported (%2$d renamed)</string>
     <string name="export_error">Failed to export: %s</string>
     <string name="import_error">Failed to import: %s</string>
     <string name="import_error_invalid_format">Invalid profile file format</string>
