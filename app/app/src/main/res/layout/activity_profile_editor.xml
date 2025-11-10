@@ -497,25 +497,100 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="end"
+            android:orientation="vertical"
             android:layout_marginTop="16dp">
 
-            <Button
-                android:id="@+id/cancelButton"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="wrap_content"
+            <!-- Button row -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/profile_editor_cancel"
-                android:layout_marginEnd="8dp" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
-            <Button
-                android:id="@+id/saveButton"
-                android:layout_width="wrap_content"
+                <!-- Test button (left) -->
+                <Button
+                    android:id="@+id/testButton"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/profile_test_button"
+                    android:drawableStart="@android:drawable/ic_media_play"
+                    android:layout_marginEnd="8dp" />
+
+                <!-- Spacer -->
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <!-- Cancel button -->
+                <Button
+                    android:id="@+id/cancelButton"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/profile_editor_cancel"
+                    android:layout_marginEnd="8dp" />
+
+                <!-- Save button -->
+                <Button
+                    android:id="@+id/saveButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/profile_editor_save"
+                    app:backgroundTint="?attr/colorAccent" />
+            </LinearLayout>
+
+            <!-- Test Status Card (below buttons, initially hidden) -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/testStatusCard"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/profile_editor_save"
-                app:backgroundTint="?attr/colorAccent" />
+                android:layout_marginTop="8dp"
+                android:visibility="gone"
+                app:cardBackgroundColor="#E3F2FD"
+                app:cardElevation="2dp">
 
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:id="@+id/testStatusText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="?attr/textAppearanceBody2"
+                        android:text="Initializing test session..." />
+
+                    <!-- Tool Log Section (expandable) -->
+                    <LinearLayout
+                        android:id="@+id/testToolLogContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginTop="8dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Tools Called:"
+                            android:textAppearance="?attr/textAppearanceCaption"
+                            android:textStyle="bold"
+                            android:layout_marginBottom="4dp" />
+
+                        <TextView
+                            android:id="@+id/testToolLogText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textAppearance="?attr/textAppearanceCaption"
+                            android:fontFamily="monospace"
+                            android:textColor="?attr/colorOnSurface" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
         </LinearLayout>
