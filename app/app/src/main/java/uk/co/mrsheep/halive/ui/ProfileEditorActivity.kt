@@ -567,7 +567,7 @@ class ProfileEditorActivity : AppCompatActivity() {
             includeLiveContext = includeLiveContextCheckbox.isChecked,
             autoStartChat = false, // Irrelevant for testing
             toolFilterMode = currentToolFilterMode,
-            selectedToolNames = selectedToolNames.toList()
+            selectedToolNames = selectedToolNames.toSet()
         )
     }
 
