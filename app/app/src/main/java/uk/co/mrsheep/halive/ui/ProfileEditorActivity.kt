@@ -1,8 +1,12 @@
 package uk.co.mrsheep.halive.ui
 
+import android.Manifest
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.Animation
@@ -16,10 +20,12 @@ import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -29,7 +35,10 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.HAGeminiApp
+import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ToolFilterMode
+import uk.co.mrsheep.halive.services.GeminiService
+import uk.co.mrsheep.halive.services.ProfileTestManager
 import uk.co.mrsheep.halive.ui.adapters.SelectableTool
 import uk.co.mrsheep.halive.ui.adapters.ToolSelectionAdapter
 import kotlinx.coroutines.launch
@@ -102,6 +111,16 @@ class ProfileEditorActivity : AppCompatActivity() {
     private lateinit var saveButton: Button
     private lateinit var cancelButton: Button
 
+    // Test UI components
+    private lateinit var testButton: Button
+    private lateinit var testStatusCard: MaterialCardView
+    private lateinit var testStatusText: TextView
+    private lateinit var testToolLogContainer: LinearLayout
+    private lateinit var testToolLogText: TextView
+    private var testManager: ProfileTestManager? = null
+    private var isTestActive = false
+    private val testLogs = mutableListOf<ToolCallLog>()
+
     // Expansion state
     private var isSystemPromptExpanded = true
     private var isPersonalityExpanded = false
@@ -111,6 +130,17 @@ class ProfileEditorActivity : AppCompatActivity() {
     // Mode tracking
     private var editingProfileId: String? = null
     private var isEditMode: Boolean = false
+
+    // Permission launcher
+    private val micPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            lifecycleScope.launch { startTest() }
+        } else {
+            Toast.makeText(this, "Microphone permission required for testing", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -263,6 +293,40 @@ class ProfileEditorActivity : AppCompatActivity() {
 
         cancelButton.setOnClickListener {
             finish()
+        }
+
+        // Initialize test UI components
+        testButton = findViewById(R.id.testButton)
+        testStatusCard = findViewById(R.id.testStatusCard)
+        testStatusText = findViewById(R.id.testStatusText)
+        testToolLogContainer = findViewById(R.id.testToolLogContainer)
+        testToolLogText = findViewById(R.id.testToolLogText)
+
+        // Initialize test manager
+        testManager = ProfileTestManager(
+            app = application as HAGeminiApp,
+            onLogEntry = { log ->
+                // Collect logs in real-time
+                testLogs.add(log)
+
+                // Update display on main thread
+                lifecycleScope.launch {
+                    updateTestLogDisplay()
+                }
+            },
+            onStatusChange = { status ->
+                lifecycleScope.launch {
+                    updateTestStatus(status)
+                }
+            }
+        )
+
+        testButton.setOnClickListener {
+            if (isTestActive) {
+                testManager?.stopTest()
+            } else {
+                lifecycleScope.launch { startTest() }
+            }
         }
 
         // Setup expansion panels
@@ -478,6 +542,176 @@ class ProfileEditorActivity : AppCompatActivity() {
             .setMessage(message)
             .setPositiveButton("OK", null)
             .show()
+    }
+
+    private suspend fun startTest() {
+        // Check microphone permission
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+
+        // Build profile from current UI state
+        val testProfile = buildProfileFromUI()
+
+        try {
+            testManager?.startTest(testProfile, this@ProfileEditorActivity)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Failed to start test: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun buildProfileFromUI(): Profile {
+        return Profile(
+            id = "test-${System.currentTimeMillis()}", // Temporary ID
+            name = profileNameInput.text.toString().ifBlank { "Test Profile" },
+            systemPrompt = systemPromptInput.text.toString(),
+            personality = personalityInput.text.toString(),
+            backgroundInfo = backgroundInfoInput.text.toString(),
+            initialMessageToAgent = initialMessageInput.text.toString(),
+            model = modelInput.text.toString(),
+            voice = voiceInput.text.toString(),
+            includeLiveContext = includeLiveContextCheckbox.isChecked,
+            autoStartChat = false, // Irrelevant for testing
+            toolFilterMode = currentToolFilterMode,
+            selectedToolNames = selectedToolNames.toSet()
+        )
+    }
+
+    private fun updateTestStatus(status: ProfileTestManager.TestStatus) {
+        when (status) {
+            is ProfileTestManager.TestStatus.Idle -> {
+                testButton.text = getString(R.string.profile_test_button)
+                testButton.setCompoundDrawablesWithIntrinsicBounds(
+                    android.R.drawable.ic_media_play, 0, 0, 0)
+                testStatusCard.visibility = View.GONE
+                isTestActive = false
+                enableEditing(true)
+            }
+            is ProfileTestManager.TestStatus.Initializing -> {
+                testButton.isEnabled = false
+                testStatusCard.visibility = View.VISIBLE
+                testStatusCard.setCardBackgroundColor(ColorStateList.valueOf(Color.parseColor("#E3F2FD")))
+                testStatusText.text = getString(R.string.profile_test_initializing)
+                testToolLogContainer.visibility = View.GONE
+                enableEditing(false)
+
+                // Clear logs from previous test
+                testLogs.clear()
+            }
+            is ProfileTestManager.TestStatus.Active -> {
+                testButton.text = getString(R.string.profile_test_stop)
+                testButton.setCompoundDrawablesWithIntrinsicBounds(
+                    android.R.drawable.ic_media_pause, 0, 0, 0)
+                testButton.isEnabled = true
+                testStatusCard.visibility = View.VISIBLE
+                testStatusCard.setCardBackgroundColor(ColorStateList.valueOf(Color.parseColor("#C8E6C9")))
+                testStatusText.text = status.message
+                isTestActive = true
+            }
+            is ProfileTestManager.TestStatus.Stopped -> {
+                val toolsCalled = testManager?.getCalledTools() ?: emptyList()
+
+                testStatusCard.setCardBackgroundColor(ColorStateList.valueOf(Color.parseColor("#FFF9C4")))
+                testStatusCard.visibility = View.VISIBLE
+
+                if (toolsCalled.isNotEmpty()) {
+                    testStatusText.text = getString(R.string.profile_test_stopped_with_tools)
+                    testToolLogContainer.visibility = View.VISIBLE
+                    testToolLogText.text = toolsCalled.joinToString("\n") { "• $it" }
+                } else {
+                    testStatusText.text = getString(R.string.profile_test_stopped_no_tools)
+                    testToolLogContainer.visibility = View.GONE
+                }
+
+                testButton.text = getString(R.string.profile_test_button)
+                testButton.setCompoundDrawablesWithIntrinsicBounds(
+                    android.R.drawable.ic_media_play, 0, 0, 0)
+                isTestActive = false
+                enableEditing(true)
+
+                // Hide status after 5 seconds
+                testStatusCard.postDelayed({
+                    testStatusCard.visibility = View.GONE
+                }, 5000)
+            }
+            is ProfileTestManager.TestStatus.Error -> {
+                testStatusCard.visibility = View.VISIBLE
+                testStatusCard.setCardBackgroundColor(ColorStateList.valueOf(Color.parseColor("#FFCDD2")))
+                testStatusText.text = getString(R.string.profile_test_error, status.message)
+                testToolLogContainer.visibility = View.GONE
+                testButton.text = getString(R.string.profile_test_button)
+                testButton.setCompoundDrawablesWithIntrinsicBounds(
+                    android.R.drawable.ic_media_play, 0, 0, 0)
+                isTestActive = false
+                enableEditing(true)
+            }
+        }
+    }
+
+    private fun updateTestLogDisplay() {
+        if (testLogs.isEmpty()) {
+            testToolLogContainer.visibility = View.GONE
+            return
+        }
+
+        testToolLogContainer.visibility = View.VISIBLE
+
+        // Format logs in detailed multi-line format
+        val formatted = testLogs.joinToString("\n\n") { log ->
+            val status = if (log.success) "✓" else "✗"
+            buildString {
+                append("[$status] ${log.timestamp} ${log.toolName}\n")
+
+                // Show parameters if not empty
+                if (log.parameters.isNotBlank()) {
+                    append("  Args: ${log.parameters}\n")
+                }
+
+                // Show result (truncate if too long)
+                val result = if (log.result.length > 200) {
+                    log.result.take(200) + "..."
+                } else {
+                    log.result
+                }
+                append("  Result: $result")
+            }
+        }
+
+        testToolLogText.text = formatted
+
+        // Auto-scroll to bottom to see latest log entry
+        testToolLogText.post {
+            // Find the parent NestedScrollView and scroll to bottom
+            var parent = testToolLogText.parent
+            while (parent != null && parent !is NestedScrollView) {
+                parent = parent.parent
+            }
+            (parent as? NestedScrollView)?.fullScroll(View.FOCUS_DOWN)
+        }
+    }
+
+    private fun enableEditing(enabled: Boolean) {
+        profileNameInput.isEnabled = enabled
+        modelInput.isEnabled = enabled
+        voiceInput.isEnabled = enabled
+        systemPromptInput.isEnabled = enabled
+        personalityInput.isEnabled = enabled
+        backgroundInfoInput.isEnabled = enabled
+        initialMessageInput.isEnabled = enabled
+        includeLiveContextCheckbox.isEnabled = enabled
+        autoStartChatCheckbox.isEnabled = enabled
+        radioAllTools.isEnabled = enabled
+        radioSelectedTools.isEnabled = enabled
+        toolSearchBox.isEnabled = enabled
+        saveButton.isEnabled = enabled
+        cancelButton.isEnabled = enabled
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        testManager?.cleanup()
     }
 
     override fun onSupportNavigateUp(): Boolean {

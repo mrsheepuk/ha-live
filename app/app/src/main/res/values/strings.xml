@@ -56,6 +56,14 @@
     <string name="profile_editor_include_live_context">Include live context with system prompt</string>
     <string name="profile_editor_auto_start_chat">Auto-start chat when app opens</string>
 
+    <!-- Profile Testing -->
+    <string name="profile_test_button">Test Profile</string>
+    <string name="profile_test_stop">Stop Test</string>
+    <string name="profile_test_initializing">Initializing test session…</string>
+    <string name="profile_test_stopped_with_tools">Test stopped. Tools called:</string>
+    <string name="profile_test_stopped_no_tools">Test stopped. No tools were called.</string>
+    <string name="profile_test_error">Test error: %1$s</string>
+
     <!-- Export/Import Profiles -->
     <string name="menu_import_profiles">Import Profiles</string>
     <string name="menu_export_all_profiles">Export All Profiles</string>

@@ -8,17 +8,18 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.mcp.*
 
 class GeminiMCPToolExecutor(
     private val mcpClient: McpClientManager
-) {
+) : ToolExecutor {
     private val json = Json { ignoreUnknownKeys = true }
 
     /**
      * Executes a tool via MCP and returns the result to Gemini.
      */
-    suspend fun executeTool(functionCall: FunctionCallPart): FunctionResponsePart {
+    override suspend fun executeTool(functionCall: FunctionCallPart): FunctionResponsePart {
         return try {
             Log.d(TAG, "Executing tool: ${functionCall.name} with args: ${functionCall.args}")
 
