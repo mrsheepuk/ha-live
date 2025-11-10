@@ -53,4 +53,5 @@
     <string name="voice_aoede">Aoede</string>
     <string name="voice_leda">Leda</string>
     <string name="profile_editor_include_live_context">Include live context with system prompt</string>
+    <string name="profile_editor_auto_start_chat">Auto-start chat when app opens</string>
 </resources>

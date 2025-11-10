@@ -64,6 +64,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _systemPrompt = MutableStateFlow("")
     val systemPrompt: StateFlow<String> = _systemPrompt
 
+    // Auto-start state
+    private val _shouldAttemptAutoStart = MutableStateFlow(false)
+    val shouldAttemptAutoStart: StateFlow<Boolean> = _shouldAttemptAutoStart
+
+    // Track if this is the first initialization (survives activity recreation, not process death)
+    private var hasCheckedAutoStart = false
+
     private val app = application as HAGeminiApp
     private val geminiService = GeminiService()
 
@@ -105,6 +112,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val (haUrl, haToken) = HAConfig.loadConfig(getApplication())!!
                 app.initializeHomeAssistant(haUrl, haToken)
                 _uiState.value = UiState.ReadyToTalk
+
+                // Check if we should auto-start (only on first initialization)
+                checkAutoStart()
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to connect to HA: ${e.message}")
             }
@@ -117,6 +127,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun retryInitialization() {
         checkConfiguration()
+    }
+
+    /**
+     * Consume the auto-start intent flag.
+     * Called by the UI after acting on the shouldAttemptAutoStart flag.
+     */
+    fun consumeAutoStartIntent() {
+        _shouldAttemptAutoStart.value = false
     }
 
     /**
@@ -553,6 +571,22 @@ $renderedBackgroundInfo
      * Public method to expose session state
      */
     fun isSessionActive(): Boolean = isSessionActive
+
+    /**
+     * Check if auto-start chat is enabled and set the flag.
+     * Only checks once per ViewModel instance (survives activity recreation but not process death).
+     */
+    private fun checkAutoStart() {
+        // Only check once per ViewModel instance (app cold start)
+        if (hasCheckedAutoStart) return
+        hasCheckedAutoStart = true
+
+        // Check if active profile has auto-start enabled
+        val profile = ProfileManager.getProfileById(currentProfileId)
+        if (profile?.autoStartChat == true) {
+            _shouldAttemptAutoStart.value = true
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()

@@ -279,9 +279,13 @@ object ProfileManager {
             systemPrompt = original.systemPrompt,
             personality = original.personality,
             backgroundInfo = original.backgroundInfo,
+            initialMessageToAgent = original.initialMessageToAgent,
             model = original.model,
             voice = original.voice,
             includeLiveContext = original.includeLiveContext,
+            autoStartChat = original.autoStartChat,
+            toolFilterMode = original.toolFilterMode,
+            selectedToolNames = original.selectedToolNames,
             isDefault = false // Duplicates are never default
         )
 
