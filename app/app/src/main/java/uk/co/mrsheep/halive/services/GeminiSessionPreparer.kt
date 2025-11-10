@@ -10,6 +10,7 @@ import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.core.ToolFilterMode
 import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
+import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.ui.ToolCallLog
 
 /**
@@ -27,7 +28,7 @@ import uk.co.mrsheep.halive.ui.ToolCallLog
 class GeminiSessionPreparer(
     private val mcpClient: McpClientManager,
     private val haApiClient: HomeAssistantApiClient,
-    private val toolExecutor: GeminiMCPToolExecutor,
+    private val toolExecutor: ToolExecutor,
     private val onLogEntry: (ToolCallLog) -> Unit
 ) {
     companion object {
