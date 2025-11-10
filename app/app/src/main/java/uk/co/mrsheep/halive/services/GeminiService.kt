@@ -16,6 +16,7 @@ import com.google.firebase.ai.type.PublicPreviewAPI
 import com.google.firebase.ai.type.ResponseModality
 import com.google.firebase.ai.type.SpeechConfig
 import com.google.firebase.ai.type.Voice
+import com.google.firebase.ai.type.Transcription
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.liveGenerationConfig
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,7 +58,8 @@ class GeminiService {
     @OptIn(PublicPreviewAPI::class)
     suspend fun startSession(
         // The ViewModel passes a lambda that knows how to call the repository
-        functionCallHandler: suspend (FunctionCallPart) -> FunctionResponsePart
+        functionCallHandler: suspend (FunctionCallPart) -> FunctionResponsePart,
+        transcriptHandler: ((Transcription, Transcription) -> Unit)? = null
     ) {
         val model = generativeModel ?: throw IllegalStateException("Model not initialized")
 
@@ -69,7 +71,7 @@ class GeminiService {
             // Wrap the suspend function in runBlocking since the SDK expects a regular function
             liveSession?.startAudioConversation(
                 functionCallHandler = { call -> runBlocking { functionCallHandler(call) } },
-                transcriptHandler = null,
+                transcriptHandler = transcriptHandler,
                 enableInterruptions = true
             )
 

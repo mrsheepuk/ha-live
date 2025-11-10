@@ -17,6 +17,7 @@ import uk.co.mrsheep.halive.services.GeminiSessionPreparer
 import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.type.FunctionCallPart
 import com.google.firebase.ai.type.FunctionResponsePart
+import com.google.firebase.ai.type.Transcription
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -230,16 +231,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 isSessionActive = true
                 _uiState.value = UiState.ChatActive
 
+                // Get the active profile for transcription settings and initial message
+                val profile = ProfileManager.getProfileById(currentProfileId)
+
+                // Create transcription handler based on profile setting
+                val transcriptHandler: ((Transcription, Transcription) -> Unit)? =
+                    if (profile?.enableTranscription == true) {
+                        { userTranscription, modelTranscription ->
+                            val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+
+                            // Log user transcription (only if not null/empty)
+                            userTranscription.text?.takeIf { it.isNotBlank() }?.let { text ->
+                                addToolLog(
+                                    ToolCallLog(
+                                        timestamp = timestamp,
+                                        toolName = "🎤 User",
+                                        parameters = "",
+                                        success = true,
+                                        result = text
+                                    )
+                                )
+                            }
+
+                            // Log model transcription (only if not null/empty)
+                            modelTranscription.text?.takeIf { it.isNotBlank() }?.let { text ->
+                                addToolLog(
+                                    ToolCallLog(
+                                        timestamp = timestamp,
+                                        toolName = "🔊 Model",
+                                        parameters = "",
+                                        success = true,
+                                        result = text
+                                    )
+                                )
+                            }
+                        }
+                    } else null
+
                 // Start the session, passing our Task 2 executor as the handler
                 geminiService.startSession(
-                    functionCallHandler = ::executeHomeAssistantTool
+                    functionCallHandler = ::executeHomeAssistantTool,
+                    transcriptHandler = transcriptHandler
                 )
 
                 // Play ready beep to indicate session is active
                 BeepHelper.playReadyBeep(getApplication())
 
                 // Send initial message to agent if configured
-                val profile = ProfileManager.getProfileById(currentProfileId)
                 profile?.initialMessageToAgent?.let { initialText ->
                     if (initialText.isNotBlank()) {
                         try {
