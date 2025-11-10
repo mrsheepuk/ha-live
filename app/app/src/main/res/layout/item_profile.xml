@@ -86,6 +86,15 @@
                 android:layout_marginEnd="4dp" />
 
             <Button
+                android:id="@+id/exportButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/profile_export"
+                android:textSize="12sp"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_marginEnd="4dp" />
+
+            <Button
                 android:id="@+id/deleteButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

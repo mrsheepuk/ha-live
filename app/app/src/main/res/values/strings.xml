@@ -22,6 +22,7 @@
     <string name="profile_create_new">Create New Profile</string>
     <string name="profile_edit">Edit</string>
     <string name="profile_duplicate">Duplicate</string>
+    <string name="profile_export">Export</string>
     <string name="profile_delete">Delete</string>
     <string name="profile_delete_confirm">Delete this profile?</string>
     <string name="profile_delete_last_error">Cannot delete the last profile. Create another profile first.</string>
@@ -54,4 +55,17 @@
     <string name="voice_leda">Leda</string>
     <string name="profile_editor_include_live_context">Include live context with system prompt</string>
     <string name="profile_editor_auto_start_chat">Auto-start chat when app opens</string>
+
+    <!-- Export/Import Profiles -->
+    <string name="menu_import_profiles">Import Profiles</string>
+    <string name="menu_export_all_profiles">Export All Profiles</string>
+    <string name="action_export">Export</string>
+    <string name="export_single_success">Profile exported</string>
+    <string name="export_all_success">%d profiles exported</string>
+    <string name="import_success">%d profiles imported</string>
+    <string name="import_success_with_renames">%d profiles imported (%d renamed)</string>
+    <string name="export_error">Failed to export: %s</string>
+    <string name="import_error">Failed to import: %s</string>
+    <string name="import_error_invalid_format">Invalid profile file format</string>
+    <string name="import_error_read_file">Could not read file</string>
 </resources>

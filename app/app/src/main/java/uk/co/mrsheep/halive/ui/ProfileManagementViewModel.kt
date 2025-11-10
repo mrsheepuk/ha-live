@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
+import uk.co.mrsheep.halive.core.ProfileExportImport
 
 /**
  * ViewModel for ProfileManagementActivity.
@@ -97,6 +98,61 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
             } catch (e: Exception) {
                 _state.value = ProfileManagementState.Error(
                     e.message ?: "Failed to duplicate profile"
+                )
+            }
+        }
+    }
+
+    /**
+     * Exports a list of profiles to a JSON string.
+     */
+    fun exportProfiles(profiles: List<Profile>): String {
+        return ProfileExportImport.exportProfiles(profiles)
+    }
+
+    /**
+     * Exports a single profile by ID.
+     * Returns the JSON string if found, or null if profile doesn't exist.
+     */
+    fun exportSingleProfile(profileId: String): String? {
+        val profile = ProfileManager.getProfileById(profileId) ?: return null
+        return ProfileExportImport.exportProfiles(listOf(profile))
+    }
+
+    /**
+     * Imports profiles from a JSON string.
+     * Handles conflict resolution and updates the state.
+     * Returns the ImportResult with conflict information.
+     */
+    fun importProfiles(jsonString: String, onSuccess: (Int, Int) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            try {
+                val existingProfiles = ProfileManager.getAllProfiles()
+                val result = ProfileExportImport.importProfiles(jsonString, existingProfiles)
+
+                result.fold(
+                    onSuccess = { importResult ->
+                        // Add imported profiles to ProfileManager
+                        importResult.profiles.forEach { profile ->
+                            try {
+                                ProfileManager.createProfile(profile)
+                            } catch (e: Exception) {
+                                // Log duplicate name errors but continue with other imports
+                            }
+                        }
+                        // Notify caller with count and conflicts
+                        onSuccess(importResult.profiles.size, importResult.conflicts.size)
+                        // State will be updated by ProfileManager's StateFlow emissions
+                    },
+                    onFailure = { exception ->
+                        _state.value = ProfileManagementState.Error(
+                            exception.message ?: "Failed to import profiles"
+                        )
+                    }
+                )
+            } catch (e: Exception) {
+                _state.value = ProfileManagementState.Error(
+                    e.message ?: "Failed to import profiles"
                 )
             }
         }
