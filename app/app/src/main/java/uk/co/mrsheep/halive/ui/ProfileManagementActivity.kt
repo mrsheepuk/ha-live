@@ -1,10 +1,15 @@
 package uk.co.mrsheep.halive.ui
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -17,6 +22,10 @@ import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.ui.adapters.ProfileAdapter
+import uk.co.mrsheep.halive.util.FileUtils
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Activity for managing profiles.
@@ -40,6 +49,38 @@ class ProfileManagementActivity : AppCompatActivity() {
     private lateinit var errorText: TextView
 
     private lateinit var profileAdapter: ProfileAdapter
+    private var exportingProfileId: String? = null
+
+    // Activity result launchers for file operations
+    private val exportSingleLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                handleExportSingle(uri)
+            }
+        }
+    }
+
+    private val exportAllLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                handleExportAll(uri)
+            }
+        }
+    }
+
+    private val importLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                handleImport(uri)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,6 +126,12 @@ class ProfileManagementActivity : AppCompatActivity() {
                 val intent = Intent(this, ProfileEditorActivity::class.java)
                 intent.putExtra(ProfileEditorActivity.EXTRA_DUPLICATE_FROM_ID, profile.id)
                 startActivity(intent)
+            },
+            onExport = { profile ->
+                exportingProfileId = profile.id
+                val fileName = getSuggestedExportFileName(profile.name)
+                val intent = FileUtils.createExportIntent(fileName)
+                exportSingleLauncher.launch(intent)
             },
             onDelete = { profile ->
                 showDeleteConfirmationDialog(profile)
@@ -157,6 +204,122 @@ class ProfileManagementActivity : AppCompatActivity() {
             .setMessage(message)
             .setPositiveButton("OK", null)
             .show()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.profile_management_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_import_profiles -> {
+                val intent = FileUtils.createImportIntent()
+                importLauncher.launch(intent)
+                true
+            }
+            R.id.action_export_all_profiles -> {
+                val fileName = getSuggestedExportFileName(null)
+                val intent = FileUtils.createExportIntent(fileName)
+                exportAllLauncher.launch(intent)
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun handleExportSingle(uri: Uri) {
+        val profileId = exportingProfileId ?: return
+        val jsonString = viewModel.exportSingleProfile(profileId)
+        if (jsonString != null) {
+            val result = FileUtils.writeToUri(this, uri, jsonString)
+            if (result.isSuccess) {
+                Toast.makeText(this, getString(R.string.export_single_success), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(
+                    this,
+                    getString(R.string.export_error, result.exceptionOrNull()?.message ?: "Unknown error"),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        } else {
+            Toast.makeText(
+                this,
+                getString(R.string.export_error, "Profile not found"),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+        exportingProfileId = null
+    }
+
+    private fun handleExportAll(uri: Uri) {
+        lifecycleScope.launch {
+            val profiles = viewModel.state.value.let { state ->
+                when (state) {
+                    is ProfileManagementState.Loaded -> state.profiles
+                    else -> emptyList()
+                }
+            }
+            val jsonString = viewModel.exportProfiles(profiles)
+            val result = FileUtils.writeToUri(this@ProfileManagementActivity, uri, jsonString)
+            if (result.isSuccess) {
+                Toast.makeText(
+                    this@ProfileManagementActivity,
+                    getString(R.string.export_all_success, profiles.size),
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                Toast.makeText(
+                    this@ProfileManagementActivity,
+                    getString(R.string.export_error, result.exceptionOrNull()?.message ?: "Unknown error"),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private fun handleImport(uri: Uri) {
+        lifecycleScope.launch {
+            val result = FileUtils.readFromUri(this@ProfileManagementActivity, uri)
+            if (result.isSuccess) {
+                val jsonString = result.getOrNull() ?: return@launch
+                viewModel.importProfiles(jsonString) { profileCount, conflictCount ->
+                    val message = if (conflictCount > 0) {
+                        getString(R.string.import_success_with_renames, profileCount, conflictCount)
+                    } else {
+                        getString(R.string.import_success, profileCount)
+                    }
+                    Toast.makeText(
+                        this@ProfileManagementActivity,
+                        message,
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } else {
+                Toast.makeText(
+                    this@ProfileManagementActivity,
+                    getString(R.string.import_error, result.exceptionOrNull()?.message ?: "Unknown error"),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    /**
+     * Generates a suggested filename for profile export.
+     * Format: "ha_profiles_YYYY-MM-DD.haprofile" for all profiles
+     * Format: "profile_<name>_YYYY-MM-DD.haprofile" for single profiles
+     */
+    private fun getSuggestedExportFileName(profileName: String?): String {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val dateString = dateFormat.format(Date())
+        return if (profileName != null && profileName.isNotBlank()) {
+            // Sanitize profile name for filename (remove special characters)
+            val sanitized = profileName.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+            "profile_${sanitized}_$dateString.haprofile"
+        } else {
+            "ha_profiles_$dateString.haprofile"
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {

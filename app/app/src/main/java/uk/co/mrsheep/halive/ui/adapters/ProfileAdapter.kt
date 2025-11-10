@@ -19,6 +19,7 @@ class ProfileAdapter(
     private val onItemClick: (Profile) -> Unit,
     private val onEdit: (Profile) -> Unit,
     private val onDuplicate: (Profile) -> Unit,
+    private val onExport: (Profile) -> Unit,
     private val onDelete: (Profile) -> Unit
 ) : RecyclerView.Adapter<ProfileAdapter.ProfileViewHolder>() {
 
@@ -54,6 +55,7 @@ class ProfileAdapter(
         private val defaultBadge: TextView = itemView.findViewById(R.id.defaultBadge)
         private val editButton: Button = itemView.findViewById(R.id.editButton)
         private val duplicateButton: Button = itemView.findViewById(R.id.duplicateButton)
+        private val exportButton: Button = itemView.findViewById(R.id.exportButton)
         private val deleteButton: Button = itemView.findViewById(R.id.deleteButton)
 
         fun bind(profile: Profile) {
@@ -75,6 +77,10 @@ class ProfileAdapter(
 
             duplicateButton.setOnClickListener {
                 onDuplicate(profile)
+            }
+
+            exportButton.setOnClickListener {
+                onExport(profile)
             }
 
             deleteButton.setOnClickListener {
