@@ -19,8 +19,9 @@ import uk.co.mrsheep.halive.ui.ToolCallLog
  * - Tool integration without side effects
  *
  * ## Safety
- * - Never makes real calls to Home Assistant
- * - Uses MockToolExecutor exclusively (not GeminiMCPToolExecutor)
+ * - Read-only tools (GetLiveContext, GetDateTime) pass through to real HA for accurate data
+ * - State-modifying tools never make real calls to Home Assistant
+ * - Uses MockToolExecutor with selective pass-through capability
  * - Separate Gemini service instance for testing
  * - Gracefully handles initialization errors
  *
@@ -73,10 +74,11 @@ class ProfileTestManager(
     private val testGeminiService = GeminiService()
 
     /**
-     * Mock tool executor that simulates all tool responses.
-     * Tracks which tools were called for debugging.
+     * Mock tool executor with pass-through for read-only tools.
+     * Read-only tools (GetLiveContext, GetDateTime) are passed to real HA for accurate data.
+     * All other tools are mocked for safety.
      */
-    private val mockToolExecutor = MockToolExecutor()
+    private var mockToolExecutor: MockToolExecutor? = null
 
     /**
      * Session preparer that handles initialization (fetching tools, rendering templates, etc.).
@@ -119,11 +121,17 @@ class ProfileTestManager(
             val haApiClient = app.haApiClient
                 ?: throw IllegalStateException("Home Assistant API client not initialized")
 
+            // Create real executor for pass-through of read-only tools
+            val realExecutor = GeminiMCPToolExecutor(mcpClient)
+
+            // Create mock executor with pass-through capability
+            mockToolExecutor = MockToolExecutor(realExecutor = realExecutor)
+
             // Create a new session preparer for this test using MockToolExecutor
             sessionPreparer = GeminiSessionPreparer(
                 mcpClient = mcpClient,
                 haApiClient = haApiClient,
-                toolExecutor = mockToolExecutor,
+                toolExecutor = mockToolExecutor!!,
                 onLogEntry = onLogEntry
             )
 
@@ -139,7 +147,7 @@ class ProfileTestManager(
 
             // Start the audio conversation with mock function handler
             testGeminiService.startSession { call ->
-                mockToolExecutor.executeTool(call)
+                mockToolExecutor!!.executeTool(call)
             }
 
             isTestActive = true
