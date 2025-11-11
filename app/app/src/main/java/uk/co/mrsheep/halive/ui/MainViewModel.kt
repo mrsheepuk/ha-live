@@ -12,11 +12,14 @@ import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.services.BeepHelper
+import uk.co.mrsheep.halive.services.GeminiMCPToolExecutor
 import uk.co.mrsheep.halive.services.GeminiService
 import uk.co.mrsheep.halive.services.GeminiSessionPreparer
+import uk.co.mrsheep.halive.services.McpClientManager
 import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.type.FunctionCallPart
 import com.google.firebase.ai.type.FunctionResponsePart
+import com.google.firebase.ai.type.Transcription
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -108,22 +111,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            // Step 3: Initialize MCP connection (Gemini will be initialized when user starts chat)
+            // Step 3: Store HA credentials and initialize API client (MCP connection created per-session)
             try {
                 val (haUrl, haToken) = HAConfig.loadConfig(getApplication())!!
                 app.initializeHomeAssistant(haUrl, haToken)
-                sessionPreparer = GeminiSessionPreparer(
-                    mcpClient = app.mcpClient!!,
-                    haApiClient = app.haApiClient!!,
-                    toolExecutor = app.toolExecutor!!,
-                    onLogEntry = ::addToolLog
-                )
                 _uiState.value = UiState.ReadyToTalk
 
                 // Check if we should auto-start (only on first initialization)
                 checkAutoStart()
             } catch (e: Exception) {
-                _uiState.value = UiState.Error("Failed to connect to HA: ${e.message}")
+                _uiState.value = UiState.Error("Failed to initialize HA config: ${e.message}")
             }
         }
     }
@@ -223,6 +220,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Set state to Initializing while preparing the model
                 _uiState.value = UiState.Initializing
 
+                // Create fresh MCP connection for this session
+                app.mcpClient = McpClientManager(app.haUrl!!, app.haToken!!)
+                app.mcpClient?.initialize()
+                app.toolExecutor = GeminiMCPToolExecutor(app.mcpClient!!)
+
+                // Now sessionPreparer needs to be recreated with the new mcpClient
+                sessionPreparer = GeminiSessionPreparer(
+                    mcpClient = app.mcpClient!!,
+                    haApiClient = app.haApiClient!!,
+                    toolExecutor = app.toolExecutor!!,
+                    onLogEntry = ::addToolLog
+                )
+
                 // Initialize Gemini with fresh tools and system prompt
                 initializeGemini()
 
@@ -230,16 +240,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 isSessionActive = true
                 _uiState.value = UiState.ChatActive
 
+                // Get the active profile for transcription settings and initial message
+                val profile = ProfileManager.getProfileById(currentProfileId)
+
+                // Create transcription handler based on profile setting
+                val transcriptHandler: ((Transcription?, Transcription?) -> Unit)? =
+                    if (profile?.enableTranscription == true) {
+                        { userTranscription, modelTranscription ->
+                            val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+
+                            // Log user transcription (only if not null/empty)
+                            userTranscription?.text?.takeIf { it.isNotBlank() }?.let { text ->
+                                addToolLog(
+                                    ToolCallLog(
+                                        timestamp = timestamp,
+                                        toolName = "🎤 User",
+                                        parameters = "",
+                                        success = true,
+                                        result = text
+                                    )
+                                )
+                            }
+
+                            // Log model transcription (only if not null/empty)
+                            modelTranscription?.text?.takeIf { it.isNotBlank() }?.let { text ->
+                                addToolLog(
+                                    ToolCallLog(
+                                        timestamp = timestamp,
+                                        toolName = "🔊 Model",
+                                        parameters = "",
+                                        success = true,
+                                        result = text
+                                    )
+                                )
+                            }
+                        }
+                    } else null
+
                 // Start the session, passing our Task 2 executor as the handler
                 geminiService.startSession(
-                    functionCallHandler = ::executeHomeAssistantTool
+                    functionCallHandler = ::executeHomeAssistantTool,
+                    transcriptHandler = transcriptHandler
                 )
 
                 // Play ready beep to indicate session is active
                 BeepHelper.playReadyBeep(getApplication())
 
                 // Send initial message to agent if configured
-                val profile = ProfileManager.getProfileById(currentProfileId)
                 profile?.initialMessageToAgent?.let { initialText ->
                     if (initialText.isNotBlank()) {
                         try {
@@ -276,6 +323,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } catch (e: Exception) {
+                // Clean up MCP connection if initialization failed
+                app.mcpClient?.shutdown()
+                app.mcpClient = null
+                app.toolExecutor = null
+
                 isSessionActive = false
                 _uiState.value = UiState.Error("Failed to start session: ${e.message}")
             }
@@ -288,6 +340,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Exception) {
             _uiState.value = UiState.Error("Failed to stop session: ${e.message}")
         }
+
+        // Clean up MCP connection
+        app.mcpClient?.shutdown()
+        app.mcpClient = null
+        app.toolExecutor = null
+
         isSessionActive = false
         _uiState.value = UiState.ReadyToTalk
     }

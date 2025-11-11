@@ -16,6 +16,8 @@ class HAGeminiApp : Application() {
     var toolExecutor: ToolExecutor? = null
     var haApiClient: HomeAssistantApiClient? = null
     var lastAvailableTools: List<String>? = null
+    var haUrl: String? = null
+    var haToken: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -47,9 +49,8 @@ class HAGeminiApp : Application() {
      * Establishes the MCP SSE connection and performs initialization handshake.
      */
     suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
-        mcpClient = McpClientManager(haUrl, haToken)
-        mcpClient?.initialize() // SSE connection + MCP handshake
-        toolExecutor = GeminiMCPToolExecutor(mcpClient!!)
+        this.haUrl = haUrl
+        this.haToken = haToken
         haApiClient = HomeAssistantApiClient(haUrl, haToken)
     }
 

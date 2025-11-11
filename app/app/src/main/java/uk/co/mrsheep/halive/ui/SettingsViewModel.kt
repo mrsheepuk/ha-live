@@ -8,6 +8,7 @@ import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
+import uk.co.mrsheep.halive.services.McpClientManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -45,23 +46,31 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             _settingsState.value = SettingsState.TestingConnection
 
+            var testMcpClient: McpClientManager? = null
             try {
                 val (url, token) = HAConfig.loadConfig(getApplication())
                     ?: throw Exception("HA not configured")
 
-                // Initialize temporary connection
+                // Store credentials in app for later use
                 app.initializeHomeAssistant(url, token)
 
-                // Try to fetch tools
-                val tools = app.mcpClient?.getTools()
+                // Create temporary MCP connection for testing
+                testMcpClient = McpClientManager(url, token)
+                testMcpClient.initialize()
 
-                if (tools != null && tools.tools.isNotEmpty()) {
+                // Try to fetch tools
+                val tools = testMcpClient.getTools()
+
+                if (tools.tools.isNotEmpty()) {
                     _settingsState.value = SettingsState.ConnectionSuccess("Found ${tools.tools.size} tools")
                 } else {
                     _settingsState.value = SettingsState.ConnectionFailed("No tools found")
                 }
             } catch (e: Exception) {
                 _settingsState.value = SettingsState.ConnectionFailed(e.message ?: "Connection failed")
+            } finally {
+                // Clean up temporary test connection
+                testMcpClient?.shutdown()
             }
 
             // Reload settings to restore buttons

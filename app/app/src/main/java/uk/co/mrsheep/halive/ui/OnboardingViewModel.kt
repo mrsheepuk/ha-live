@@ -9,6 +9,7 @@ import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
+import uk.co.mrsheep.halive.services.McpClientManager
 import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -57,24 +58,32 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             _onboardingState.value = OnboardingState.TestingConnection
 
+            var testMcpClient: McpClientManager? = null
             try {
                 // Store temporarily
                 currentHAUrl = url
                 currentHAToken = token
 
-                // Initialize connection
+                // Store credentials in app for later use
                 app.initializeHomeAssistant(url, token)
 
-                // Try to fetch tools
-                val tools = app.mcpClient?.getTools()
+                // Create temporary MCP connection for testing
+                testMcpClient = McpClientManager(url, token)
+                testMcpClient.initialize()
 
-                if (tools != null && tools.tools.isNotEmpty()) {
+                // Try to fetch tools
+                val tools = testMcpClient.getTools()
+
+                if (tools.tools.isNotEmpty()) {
                     _onboardingState.value = OnboardingState.ConnectionSuccess("Connected successfully!")
                 } else {
                     _onboardingState.value = OnboardingState.ConnectionFailed("No tools found")
                 }
             } catch (e: Exception) {
                 _onboardingState.value = OnboardingState.ConnectionFailed(e.message ?: "Connection failed")
+            } finally {
+                // Clean up temporary test connection
+                testMcpClient?.shutdown()
             }
         }
     }

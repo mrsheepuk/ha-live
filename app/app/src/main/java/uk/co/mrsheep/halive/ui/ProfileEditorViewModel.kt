@@ -60,6 +60,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      * @param model The AI model to use
      * @param voice The voice to use for audio responses
      * @param includeLiveContext Whether to include live context with system prompt
+     * @param enableTranscription Whether to enable transcription display
      * @param autoStartChat Whether to auto-start chat when app opens
      * @param toolFilterMode Whether to use all tools or only selected tools
      * @param selectedToolNames Set of tool names to use if in SELECTED mode
@@ -74,6 +75,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
         model: String,
         voice: String,
         includeLiveContext: Boolean,
+        enableTranscription: Boolean,
         autoStartChat: Boolean,
         toolFilterMode: ToolFilterMode,
         selectedToolNames: Set<String>,
@@ -105,6 +107,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         model = model,
                         voice = voice,
                         includeLiveContext = includeLiveContext,
+                        enableTranscription = enableTranscription,
                         autoStartChat = autoStartChat,
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,
@@ -122,6 +125,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         model = model,
                         voice = voice,
                         includeLiveContext = includeLiveContext,
+                        enableTranscription = enableTranscription,
                         autoStartChat = autoStartChat,
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,

@@ -34,6 +34,7 @@ data class Profile(
     val lastUsedAt: Long = System.currentTimeMillis(),
     val toolFilterMode: ToolFilterMode = ToolFilterMode.ALL,
     val selectedToolNames: Set<String> = emptySet(),
+    val enableTranscription: Boolean = SystemPromptConfig.DEFAULT_ENABLE_TRANSCRIPTION,
     val autoStartChat: Boolean = false
 ) {
     companion object {
@@ -53,6 +54,7 @@ data class Profile(
                 isDefault = true,
                 toolFilterMode = ToolFilterMode.ALL,
                 selectedToolNames = emptySet(),
+                enableTranscription = SystemPromptConfig.DEFAULT_ENABLE_TRANSCRIPTION,
                 autoStartChat = false
             )
         }
@@ -99,6 +101,7 @@ data class Profile(
             "model": "${model.replace("\"", "\\\"")}",
             "voice": "${voice.replace("\"", "\\\"")}",
             "includeLiveContext": $includeLiveContext,
+            "enableTranscription": $enableTranscription,
             "autoStartChat": $autoStartChat,
             "toolFilterMode": "$toolFilterMode",
             "selectedToolNames": [$toolNamesJson]

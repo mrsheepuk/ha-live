@@ -2,6 +2,8 @@ package uk.co.mrsheep.halive.services
 
 import android.util.Log
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -38,6 +40,10 @@ class McpClientManager(
 
     // Coroutine scope for background processing
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    // Connection state tracking
+    private var isConnectionAlive: Boolean = false
+    private val reconnectionMutex = Mutex()
 
     /**
      * Phase 1: Initialize the MCP connection.
@@ -191,48 +197,94 @@ class McpClientManager(
      * Send a fire-and-forget notification.
      */
     private fun sendNotification(notification: JsonRpcNotification) {
-        val message = json.encodeToString(notification)
-        sendMessage(message)
-    }
-
-    /**
-     * Send a raw message over the SSE connection.
-     * Note: SSE is unidirectional (server -> client), but MCP uses
-     * a technique where we POST each request as a separate HTTP call
-     * to the same endpoint, and responses come back via SSE.
-     */
-    private fun sendMessage(message: String) {
         scope.launch {
+            val message = json.encodeToString(notification)
             try {
-                Log.d(TAG, "Sending $message")
-                val request = Request.Builder()
-                    .url("$haBaseUrl$endpoint")
-                    .header("Authorization", "Bearer $haToken")
-                    .header("Content-Type", "application/json")
-                    .post(message.toRequestBody("application/json".toMediaType()))
-                    .build()
-
-                client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        Log.e(TAG, "Failed to send message: ${response.code}")
-                        throw McpException("Failed to send message: ${response.code}")
-                    }
-                }
+                sendMessage(message)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to send message", e)
+                Log.e(TAG, "Failed to send notification", e)
+                // Don't rethrow - notifications are fire-and-forget
             }
         }
     }
 
     /**
-     * Phase 3: Gracefully shut down the connection.
+     * Send a raw message over the SSE connection.
+     * If connection is dead, automatically reconnects first.
+     * Note: SSE is unidirectional (server -> client), but MCP uses
+     * a technique where we POST each request as a separate HTTP call
+     * to the same endpoint, and responses come back via SSE.
+     */
+    private suspend fun sendMessage(message: String) = withContext(Dispatchers.IO) {
+        // Check if we need to reconnect
+        if (!isConnectionAlive) {
+            reconnectionMutex.withLock {
+                // Double-check after acquiring lock (another coroutine might have reconnected)
+                if (!isConnectionAlive) {
+                    Log.w(TAG, "SSE connection lost, attempting reconnection...")
+                    try {
+                        resetConnection()  // Clean up old connection (but keep scope/client alive)
+                        initialize()       // Establish fresh connection
+                        Log.i(TAG, "Auto-reconnection successful")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Auto-reconnection failed", e)
+                        throw McpException("Failed to reconnect: ${e.message}", e)
+                    }
+                }
+            }
+        }
+
+        // Now send the message over the (possibly fresh) connection
+        try {
+            Log.d(TAG, "Sending $message")
+            val request = Request.Builder()
+                .url("$haBaseUrl$endpoint")
+                .header("Authorization", "Bearer $haToken")
+                .header("Content-Type", "application/json")
+                .post(message.toRequestBody("application/json".toMediaType()))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "Failed to send message: ${response.code}")
+                    throw McpException("Failed to send message: ${response.code}")
+                }
+            }
+        } catch (e: Exception) {
+            if (e is McpException) throw e
+            Log.e(TAG, "Error sending message", e)
+            throw McpException("Error sending message: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Clean up just the connection state without destroying the client.
+     * Used during auto-reconnection.
+     */
+    private fun resetConnection() {
+        isInitialized = false
+        isConnectionAlive = false
+        eventSource?.cancel()
+        eventSource = null
+        pendingRequests.clear()
+        // Note: We do NOT cancel scope or shutdown OkHttpClient - those stay alive
+        Log.d(TAG, "MCP connection reset for reconnection")
+    }
+
+    /**
+     * Phase 3: Gracefully shut down the connection and clean up all resources.
+     * This is a final shutdown - the client cannot be reused after this.
      */
     fun shutdown() {
         isInitialized = false
+        isConnectionAlive = false
         eventSource?.cancel()
         eventSource = null
         pendingRequests.clear()
         scope.cancel()
+        // Clean up OkHttpClient resources
+        client.dispatcher.executorService.shutdown()
+        client.connectionPool.evictAll()
         Log.d(TAG, "MCP client shut down")
     }
 
@@ -253,6 +305,7 @@ class McpClientManager(
 
         override fun onOpen(eventSource: EventSource, response: Response) {
             Log.d(TAG, "SSE connection opened, ${response.body.toString()}")
+            isConnectionAlive = true
             connectionEstablished.complete(Unit)
         }
 
@@ -297,6 +350,7 @@ class McpClientManager(
             response: Response?
         ) {
             Log.e(TAG, "SSE connection failed", t)
+            isConnectionAlive = false
             connectionEstablished.completeExceptionally(
                 t ?: McpException("SSE connection failed")
             )
@@ -310,6 +364,14 @@ class McpClientManager(
 
         override fun onClosed(eventSource: EventSource) {
             Log.d(TAG, "SSE connection closed")
+            isConnectionAlive = false
+            
+            // Fail pending requests from old connection
+            // They can retry and will trigger auto-reconnection
+            pendingRequests.values.forEach {
+                it.completeExceptionally(McpException("Connection closed, will auto-reconnect on retry"))
+            }
+            pendingRequests.clear()
         }
     }
 
