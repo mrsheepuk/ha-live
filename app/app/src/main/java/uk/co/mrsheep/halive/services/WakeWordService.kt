@@ -5,7 +5,6 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
-import androidx.annotation.SuppressLint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -81,8 +80,10 @@ class WakeWordService(
      *
      * The method initializes the model, creates an AudioRecord instance, and launches
      * a coroutine on Dispatchers.IO to process audio chunks in real-time.
+     *
+     * Note: Permission warning is suppressed because MainActivity verifies RECORD_AUDIO
+     * permission before calling ViewModel lifecycle methods that trigger this function.
      */
-    @SuppressLint("MissingPermission") // MainActivity checks RECORD_AUDIO permission at app startup
     fun startListening() {
         if (isListening) {
             Log.w(TAG, "Already listening for wake word, ignoring startListening() call")
