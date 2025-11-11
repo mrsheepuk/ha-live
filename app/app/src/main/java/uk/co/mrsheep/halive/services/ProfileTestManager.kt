@@ -146,9 +146,12 @@ class ProfileTestManager(
             )
 
             // Start the audio conversation with mock function handler
-            testGeminiService.startSession { call ->
-                mockToolExecutor!!.executeTool(call)
-            }
+            testGeminiService.startSession(
+                functionCallHandler = { call ->
+                    mockToolExecutor!!.executeTool(call)
+                },
+                transcriptHandler = null
+            )
 
             isTestActive = true
             onStatusChange(TestStatus.Active("Test session active - speak now!"))

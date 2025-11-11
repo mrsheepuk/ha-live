@@ -59,7 +59,7 @@ class GeminiService {
     suspend fun startSession(
         // The ViewModel passes a lambda that knows how to call the repository
         functionCallHandler: suspend (FunctionCallPart) -> FunctionResponsePart,
-        transcriptHandler: ((Transcription, Transcription) -> Unit)? = null
+        transcriptHandler: ((Transcription?, Transcription?) -> Unit)? = null
     ) {
         val model = generativeModel ?: throw IllegalStateException("Model not initialized")
 

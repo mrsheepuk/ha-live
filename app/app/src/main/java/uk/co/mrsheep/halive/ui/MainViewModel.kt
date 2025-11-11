@@ -235,13 +235,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val profile = ProfileManager.getProfileById(currentProfileId)
 
                 // Create transcription handler based on profile setting
-                val transcriptHandler: ((Transcription, Transcription) -> Unit)? =
+                val transcriptHandler: ((Transcription?, Transcription?) -> Unit)? =
                     if (profile?.enableTranscription == true) {
                         { userTranscription, modelTranscription ->
                             val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
 
                             // Log user transcription (only if not null/empty)
-                            userTranscription.text?.takeIf { it.isNotBlank() }?.let { text ->
+                            userTranscription?.text?.takeIf { it.isNotBlank() }?.let { text ->
                                 addToolLog(
                                     ToolCallLog(
                                         timestamp = timestamp,
@@ -254,7 +254,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             }
 
                             // Log model transcription (only if not null/empty)
-                            modelTranscription.text?.takeIf { it.isNotBlank() }?.let { text ->
+                            modelTranscription?.text?.takeIf { it.isNotBlank() }?.let { text ->
                                 addToolLog(
                                     ToolCallLog(
                                         timestamp = timestamp,
