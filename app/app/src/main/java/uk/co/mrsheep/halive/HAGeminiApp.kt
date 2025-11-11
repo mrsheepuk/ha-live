@@ -1,6 +1,7 @@
 package uk.co.mrsheep.halive
 
 import android.app.Application
+import uk.co.mrsheep.halive.core.AssetCopyUtil
 import uk.co.mrsheep.halive.core.CrashLogger
 import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.ProfileManager
@@ -39,6 +40,9 @@ class HAGeminiApp : Application() {
 
         // Ensure at least one profile exists (NEW)
         ProfileManager.ensureDefaultProfileExists()
+
+        // Copy TFLite model files from assets to filesDir for wake word detection
+        AssetCopyUtil.copyAssetsToFilesDir(this)
 
         // Note: MCP connection is NOT established here
         // It will be established in MainActivity after user configures HA

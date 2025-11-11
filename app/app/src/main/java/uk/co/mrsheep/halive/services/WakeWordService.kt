@@ -1,0 +1,257 @@
+package uk.co.mrsheep.halive.services
+
+import android.content.Context
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.util.Log
+import androidx.annotation.SuppressLint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import uk.co.mrsheep.halive.services.wake.OwwModel
+import java.io.File
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.isActive
+
+/**
+ * Manages wake word detection using AudioRecord and TensorFlow Lite inference.
+ *
+ * Captures 16kHz mono PCM audio, processes it in 1152-sample chunks, and runs
+ * TFLite inference via OwwModel. Triggers callback when detection confidence
+ * exceeds the configured threshold.
+ *
+ * @param context Application context for accessing files and audio resources
+ * @param onWakeWordDetected Callback invoked on the main dispatcher when wake word is detected
+ */
+class WakeWordService(
+    private val context: Context,
+    private val onWakeWordDetected: () -> Unit
+) {
+    companion object {
+        private const val TAG = "WakeWordService"
+        private const val SAMPLE_RATE = 16000
+        private const val CHUNK_SIZE = 1152 // OwwModel.MEL_INPUT_COUNT
+        private const val WAKE_WORD_THRESHOLD = 0.5f
+    }
+
+    private var owwModel: OwwModel? = null
+    private var audioRecord: AudioRecord? = null
+    private var recordingJob: Job? = null
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var isListening = false
+
+    /**
+     * Initializes the wake word model from the application's files directory.
+     * The three model files should be copied by AssetCopyUtil.
+     *
+     * @return true if model initialized successfully, false otherwise
+     */
+    private fun initializeModel(): Boolean {
+        return try {
+            val melModel = File(context.filesDir, "oww_mel.tflite")
+            val embModel = File(context.filesDir, "oww_emb.tflite")
+            val wakeModel = File(context.filesDir, "oww_wake.tflite")
+
+            if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
+                Log.e(TAG, "One or more model files not found in ${context.filesDir}")
+                Log.e(TAG, "  oww_mel.tflite: ${melModel.exists()}")
+                Log.e(TAG, "  oww_emb.tflite: ${embModel.exists()}")
+                Log.e(TAG, "  oww_wake.tflite: ${wakeModel.exists()}")
+                return false
+            }
+
+            owwModel = OwwModel(melModel, embModel, wakeModel)
+            Log.d(TAG, "Wake word model initialized successfully")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error initializing wake word model: ${e.message}", e)
+            false
+        }
+    }
+
+    /**
+     * Starts listening for the wake word.
+     *
+     * If already listening, returns early without error. AudioRecord requires
+     * the RECORD_AUDIO permission, which is checked by MainActivity at app startup.
+     *
+     * The method initializes the model, creates an AudioRecord instance, and launches
+     * a coroutine on Dispatchers.IO to process audio chunks in real-time.
+     */
+    @SuppressLint("MissingPermission") // MainActivity checks RECORD_AUDIO permission at app startup
+    fun startListening() {
+        if (isListening) {
+            Log.w(TAG, "Already listening for wake word, ignoring startListening() call")
+            return
+        }
+
+        if (!initializeModel()) {
+            Log.e(TAG, "Failed to initialize wake word model, cannot start listening")
+            return
+        }
+
+        try {
+            val bufferSize = AudioRecord.getMinBufferSize(
+                SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+
+            if (bufferSize <= 0) {
+                Log.e(TAG, "Invalid AudioRecord buffer size: $bufferSize")
+                cleanup()
+                return
+            }
+
+            audioRecord = AudioRecord(
+                MediaRecorder.AudioSource.MIC,
+                SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                bufferSize * 2
+            )
+
+            val recorder = audioRecord
+            if (recorder == null) {
+                Log.e(TAG, "Failed to create AudioRecord instance")
+                cleanup()
+                return
+            }
+
+            if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+                Log.e(TAG, "AudioRecord not initialized properly")
+                recorder.release()
+                audioRecord = null
+                cleanup()
+                return
+            }
+
+            recorder.startRecording()
+            isListening = true
+            Log.d(TAG, "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE)")
+
+            recordingJob = scope.launch {
+                val audioBuffer = ShortArray(CHUNK_SIZE)
+                val floatBuffer = FloatArray(CHUNK_SIZE)
+
+                while (isActive && isListening) {
+                    try {
+                        val samplesRead = recorder.read(audioBuffer, 0, CHUNK_SIZE)
+
+                        if (samplesRead == CHUNK_SIZE) {
+                            // Convert 16-bit PCM samples to float range (-1.0 to 1.0)
+                            for (i in 0 until CHUNK_SIZE) {
+                                floatBuffer[i] = audioBuffer[i] / 32768.0f
+                            }
+
+                            // Run TFLite inference on audio chunk
+                            val model = owwModel
+                            if (model != null) {
+                                try {
+                                    val detectionScore = model.processFrame(floatBuffer)
+
+                                    if (detectionScore > WAKE_WORD_THRESHOLD) {
+                                        Log.i(TAG, "Wake word detected! Score: %.4f (threshold: $WAKE_WORD_THRESHOLD)".format(detectionScore))
+                                        isListening = false
+
+                                        // Trigger callback on main dispatcher
+                                        withContext(Dispatchers.Main) {
+                                            onWakeWordDetected()
+                                        }
+
+                                        // Exit audio processing loop
+                                        return@launch
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error running TFLite inference: ${e.message}", e)
+                                }
+                            }
+                        } else if (samplesRead < 0) {
+                            Log.e(TAG, "AudioRecord read error: $samplesRead")
+                            isListening = false
+                            return@launch
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error in audio processing loop: ${e.message}", e)
+                        isListening = false
+                        return@launch
+                    }
+                }
+
+                Log.d(TAG, "Audio processing loop completed")
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting wake word listening: ${e.message}", e)
+            isListening = false
+            cleanup()
+        }
+    }
+
+    /**
+     * Stops listening for the wake word.
+     *
+     * Cancels the audio processing coroutine and releases audio resources.
+     * If not currently listening, logs a warning and returns.
+     */
+    fun stopListening() {
+        if (!isListening) {
+            Log.w(TAG, "Not currently listening for wake word")
+            return
+        }
+
+        isListening = false
+        Log.d(TAG, "Stopping wake word listener")
+
+        recordingJob?.cancel()
+        recordingJob = null
+
+        cleanup()
+    }
+
+    /**
+     * Cleans up audio and model resources.
+     *
+     * Safely stops and releases AudioRecord, and closes the OwwModel.
+     * Exceptions during cleanup are logged but do not throw.
+     */
+    private fun cleanup() {
+        try {
+            audioRecord?.let {
+                if (it.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                    it.stop()
+                    Log.d(TAG, "AudioRecord stopped")
+                }
+                it.release()
+                Log.d(TAG, "AudioRecord released")
+            }
+            audioRecord = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing AudioRecord: ${e.message}", e)
+        }
+
+        try {
+            owwModel?.close()
+            Log.d(TAG, "OwwModel closed")
+            owwModel = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing OwwModel: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Releases all resources and cancels all coroutines.
+     *
+     * Should be called when the wake word service is no longer needed.
+     * After calling this, the service cannot be reused.
+     */
+    fun destroy() {
+        stopListening()
+        scope.cancel()
+        Log.d(TAG, "WakeWordService destroyed")
+    }
+}

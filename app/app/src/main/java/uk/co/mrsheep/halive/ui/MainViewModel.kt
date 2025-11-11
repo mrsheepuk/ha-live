@@ -16,6 +16,7 @@ import uk.co.mrsheep.halive.services.GeminiMCPToolExecutor
 import uk.co.mrsheep.halive.services.GeminiService
 import uk.co.mrsheep.halive.services.GeminiSessionPreparer
 import uk.co.mrsheep.halive.services.McpClientManager
+import uk.co.mrsheep.halive.services.WakeWordService
 import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.type.FunctionCallPart
 import com.google.firebase.ai.type.FunctionResponsePart
@@ -79,6 +80,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val geminiService = GeminiService()
     private lateinit var sessionPreparer: GeminiSessionPreparer
 
+    // Wake word service for foreground detection
+    private val wakeWordService = WakeWordService(application) {
+        // Callback invoked when wake word is detected (already on Main thread)
+        if (!isSessionActive) {
+            Log.d(TAG, "Wake word detected! Auto-starting chat...")
+            onChatButtonClicked()
+        }
+    }
+
     // Track whether a chat session is currently active
     private var isSessionActive = false
 
@@ -123,6 +133,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to initialize HA config: ${e.message}")
             }
+        }
+    }
+
+    /**
+     * Start wake word listening if not in active chat.
+     * Permission is checked by MainActivity before calling lifecycle methods.
+     */
+    private fun startWakeWordListening() {
+        if (!isSessionActive) {
+            wakeWordService.startListening()
         }
     }
 
@@ -218,6 +238,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun startChat() {
         viewModelScope.launch {
             try {
+                // Stop wake word listening (release microphone)
+                wakeWordService.stopListening()
+
                 // Set state to Initializing while preparing the model
                 _uiState.value = UiState.Initializing
 
@@ -331,6 +354,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 isSessionActive = false
                 _uiState.value = UiState.Error("Failed to start session: ${e.message}")
+
+                // Restart wake word listening on failure (reacquire microphone)
+                startWakeWordListening()
             }
         }
     }
@@ -350,6 +376,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         isSessionActive = false
         _uiState.value = UiState.ReadyToTalk
+
+        // Restart wake word listening (reacquire microphone)
+        startWakeWordListening()
     }
 
     /**
@@ -533,9 +562,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Called when MainActivity enters the foreground (onResume).
+     * Starts wake word listening if in ready state and permission is granted.
+     */
+    fun onActivityResume() {
+        if (_uiState.value == UiState.ReadyToTalk) {
+            startWakeWordListening()
+        }
+    }
+
+    /**
+     * Called when MainActivity leaves the foreground (onPause).
+     * Stops wake word listening to enforce foreground-only behavior.
+     */
+    fun onActivityPause() {
+        wakeWordService.stopListening()
+    }
+
     override fun onCleared() {
         super.onCleared()
         geminiService.cleanup()
+        wakeWordService.destroy()
     }
 }
 

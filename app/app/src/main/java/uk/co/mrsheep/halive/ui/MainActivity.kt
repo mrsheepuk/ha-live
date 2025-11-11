@@ -70,6 +70,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Only start wake word if we're in ready state AND have permission
+        if (viewModel.uiState.value == UiState.ReadyToTalk) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED
+            ) {
+                viewModel.onActivityResume()
+            }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Always stop listening when app is paused (foreground-only behavior)
+        viewModel.onActivityPause()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -207,7 +225,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 mainButton.text = "Start Chat"
-                statusText.text = "Ready to chat"
+                statusText.text = "Listening for wake word..."
                 mainButton.setOnTouchListener(null) // Remove touch listener
                 mainButton.setOnClickListener(chatButtonClickListener)
             }
