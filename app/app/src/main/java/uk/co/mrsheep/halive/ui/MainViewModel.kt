@@ -12,8 +12,10 @@ import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.services.BeepHelper
+import uk.co.mrsheep.halive.services.GeminiMCPToolExecutor
 import uk.co.mrsheep.halive.services.GeminiService
 import uk.co.mrsheep.halive.services.GeminiSessionPreparer
+import uk.co.mrsheep.halive.services.McpClientManager
 import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.type.FunctionCallPart
 import com.google.firebase.ai.type.FunctionResponsePart
@@ -109,22 +111,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            // Step 3: Initialize MCP connection (Gemini will be initialized when user starts chat)
+            // Step 3: Store HA credentials and initialize API client (MCP connection created per-session)
             try {
                 val (haUrl, haToken) = HAConfig.loadConfig(getApplication())!!
                 app.initializeHomeAssistant(haUrl, haToken)
-                sessionPreparer = GeminiSessionPreparer(
-                    mcpClient = app.mcpClient!!,
-                    haApiClient = app.haApiClient!!,
-                    toolExecutor = app.toolExecutor!!,
-                    onLogEntry = ::addToolLog
-                )
                 _uiState.value = UiState.ReadyToTalk
 
                 // Check if we should auto-start (only on first initialization)
                 checkAutoStart()
             } catch (e: Exception) {
-                _uiState.value = UiState.Error("Failed to connect to HA: ${e.message}")
+                _uiState.value = UiState.Error("Failed to initialize HA config: ${e.message}")
             }
         }
     }
@@ -224,6 +220,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Set state to Initializing while preparing the model
                 _uiState.value = UiState.Initializing
 
+                // Create fresh MCP connection for this session
+                app.mcpClient = McpClientManager(app.haUrl!!, app.haToken!!)
+                app.mcpClient?.initialize()
+                app.toolExecutor = GeminiMCPToolExecutor(app.mcpClient!!)
+
+                // Now sessionPreparer needs to be recreated with the new mcpClient
+                sessionPreparer = GeminiSessionPreparer(
+                    mcpClient = app.mcpClient!!,
+                    haApiClient = app.haApiClient!!,
+                    toolExecutor = app.toolExecutor!!,
+                    onLogEntry = ::addToolLog
+                )
+
                 // Initialize Gemini with fresh tools and system prompt
                 initializeGemini()
 
@@ -314,6 +323,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } catch (e: Exception) {
+                // Clean up MCP connection if initialization failed
+                app.mcpClient?.shutdown()
+                app.mcpClient = null
+                app.toolExecutor = null
+
                 isSessionActive = false
                 _uiState.value = UiState.Error("Failed to start session: ${e.message}")
             }
@@ -326,6 +340,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Exception) {
             _uiState.value = UiState.Error("Failed to stop session: ${e.message}")
         }
+
+        // Clean up MCP connection
+        app.mcpClient?.shutdown()
+        app.mcpClient = null
+        app.toolExecutor = null
+
         isSessionActive = false
         _uiState.value = UiState.ReadyToTalk
     }

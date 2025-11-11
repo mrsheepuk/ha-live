@@ -86,6 +86,12 @@ class ProfileTestManager(
     private var sessionPreparer: GeminiSessionPreparer? = null
 
     /**
+     * Fresh MCP connection created for this test session (separate from app's shared connection).
+     * Ensures test sessions use isolated, ephemeral connections that can be safely cleaned up.
+     */
+    private var mcpClient: McpClientManager? = null
+
+    /**
      * Tracks whether a test session is currently active.
      */
     private var isTestActive = false
@@ -114,22 +120,29 @@ class ProfileTestManager(
             onStatusChange(TestStatus.Initializing)
             Log.d(TAG, "Starting test session with profile: ${profile.name}")
 
-            // Ensure MCP client is available
-            val mcpClient = app.mcpClient
-                ?: throw IllegalStateException("MCP client not initialized")
+            // Get HA credentials from app
+            val haUrl = app.haUrl
+                ?: throw IllegalStateException("Home Assistant URL not configured")
+            val haToken = app.haToken
+                ?: throw IllegalStateException("Home Assistant token not configured")
 
             val haApiClient = app.haApiClient
                 ?: throw IllegalStateException("Home Assistant API client not initialized")
 
+            // Create fresh MCP connection for this test session
+            mcpClient = McpClientManager(haUrl, haToken)
+            mcpClient!!.initialize()
+            Log.d(TAG, "Fresh MCP connection created for test session")
+
             // Create real executor for pass-through of read-only tools
-            val realExecutor = GeminiMCPToolExecutor(mcpClient)
+            val toolExecutor = GeminiMCPToolExecutor(mcpClient!!)
 
             // Create mock executor with pass-through capability
-            mockToolExecutor = MockToolExecutor(realExecutor = realExecutor)
+            mockToolExecutor = MockToolExecutor(realExecutor = toolExecutor)
 
             // Create a new session preparer for this test using MockToolExecutor
             sessionPreparer = GeminiSessionPreparer(
-                mcpClient = mcpClient,
+                mcpClient = mcpClient!!,
                 haApiClient = haApiClient,
                 toolExecutor = mockToolExecutor!!,
                 onLogEntry = onLogEntry
@@ -158,11 +171,17 @@ class ProfileTestManager(
             Log.d(TAG, "Test session started successfully")
 
         } catch (e: SecurityException) {
+            // Clean up MCP connection if initialization failed
+            mcpClient?.shutdown()
+            mcpClient = null
             Log.e(TAG, "Microphone permission denied", e)
             onStatusChange(TestStatus.Error("Microphone permission required"))
             throw e
 
         } catch (e: Exception) {
+            // Clean up MCP connection if initialization failed
+            mcpClient?.shutdown()
+            mcpClient = null
             Log.e(TAG, "Failed to start test session: ${e.message}", e)
             onStatusChange(TestStatus.Error("Failed to initialize test session: ${e.message}"))
             throw e
@@ -192,6 +211,11 @@ class ProfileTestManager(
 
             // Clear mock executor call history for the next test
             MockToolExecutor.clearCallHistory()
+
+            // Clean up test MCP connection
+            mcpClient?.shutdown()
+            mcpClient = null
+            Log.d(TAG, "Test MCP connection cleaned up")
 
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping test session: ${e.message}", e)

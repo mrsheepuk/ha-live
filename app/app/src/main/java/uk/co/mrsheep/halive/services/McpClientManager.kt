@@ -233,6 +233,9 @@ class McpClientManager(
         eventSource = null
         pendingRequests.clear()
         scope.cancel()
+        // Clean up OkHttpClient resources
+        client.dispatcher.executorService.shutdown()
+        client.connectionPool.evictAll()
         Log.d(TAG, "MCP client shut down")
     }
 
