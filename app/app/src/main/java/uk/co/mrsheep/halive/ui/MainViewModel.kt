@@ -20,6 +20,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.type.FunctionCallPart
 import com.google.firebase.ai.type.FunctionResponsePart
 import com.google.firebase.ai.type.Transcription
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -443,11 +444,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         )
 
-        // Stop the chat session immediately
-        stopChat()
-
-        // Return success response
-        return FunctionResponsePart(
+        // Create the response first
+        val response = FunctionResponsePart(
             name = call.name,
             response = buildJsonObject {
                 put("success", true)
@@ -455,6 +453,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             },
             id = call.id
         )
+
+        // Schedule stop after minimal delay for SDK to process the response
+        viewModelScope.launch {
+            delay(300) // Allow Firebase SDK to send the function response
+            stopChat()
+        }
+
+        // Return success response immediately
+        return response
     }
 
     private fun addToolLog(log: ToolCallLog) {
