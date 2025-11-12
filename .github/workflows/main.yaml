@@ -1,0 +1,53 @@
+name: Main
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read # Required for actions/checkout
+  checks: write # Set status of checks
+  issues: write # Comment the PR as we go
+  statuses: write # Set commit statuses as tests pass or fail
+
+concurrency:
+  group: ${{ github.workflow }}-main
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Decode Debug Keystore
+        run: |
+          echo "Decoding and installing debug keystore..."
+          mkdir -p ~/.config/.android
+          
+          echo "${DEBUG_KEYSTORE_B64}" | base64 --decode > ~/.config/.android/debug.keystore
+          ls -l ~/.config/.android/debug.keystore
+          echo "Debug keystore installed."
+        env:
+          DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+
+      - name: Build Debug APK
+        working-directory: ./app
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v5
+        with:
+          name: app-debug-apk
+          path: ./app/app/build/outputs/apk/debug/app-debug.apk
