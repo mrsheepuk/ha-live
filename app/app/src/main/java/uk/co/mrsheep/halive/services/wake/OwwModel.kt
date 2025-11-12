@@ -1,12 +1,12 @@
 package uk.co.mrsheep.halive.services.wake
 
 import org.tensorflow.lite.Interpreter
-import java.io.File
+import java.nio.ByteBuffer
 
 class OwwModel(
-    melSpectrogramPath: File,
-    embeddingPath: File,
-    wakeWordPath: File
+    melSpectrogramPath: ByteBuffer,
+    embeddingPath: ByteBuffer,
+    wakeWordPath: ByteBuffer
 ) : AutoCloseable {
     @Suppress("JoinDeclarationAndAssignment")
     private val melInterpreter: Interpreter
@@ -96,15 +96,20 @@ class OwwModel(
         // wake model shape is [1,16,96] -> [1,1]
         const val WAKE_INPUT_COUNT = 16 // hardcoded in the model
 
-        private fun loadModel(modelPath: File, inputDims: IntArray? = null): Interpreter {
-            val interpreter = Interpreter(modelPath)
+        private fun loadModel(modelPath: ByteBuffer, inputDims: IntArray? = null): Interpreter {
+            try {
 
-            if (inputDims != null) {
-                interpreter.resizeInput(0, inputDims)
+                val interpreter = Interpreter(modelPath)
+
+                if (inputDims != null) {
+                    interpreter.resizeInput(0, inputDims)
+                }
+
+                interpreter.allocateTensors()
+                return interpreter
+            } catch (t: Throwable) {
+                throw Exception("Failed to load model $modelPath", t)
             }
-
-            interpreter.allocateTensors()
-            return interpreter
         }
     }
 }

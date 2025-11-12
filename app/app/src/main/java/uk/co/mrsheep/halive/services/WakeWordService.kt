@@ -15,6 +15,8 @@ import uk.co.mrsheep.halive.services.wake.OwwModel
 import java.io.File
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 
 /**
  * Manages wake word detection using AudioRecord and TensorFlow Lite inference.
@@ -51,17 +53,17 @@ class WakeWordService(
      */
     private fun initializeModel(): Boolean {
         return try {
-            val melModel = File(context.filesDir, "oww_mel.tflite")
-            val embModel = File(context.filesDir, "oww_emb.tflite")
-            val wakeModel = File(context.filesDir, "oww_wake.tflite")
+            val melModel = loadModelFile("oww_mel.tflite")
+            val embModel = loadModelFile("oww_emb.tflite")
+            val wakeModel = loadModelFile( "oww_wake.tflite")
 
-            if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
-                Log.e(TAG, "One or more model files not found in ${context.filesDir}")
-                Log.e(TAG, "  oww_mel.tflite: ${melModel.exists()}")
-                Log.e(TAG, "  oww_emb.tflite: ${embModel.exists()}")
-                Log.e(TAG, "  oww_wake.tflite: ${wakeModel.exists()}")
-                return false
-            }
+//            if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
+//                Log.e(TAG, "One or more model files not found in ${context.filesDir}")
+//                Log.e(TAG, "  oww_mel.tflite: ${melModel.exists()}")
+//                Log.e(TAG, "  oww_emb.tflite: ${embModel.exists()}")
+//                Log.e(TAG, "  oww_wake.tflite: ${wakeModel.exists()}")
+//                return false
+//            }
 
             owwModel = OwwModel(melModel, embModel, wakeModel)
             Log.d(TAG, "Wake word model initialized successfully")
@@ -133,7 +135,10 @@ class WakeWordService(
 
             recorder.startRecording()
             isListening = true
-            Log.d(TAG, "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE)")
+            Log.d(
+                TAG,
+                "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE)"
+            )
 
             recordingJob = scope.launch {
                 val audioBuffer = ShortArray(CHUNK_SIZE)
@@ -156,7 +161,12 @@ class WakeWordService(
                                     val detectionScore = model.processFrame(floatBuffer)
 
                                     if (detectionScore > WAKE_WORD_THRESHOLD) {
-                                        Log.i(TAG, "Wake word detected! Score: %.4f (threshold: $WAKE_WORD_THRESHOLD)".format(detectionScore))
+                                        Log.i(
+                                            TAG,
+                                            "Wake word detected! Score: %.4f (threshold: $WAKE_WORD_THRESHOLD)".format(
+                                                detectionScore
+                                            )
+                                        )
                                         isListening = false
 
                                         // Trigger callback on main dispatcher
@@ -185,7 +195,10 @@ class WakeWordService(
 
                 Log.d(TAG, "Audio processing loop completed")
             }
-
+        } catch (s: SecurityException) {
+            Log.e(TAG, "No permission to listen (should be handled above): ${s.message}")
+            isListening = false
+            cleanup()
         } catch (e: Exception) {
             Log.e(TAG, "Error starting wake word listening: ${e.message}", e)
             isListening = false
@@ -254,5 +267,17 @@ class WakeWordService(
         stopListening()
         scope.cancel()
         Log.d(TAG, "WakeWordService destroyed")
+    }
+
+    /**
+     * Loads a model file from the assets folder into a memory-mapped ByteBuffer.
+     */
+    private fun loadModelFile(filename: String): ByteBuffer {
+        val fileDescriptor = context.assets.openFd(filename)
+        val inputStream = fileDescriptor.createInputStream()
+        val fileChannel = inputStream.channel
+        val startOffset = fileDescriptor.startOffset
+        val declaredLength = fileDescriptor.declaredLength
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
     }
 }
