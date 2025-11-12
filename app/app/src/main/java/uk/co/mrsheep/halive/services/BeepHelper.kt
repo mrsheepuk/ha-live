@@ -14,9 +14,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Helper object for playing ready beep and haptic feedback.
+ * Helper object for playing beeps and haptic feedback.
  *
- * Provides audio and tactile feedback when the voice assistant is ready to start a conversation.
+ * Provides audio and tactile feedback for voice assistant conversation lifecycle:
+ * - Ready beep: Ascending two-tone pattern (powering up) when conversation starts
+ * - End beep: Descending two-tone pattern (powering down) when conversation ends
+ *
  * All operations are non-blocking and crash-safe.
  */
 object BeepHelper {
@@ -27,7 +30,7 @@ object BeepHelper {
      * Plays a short ready beep with haptic feedback.
      *
      * This function:
-     * - Plays a notification beep using ToneGenerator (TONE_PROP_BEEP, ~200ms duration)
+     * - Plays an ascending two-tone notification beep using ToneGenerator (DTMF 4→8, ~230ms duration)
      * - Triggers haptic feedback (short vibration pattern)
      * - Executes asynchronously to avoid blocking the UI thread
      * - Handles all errors gracefully to prevent crashes
@@ -53,18 +56,74 @@ object BeepHelper {
     }
 
     /**
-     * Plays a short notification beep tone.
+     * Plays an end beep with haptic feedback.
+     *
+     * This function:
+     * - Plays a descending two-tone notification beep using ToneGenerator
+     * - Triggers haptic feedback (short vibration pattern)
+     * - Executes asynchronously to avoid blocking the UI thread
+     * - Handles all errors gracefully to prevent crashes
+     *
+     * The function returns immediately and executes audio/haptic feedback in the background.
+     *
+     * @param context The Android application context used to access system services
+     */
+    fun playEndBeep(context: Context) {
+        // Execute asynchronously to avoid blocking the UI thread
+        GlobalScope.launch(Dispatchers.Default) {
+            try {
+                // Play the end beep tone
+                playEndBeepTone()
+
+                // Play haptic feedback
+                playHaptic(context)
+            } catch (e: Exception) {
+                // Silently handle any errors - beep failure shouldn't crash the app
+                Log.w(TAG, "Failed to play end beep or haptic", e)
+            }
+        }
+    }
+
+    /**
+     * Plays an ascending two-tone pattern (powering up).
      *
      * Uses ToneGenerator with STREAM_NOTIFICATION audio stream and releases resources immediately
-     * after the tone plays. ToneGenerator is properly cleaned up in a finally block.
+     * after the tones play. ToneGenerator is properly cleaned up in a finally block.
+     * Pattern: DTMF 4 (100ms) → wait 110ms → DTMF 8 (100ms) → wait 120ms
      */
     private suspend fun playBeep() {
         val toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
         try {
-            // Play TONE_PROP_BEEP for 200ms
-            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
-            // Allow time for tone to play
-            delay(250)
+            // Play DTMF tone 4 for 100ms (ascending pattern start)
+            toneGenerator.startTone(ToneGenerator.TONE_DTMF_4, 100)
+            delay(110)
+
+            // Play DTMF tone 8 for 100ms (ascending pattern end)
+            toneGenerator.startTone(ToneGenerator.TONE_DTMF_8, 100)
+            delay(120)
+        } finally {
+            // Ensure ToneGenerator is always released to prevent resource leaks
+            toneGenerator.release()
+        }
+    }
+
+    /**
+     * Plays a descending two-tone pattern (powering down).
+     *
+     * Uses ToneGenerator with STREAM_NOTIFICATION audio stream and releases resources immediately
+     * after the tones play. ToneGenerator is properly cleaned up in a finally block.
+     * Pattern: DTMF 8 (100ms) → wait 110ms → DTMF 4 (100ms) → wait 120ms
+     */
+    private suspend fun playEndBeepTone() {
+        val toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
+        try {
+            // Play DTMF tone 8 for 100ms (descending pattern start)
+            toneGenerator.startTone(ToneGenerator.TONE_DTMF_8, 100)
+            delay(110)
+
+            // Play DTMF tone 4 for 100ms (descending pattern end)
+            toneGenerator.startTone(ToneGenerator.TONE_DTMF_4, 100)
+            delay(120)
         } finally {
             // Ensure ToneGenerator is always released to prevent resource leaks
             toneGenerator.release()

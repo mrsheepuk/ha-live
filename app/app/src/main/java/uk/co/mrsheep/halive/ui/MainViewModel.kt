@@ -336,6 +336,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun stopChat() {
+        BeepHelper.playEndBeep(getApplication())
         try {
             geminiService.stopSession()
         } catch (e: Exception) {
