@@ -362,6 +362,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * It directly connects the Gemini `functionCall` to the MCP executor.
      */
     private suspend fun executeHomeAssistantTool(call: FunctionCallPart): FunctionResponsePart {
+        // Intercept EndConversation tool
+        if (call.name == "EndConversation") {
+            return handleEndConversation(call)
+        }
+
         _uiState.value = UiState.ExecutingAction(call.name)
 
         // Prepare parameters string for logging
@@ -417,6 +422,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         _uiState.value = UiState.ChatActive // Return to normal chat-active state
         return result
+    }
+
+    private suspend fun handleEndConversation(call: FunctionCallPart): FunctionResponsePart {
+        // Extract reason parameter
+        val reason = call.args["reason"]?.toString() ?: "Natural conclusion"
+
+        // Create timestamp
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+            .format(java.util.Date())
+
+        // Log the tool call
+        addToolLog(
+            ToolCallLog(
+                timestamp = timestamp,
+                toolName = call.name,
+                parameters = call.args.toString(),
+                success = true,
+                result = "Conversation ended: $reason"
+            )
+        )
+
+        // Stop the chat session immediately
+        stopChat()
+
+        // Return success response
+        return FunctionResponsePart(
+            name = call.name,
+            response = buildJsonObject {
+                put("success", true)
+                put("message", "Conversation ended: $reason")
+            },
+            id = call.id
+        )
     }
 
     private fun addToolLog(log: ToolCallLog) {

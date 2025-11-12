@@ -11,6 +11,7 @@ import uk.co.mrsheep.halive.core.ToolFilterMode
 import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
 import uk.co.mrsheep.halive.services.ToolExecutor
+import uk.co.mrsheep.halive.services.LocalToolDefinitions
 import uk.co.mrsheep.halive.ui.ToolCallLog
 
 /**
@@ -55,11 +56,21 @@ class GeminiSessionPreparer(
             val (filteredTools, toolNames, totalToolCount) = fetchAndFilterTools(profile)
 
             // Transform filtered tools to Gemini format
-            val tools = filteredTools?.let {
+            val mcpTools = filteredTools?.let {
                 GeminiMCPToolTransformer.transform(
                     McpToolsListResult(it)
                 )
             } ?: emptyList()
+
+            // Create local tool declarations and wrap in Tool
+            val localFunctionDeclarations = listOf(LocalToolDefinitions.createEndConversationTool())
+            val localTools = Tool.functionDeclarations(localFunctionDeclarations)
+
+            // Combine MCP tools with local tools
+            val tools = mcpTools + localTools
+
+            // Update toolNames to include synthetic tools
+            val updatedToolNames = (toolNames + "EndConversation").sorted()
 
             // Render background info template if present
             val renderedBackgroundInfo = renderBackgroundInfo(profile)
@@ -90,9 +101,9 @@ class GeminiSessionPreparer(
                 "Filter Mode: ALL"
             }
 
-            val toolsSection = if (toolNames.isNotEmpty()) {
-                "$filterInfo\nAvailable Tools (${toolNames.size}):\n" +
-                    toolNames.joinToString("\n") { "- $it" }
+            val toolsSection = if (updatedToolNames.isNotEmpty()) {
+                "$filterInfo\nAvailable Tools (${updatedToolNames.size}):\n" +
+                    updatedToolNames.joinToString("\n") { "- $it" }
             } else {
                 "$filterInfo\nNo tools available"
             }
