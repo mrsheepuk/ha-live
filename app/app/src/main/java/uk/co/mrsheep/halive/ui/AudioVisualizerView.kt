@@ -362,7 +362,7 @@ class AudioVisualizerView @JvmOverloads constructor(
         pulseFrequency: Float,
         opacity: Float
     ) {
-        val pulseValue = (sin(elapsedSeconds * 2f * PI * pulseFrequency) + 1f) / 2f
+        val pulseValue = ((sin(elapsedSeconds * 2f * PI.toFloat() * pulseFrequency) + 1f) / 2f).toFloat()
         val haloPaints = arrayOf(paintHalo1, paintHalo2, paintHalo3)
 
         for (i in haloPaints.indices) {
@@ -424,7 +424,7 @@ class AudioVisualizerView @JvmOverloads constructor(
         opacity: Float,
         colorBlend: Float
     ) {
-        val pulseValue = (sin(elapsedSeconds * 2f * PI * pulseFrequency) + 1f) / 2f
+        val pulseValue = ((sin(elapsedSeconds * 2f * PI.toFloat() * pulseFrequency) + 1f) / 2f).toFloat()
         val orbRadius = 15f + (pulseValue * 10f)
 
         // Draw background halo
