@@ -25,6 +25,8 @@ import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.Profile
+import uk.co.mrsheep.halive.ui.AudioVisualizerView
+import uk.co.mrsheep.halive.ui.VisualizerState
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -37,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mainButton: Button
     private lateinit var toolLogText: TextView
     private lateinit var retryButton: Button
+    private lateinit var audioVisualizer: AudioVisualizerView
 
     private fun checkConfigurationAndLaunch() {
         // Check if app is configured
@@ -86,6 +89,7 @@ class MainActivity : AppCompatActivity() {
         mainButton = findViewById(R.id.mainButton)
         toolLogText = findViewById(R.id.toolLogText)
         retryButton = findViewById(R.id.retryButton)
+        audioVisualizer = findViewById(R.id.audioVisualizer)
 
         retryButton.setOnClickListener {
             viewModel.retryInitialization()
@@ -144,27 +148,32 @@ class MainActivity : AppCompatActivity() {
     private fun updateUiForState(state: UiState) {
         when (state) {
             UiState.Loading -> {
+                audioVisualizer.setState(VisualizerState.DORMANT)
                 mainButton.visibility = View.GONE
                 retryButton.visibility = View.GONE
                 statusText.text = "Loading..."
             }
             UiState.FirebaseConfigNeeded -> {
+                audioVisualizer.setState(VisualizerState.DORMANT)
                 // Should not reach here - handled by OnboardingActivity
                 mainButton.visibility = View.GONE
                 statusText.text = "Please complete onboarding"
             }
             UiState.HAConfigNeeded -> {
+                audioVisualizer.setState(VisualizerState.DORMANT)
                 // Should not reach here - handled by OnboardingActivity
                 mainButton.visibility = View.GONE
                 statusText.text = "Please complete onboarding"
             }
             UiState.Initializing -> {
+                audioVisualizer.setState(VisualizerState.DORMANT)
                 profileSpinner.isEnabled = false
                 mainButton.visibility = View.GONE
                 retryButton.visibility = View.GONE
                 statusText.text = "Initializing..."
             }
             UiState.ReadyToTalk -> {
+                audioVisualizer.setState(VisualizerState.DORMANT)
                 profileSpinner.isEnabled = true
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
@@ -174,6 +183,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.setOnClickListener(chatButtonClickListener)
             }
             UiState.ChatActive -> {
+                audioVisualizer.setState(VisualizerState.ACTIVE)
                 profileSpinner.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
@@ -182,6 +192,7 @@ class MainActivity : AppCompatActivity() {
                 // Listener is already active
             }
             is UiState.ExecutingAction -> {
+                audioVisualizer.setState(VisualizerState.EXECUTING)
                 profileSpinner.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
@@ -189,6 +200,7 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Executing ${state.tool}..."
             }
             is UiState.Error -> {
+                audioVisualizer.setState(VisualizerState.DORMANT)
                 mainButton.visibility = View.GONE
                 retryButton.visibility = View.VISIBLE
                 statusText.text = state.message
