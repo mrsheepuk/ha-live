@@ -19,13 +19,13 @@ import kotlin.math.sin
  * Animation state enum for the visualizer.
  */
 enum class VisualizerState {
-    /** Slow pulse (3s), minimal movement, desaturated colors, 50% opacity */
+    /** Very slow pulse (3s cycle), minimal movement, desaturated colors, 50% opacity */
     DORMANT,
 
-    /** Medium pulse (2s), steady particle orbit, full color, 100% opacity */
+    /** Steady pulse (2s cycle), moderate particle orbit, full color, 100% opacity */
     ACTIVE,
 
-    /** Fast pulse (1.2s), faster particles, color shift toward accent, 100% opacity */
+    /** Fast pulse (1.2s cycle), faster particles, color shift toward accent, 100% opacity */
     EXECUTING
 }
 
@@ -299,19 +299,19 @@ class AudioVisualizerView @JvmOverloads constructor(
     private fun getStateParameters(state: VisualizerState): StateParameters {
         return when (state) {
             VisualizerState.DORMANT -> StateParameters(
-                pulseFrequency = 3f,
+                pulseFrequency = 1f / 3f,  // 0.33 Hz = one pulse every 3 seconds
                 particleSpeed = 0.1f,
                 opacity = 0.5f,
                 colorBlend = 0f
             )
             VisualizerState.ACTIVE -> StateParameters(
-                pulseFrequency = 2f,
+                pulseFrequency = 1f / 2f,  // 0.5 Hz = one pulse every 2 seconds
                 particleSpeed = 1f,
                 opacity = 1f,
                 colorBlend = 0f
             )
             VisualizerState.EXECUTING -> StateParameters(
-                pulseFrequency = 1.2f,
+                pulseFrequency = 1f / 1.2f,  // 0.83 Hz = one pulse every 1.2 seconds
                 particleSpeed = 1.5f,
                 opacity = 1f,
                 colorBlend = 0.3f
