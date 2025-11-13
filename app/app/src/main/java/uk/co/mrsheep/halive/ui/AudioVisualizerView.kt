@@ -36,7 +36,7 @@ enum class VisualizerState {
  * - A rotating radial gradient background
  * - 2-3 concentric pulsing glow halos
  * - 24 particles orbiting in a ring with varying speeds and sizes
- * - A subtle central orb that provides a gentle anchor point
+ * - A central pulsing orb as the focal point
  *
  * Supports three animation states (DORMANT, ACTIVE, EXECUTING) that control:
  * - Pulse speed (3s → 2s → 1.2s cycle)
@@ -413,8 +413,7 @@ class AudioVisualizerView @JvmOverloads constructor(
     }
 
     /**
-     * Draws the subtle central orb with gentle pulse and soft background halo.
-     * Designed to be a non-distracting anchor point while particles and halos provide visual interest.
+     * Draws the central pulsing orb with background halo and 3D highlight.
      */
     private fun drawCentralOrb(
         canvas: Canvas,
@@ -426,11 +425,10 @@ class AudioVisualizerView @JvmOverloads constructor(
         colorBlend: Float
     ) {
         val pulseValue = ((sin(elapsedSeconds * 2f * PI.toFloat() * pulseFrequency) + 1f) / 2f).toFloat()
-        // Subtle pulse: 12-15px range (3px swing, gentle breathing)
-        val orbRadius = 12f + (pulseValue * 3f)
+        val orbRadius = 15f + (pulseValue * 10f)
 
-        // Draw background halo with reduced opacity for subtlety
-        paintOrbBackground.alpha = (opacity * 80).toInt().coerceIn(0, 255)
+        // Draw background halo
+        paintOrbBackground.alpha = (opacity * 150).toInt().coerceIn(0, 255)
         canvas.drawCircle(centerX, centerY, orbRadius * 1.3f, paintOrbBackground)
 
         // Draw foreground orb with optional color blend
@@ -439,10 +437,17 @@ class AudioVisualizerView @JvmOverloads constructor(
         } else {
             colorPrimary
         }
-        paintOrbForeground.color = applyOpacity(orbColor, opacity * 0.7f)
+        paintOrbForeground.color = applyOpacity(orbColor, opacity)
         canvas.drawCircle(centerX, centerY, orbRadius, paintOrbForeground)
 
-        // Highlight removed for subtlety - particles and halos are the stars now
+        // Draw highlight for depth
+        paintOrbHighlight.color = applyOpacity(colorPrimaryLight, opacity * 0.6f)
+        canvas.drawCircle(
+            centerX - orbRadius * 0.3f,
+            centerY - orbRadius * 0.3f,
+            orbRadius * 0.4f,
+            paintOrbHighlight
+        )
     }
 
     // ===================== Utility Functions =====================
