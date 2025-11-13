@@ -20,6 +20,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.type.FunctionCallPart
 import com.google.firebase.ai.type.FunctionResponsePart
 import com.google.firebase.ai.type.Transcription
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -335,6 +336,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun stopChat() {
+        BeepHelper.playEndBeep(getApplication())
         try {
             geminiService.stopSession()
         } catch (e: Exception) {
@@ -362,6 +364,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * It directly connects the Gemini `functionCall` to the MCP executor.
      */
     private suspend fun executeHomeAssistantTool(call: FunctionCallPart): FunctionResponsePart {
+        // Intercept EndConversation tool
+        if (call.name == "EndConversation") {
+            return handleEndConversation(call)
+        }
+
         _uiState.value = UiState.ExecutingAction(call.name)
 
         // Prepare parameters string for logging
@@ -417,6 +424,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         _uiState.value = UiState.ChatActive // Return to normal chat-active state
         return result
+    }
+
+    private suspend fun handleEndConversation(call: FunctionCallPart): FunctionResponsePart {
+        // Extract reason parameter
+        val reason = call.args["reason"]?.toString() ?: "Natural conclusion"
+
+        // Create timestamp
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+            .format(java.util.Date())
+
+        // Log the tool call
+        addToolLog(
+            ToolCallLog(
+                timestamp = timestamp,
+                toolName = call.name,
+                parameters = call.args.toString(),
+                success = true,
+                result = "Conversation ended: $reason"
+            )
+        )
+
+        // Create the response first
+        val response = FunctionResponsePart(
+            name = call.name,
+            response = buildJsonObject {
+                put("success", true)
+                put("message", "Conversation ended: $reason")
+            },
+            id = call.id
+        )
+
+        // Schedule stop after minimal delay for SDK to process the response
+        viewModelScope.launch {
+            delay(300) // Allow Firebase SDK to send the function response
+            stopChat()
+        }
+
+        // Return success response immediately
+        return response
     }
 
     private fun addToolLog(log: ToolCallLog) {

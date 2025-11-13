@@ -8,15 +8,20 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Helper object for playing ready beep and haptic feedback.
+ * Helper object for playing beeps and haptic feedback.
  *
- * Provides audio and tactile feedback when the voice assistant is ready to start a conversation.
+ * Provides audio and tactile feedback for voice assistant conversation lifecycle:
+ * - Ready beep: Single pleasant tone when conversation starts
+ * - End beep: Single lower tone when conversation ends
+ *
+ * All beeps use STREAM_MUSIC to match the agent's audio volume level.
  * All operations are non-blocking and crash-safe.
  */
 object BeepHelper {
@@ -27,7 +32,8 @@ object BeepHelper {
      * Plays a short ready beep with haptic feedback.
      *
      * This function:
-     * - Plays a notification beep using ToneGenerator (TONE_PROP_BEEP, ~200ms duration)
+     * - Plays a pleasant beep using ToneGenerator (TONE_PROP_BEEP, ~200ms duration)
+     * - Uses STREAM_MUSIC to match the agent's audio volume
      * - Triggers haptic feedback (short vibration pattern)
      * - Executes asynchronously to avoid blocking the UI thread
      * - Handles all errors gracefully to prevent crashes
@@ -36,6 +42,7 @@ object BeepHelper {
      *
      * @param context The Android application context used to access system services
      */
+    @OptIn(DelicateCoroutinesApi::class)
     fun playReadyBeep(context: Context) {
         // Execute asynchronously to avoid blocking the UI thread
         GlobalScope.launch(Dispatchers.Default) {
@@ -53,16 +60,66 @@ object BeepHelper {
     }
 
     /**
-     * Plays a short notification beep tone.
+     * Plays an end beep with haptic feedback.
      *
-     * Uses ToneGenerator with STREAM_NOTIFICATION audio stream and releases resources immediately
-     * after the tone plays. ToneGenerator is properly cleaned up in a finally block.
+     * This function:
+     * - Plays a negative acknowledgment tone using ToneGenerator (TONE_PROP_NACK, ~200ms duration)
+     * - Uses STREAM_MUSIC to match the agent's audio volume
+     * - Triggers haptic feedback (short vibration pattern)
+     * - Executes asynchronously to avoid blocking the UI thread
+     * - Handles all errors gracefully to prevent crashes
+     *
+     * The function returns immediately and executes audio/haptic feedback in the background.
+     *
+     * @param context The Android application context used to access system services
+     */
+    @OptIn(DelicateCoroutinesApi::class)
+    fun playEndBeep(context: Context) {
+        // Execute asynchronously to avoid blocking the UI thread
+        GlobalScope.launch(Dispatchers.Default) {
+            try {
+                // Play the end beep tone
+                playEndBeepTone()
+
+                // Play haptic feedback
+                playHaptic(context)
+            } catch (e: Exception) {
+                // Silently handle any errors - beep failure shouldn't crash the app
+                Log.w(TAG, "Failed to play end beep or haptic", e)
+            }
+        }
+    }
+
+    /**
+     * Plays a single pleasant beep tone.
+     *
+     * Uses ToneGenerator with STREAM_MUSIC audio stream to match the agent's audio volume.
+     * ToneGenerator is properly cleaned up in a finally block.
      */
     private suspend fun playBeep() {
-        val toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
+        val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
         try {
             // Play TONE_PROP_BEEP for 200ms
             toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
+            // Allow time for tone to play
+            delay(250)
+        } finally {
+            // Ensure ToneGenerator is always released to prevent resource leaks
+            toneGenerator.release()
+        }
+    }
+
+    /**
+     * Plays a single negative acknowledgment tone (more conclusive ending sound).
+     *
+     * Uses ToneGenerator with STREAM_MUSIC audio stream to match the agent's audio volume.
+     * ToneGenerator is properly cleaned up in a finally block.
+     */
+    private suspend fun playEndBeepTone() {
+        val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+        try {
+            // Play TONE_PROP_NACK for 200ms (more definitive ending tone)
+            toneGenerator.startTone(ToneGenerator.TONE_PROP_NACK, 200)
             // Allow time for tone to play
             delay(250)
         } finally {
