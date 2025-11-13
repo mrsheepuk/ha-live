@@ -8,6 +8,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
@@ -41,6 +42,7 @@ object BeepHelper {
      *
      * @param context The Android application context used to access system services
      */
+    @OptIn(DelicateCoroutinesApi::class)
     fun playReadyBeep(context: Context) {
         // Execute asynchronously to avoid blocking the UI thread
         GlobalScope.launch(Dispatchers.Default) {
@@ -61,7 +63,7 @@ object BeepHelper {
      * Plays an end beep with haptic feedback.
      *
      * This function:
-     * - Plays a lower acknowledgment tone using ToneGenerator (TONE_PROP_ACK, ~200ms duration)
+     * - Plays a negative acknowledgment tone using ToneGenerator (TONE_PROP_NACK, ~200ms duration)
      * - Uses STREAM_MUSIC to match the agent's audio volume
      * - Triggers haptic feedback (short vibration pattern)
      * - Executes asynchronously to avoid blocking the UI thread
@@ -71,6 +73,7 @@ object BeepHelper {
      *
      * @param context The Android application context used to access system services
      */
+    @OptIn(DelicateCoroutinesApi::class)
     fun playEndBeep(context: Context) {
         // Execute asynchronously to avoid blocking the UI thread
         GlobalScope.launch(Dispatchers.Default) {
@@ -107,7 +110,7 @@ object BeepHelper {
     }
 
     /**
-     * Plays a single lower acknowledgment tone.
+     * Plays a single negative acknowledgment tone (more conclusive ending sound).
      *
      * Uses ToneGenerator with STREAM_MUSIC audio stream to match the agent's audio volume.
      * ToneGenerator is properly cleaned up in a finally block.
@@ -115,8 +118,8 @@ object BeepHelper {
     private suspend fun playEndBeepTone() {
         val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
         try {
-            // Play TONE_PROP_ACK for 200ms (lower/softer than ready beep)
-            toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 200)
+            // Play TONE_PROP_NACK for 200ms (more definitive ending tone)
+            toneGenerator.startTone(ToneGenerator.TONE_PROP_NACK, 200)
             // Allow time for tone to play
             delay(250)
         } finally {
