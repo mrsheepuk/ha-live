@@ -51,7 +51,7 @@
 
     <!-- Lightning bolt - golden amber accent in upper right -->
     <group
-        android:translateX="78"
+        android:translateX="66"
         android:translateY="38">
 
         <path
