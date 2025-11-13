@@ -425,10 +425,11 @@ class AudioVisualizerView @JvmOverloads constructor(
         colorBlend: Float
     ) {
         val pulseValue = ((sin(elapsedSeconds * 2f * PI.toFloat() * pulseFrequency) + 1f) / 2f).toFloat()
-        val orbRadius = 15f + (pulseValue * 10f)
+        // Subtle pulse: 12-15px range (3px swing, gentle breathing)
+        val orbRadius = 12f + (pulseValue * 3f)
 
-        // Draw background halo
-        paintOrbBackground.alpha = (opacity * 150).toInt().coerceIn(0, 255)
+        // Draw background halo with reduced opacity for subtlety
+        paintOrbBackground.alpha = (opacity * 80).toInt().coerceIn(0, 255)
         canvas.drawCircle(centerX, centerY, orbRadius * 1.3f, paintOrbBackground)
 
         // Draw foreground orb with optional color blend
@@ -437,17 +438,10 @@ class AudioVisualizerView @JvmOverloads constructor(
         } else {
             colorPrimary
         }
-        paintOrbForeground.color = applyOpacity(orbColor, opacity)
+        paintOrbForeground.color = applyOpacity(orbColor, opacity * 0.7f)
         canvas.drawCircle(centerX, centerY, orbRadius, paintOrbForeground)
 
-        // Draw highlight for depth
-        paintOrbHighlight.color = applyOpacity(colorPrimaryLight, opacity * 0.6f)
-        canvas.drawCircle(
-            centerX - orbRadius * 0.3f,
-            centerY - orbRadius * 0.3f,
-            orbRadius * 0.4f,
-            paintOrbHighlight
-        )
+        // Highlight removed for subtlety - particles and halos are the stars now
     }
 
     // ===================== Utility Functions =====================
