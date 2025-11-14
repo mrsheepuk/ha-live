@@ -67,6 +67,9 @@ dependencies {
     // JSON parsing
     implementation("org.json:json:20231013")
 
+    // TensorFlow Lite
+    implementation(libs.tensorflow.lite)
+
     // ConstraintLayout
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
