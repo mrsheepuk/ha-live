@@ -13,6 +13,7 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import com.google.android.material.switchmaterial.SwitchMaterial
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -37,6 +38,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolLogText: TextView
     private lateinit var retryButton: Button
     private lateinit var audioVisualizer: AudioVisualizerView
+    private lateinit var wakeWordSwitch: SwitchMaterial
 
     private fun checkConfigurationAndLaunch() {
         // Check if app is configured
@@ -104,9 +106,22 @@ class MainActivity : AppCompatActivity() {
         toolLogText = findViewById(R.id.toolLogText)
         retryButton = findViewById(R.id.retryButton)
         audioVisualizer = findViewById(R.id.audioVisualizer)
+        wakeWordSwitch = findViewById(R.id.wakeWordSwitch)
 
         retryButton.setOnClickListener {
             viewModel.retryInitialization()
+        }
+
+        // Observe wake word state from ViewModel
+        lifecycleScope.launch {
+            viewModel.wakeWordEnabled.collect { enabled ->
+                wakeWordSwitch.isChecked = enabled
+            }
+        }
+
+        // Handle user toggling the switch
+        wakeWordSwitch.setOnCheckedChangeListener { _, isChecked ->
+            viewModel.toggleWakeWord(isChecked)
         }
 
         // Observe the UI state from the ViewModel
@@ -197,6 +212,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 statusText.text = "Loading..."
+                wakeWordSwitch.isEnabled = false
             }
             UiState.FirebaseConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -204,6 +220,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 statusText.text = "Please complete onboarding"
+                wakeWordSwitch.isEnabled = false
             }
             UiState.HAConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -211,6 +228,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 statusText.text = "Please complete onboarding"
+                wakeWordSwitch.isEnabled = false
             }
             UiState.Initializing -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -218,6 +236,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 statusText.text = "Initializing..."
+                wakeWordSwitch.isEnabled = false
             }
             UiState.ReadyToTalk -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -225,7 +244,12 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 mainButton.text = "Start Chat"
-                statusText.text = "Listening for wake word..."
+                wakeWordSwitch.isEnabled = true
+                statusText.text = if (viewModel.wakeWordEnabled.value) {
+                    "Listening for wake word..."
+                } else {
+                    "Ready to chat"
+                }
                 mainButton.setOnTouchListener(null) // Remove touch listener
                 mainButton.setOnClickListener(chatButtonClickListener)
             }
@@ -236,6 +260,7 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Chat active - listening..."
+                wakeWordSwitch.isEnabled = false
                 // Listener is already active
             }
             is UiState.ExecutingAction -> {
@@ -245,6 +270,7 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Executing ${state.tool}..."
+                wakeWordSwitch.isEnabled = false
             }
             is UiState.Error -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -252,6 +278,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.VISIBLE
                 statusText.text = state.message
+                wakeWordSwitch.isEnabled = false
             }
         }
     }

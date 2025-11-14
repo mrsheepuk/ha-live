@@ -11,6 +11,7 @@ import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
+import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.services.BeepHelper
 import uk.co.mrsheep.halive.services.GeminiMCPToolExecutor
 import uk.co.mrsheep.halive.services.GeminiService
@@ -73,6 +74,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _shouldAttemptAutoStart = MutableStateFlow(false)
     val shouldAttemptAutoStart: StateFlow<Boolean> = _shouldAttemptAutoStart
 
+    // Wake word enabled state
+    private val _wakeWordEnabled = MutableStateFlow(false)
+    val wakeWordEnabled: StateFlow<Boolean> = _wakeWordEnabled
+
     // Track if this is the first initialization (survives activity recreation, not process death)
     private var hasCheckedAutoStart = false
 
@@ -99,6 +104,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             currentProfileId = activeProfile.id
             _systemPrompt.value = activeProfile.getCombinedPrompt()
         }
+
+        // Load wake word preference
+        _wakeWordEnabled.value = WakeWordConfig.isEnabled(getApplication())
 
         checkConfiguration()
     }
@@ -141,6 +149,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Permission is checked by MainActivity before calling lifecycle methods.
      */
     private fun startWakeWordListening() {
+        if (!_wakeWordEnabled.value) {
+            Log.d(TAG, "Wake word disabled, skipping")
+            return
+        }
         if (!isSessionActive) {
             wakeWordService.startListening()
         }
@@ -386,6 +398,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun onPermissionDenied() {
         _uiState.value = UiState.Error("Microphone permission is required to use voice assistant")
+    }
+
+    /**
+     * Toggle wake word detection on/off.
+     * Called by UI when user toggles the switch.
+     */
+    fun toggleWakeWord(enabled: Boolean) {
+        WakeWordConfig.setEnabled(getApplication(), enabled)
+        _wakeWordEnabled.value = enabled
+
+        if (!enabled) {
+            // User turned it OFF -> stop listening immediately
+            wakeWordService.stopListening()
+        } else if (_uiState.value == UiState.ReadyToTalk) {
+            // User turned it ON and we're ready -> start listening
+            startWakeWordListening()
+        }
     }
 
     /**
