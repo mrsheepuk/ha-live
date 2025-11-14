@@ -374,7 +374,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateWakeWordChipAppearance(enabled: Boolean) {
         if (enabled) {
             // Filled style when enabled
-            wakeWordChip.backgroundTintList = ContextCompat.getColorStateList(this, R.color.colorAccent)
+            wakeWordChip.backgroundTintList = ContextCompat.getColorStateList(this, R.color.orange_accent)
             wakeWordChip.strokeWidth = 0
         } else {
             // Outlined style when disabled

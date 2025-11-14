@@ -80,7 +80,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Log expanded state (for collapsible log UI)
     private val _logExpanded = MutableStateFlow(false)
-    val logExpanded: StateFlow<Boolean> = _logExpanded.asStateFlow()
+    val logExpanded: StateFlow<Boolean> = _logExpanded
 
     // Track if this is the first initialization (survives activity recreation, not process death)
     private var hasCheckedAutoStart = false
