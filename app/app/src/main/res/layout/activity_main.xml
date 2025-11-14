@@ -28,7 +28,6 @@
         android:id="@+id/statusContainer"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         app:layout_constraintTop_toTopOf="parent"
@@ -44,7 +43,7 @@
             android:layout_weight="1"
             android:text="Loading..."
             android:textSize="18sp"
-            android:gravity="start|center_vertical" />
+            android:gravity="center" />
 
         <Button
             android:id="@+id/retryButton"
