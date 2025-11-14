@@ -4,7 +4,7 @@
     <item
         android:id="@+id/action_profiles"
         android:title="Switch Profile"
-        android:icon="@android:drawable/ic_menu_allfriends"
+        android:icon="@android:drawable/ic_menu_agenda"
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_settings"
