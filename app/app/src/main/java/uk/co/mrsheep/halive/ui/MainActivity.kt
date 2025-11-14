@@ -1,6 +1,7 @@
 package uk.co.mrsheep.halive.ui
 
 import android.Manifest
+import android.animation.ObjectAnimator
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -10,16 +11,19 @@ import android.view.MenuItem
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import com.google.android.material.switchmaterial.SwitchMaterial
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
 import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.HAConfig
@@ -38,7 +42,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolLogText: TextView
     private lateinit var retryButton: Button
     private lateinit var audioVisualizer: AudioVisualizerView
-    private lateinit var wakeWordSwitch: SwitchMaterial
+    private lateinit var wakeWordChip: MaterialButton
+    private lateinit var logHeaderContainer: LinearLayout
+    private lateinit var logChevronIcon: ImageView
+    private lateinit var logContentScroll: ScrollView
+    private lateinit var logHeaderText: TextView
 
     private fun checkConfigurationAndLaunch() {
         // Check if app is configured
@@ -106,22 +114,38 @@ class MainActivity : AppCompatActivity() {
         toolLogText = findViewById(R.id.toolLogText)
         retryButton = findViewById(R.id.retryButton)
         audioVisualizer = findViewById(R.id.audioVisualizer)
-        wakeWordSwitch = findViewById(R.id.wakeWordSwitch)
+        wakeWordChip = findViewById(R.id.wakeWordChip)
+        logHeaderContainer = findViewById(R.id.logHeaderContainer)
+        logChevronIcon = findViewById(R.id.logChevronIcon)
+        logContentScroll = findViewById(R.id.logContentScroll)
+        logHeaderText = findViewById(R.id.logHeaderText)
 
         retryButton.setOnClickListener {
             viewModel.retryInitialization()
         }
 
-        // Observe wake word state from ViewModel
+        // Observe wake word state from ViewModel and update chip appearance
         lifecycleScope.launch {
             viewModel.wakeWordEnabled.collect { enabled ->
-                wakeWordSwitch.isChecked = enabled
+                updateWakeWordChipAppearance(enabled)
             }
         }
 
-        // Handle user toggling the switch
-        wakeWordSwitch.setOnCheckedChangeListener { _, isChecked ->
-            viewModel.toggleWakeWord(isChecked)
+        // Handle user clicking the wake word chip
+        wakeWordChip.setOnClickListener {
+            viewModel.toggleWakeWord(!viewModel.wakeWordEnabled.value)
+        }
+
+        // Add click listener for log header collapse/expand
+        logHeaderContainer.setOnClickListener {
+            viewModel.toggleLogExpanded()
+        }
+
+        // Observe log expanded state from ViewModel
+        lifecycleScope.launch {
+            viewModel.logExpanded.collect { isExpanded ->
+                updateLogExpandedState(isExpanded)
+            }
         }
 
         // Observe the UI state from the ViewModel
@@ -212,7 +236,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 statusText.text = "Loading..."
-                wakeWordSwitch.isEnabled = false
+                wakeWordChip.visibility = View.GONE
             }
             UiState.FirebaseConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -220,7 +244,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 statusText.text = "Please complete onboarding"
-                wakeWordSwitch.isEnabled = false
+                wakeWordChip.visibility = View.GONE
             }
             UiState.HAConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -228,7 +252,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 statusText.text = "Please complete onboarding"
-                wakeWordSwitch.isEnabled = false
+                wakeWordChip.visibility = View.GONE
             }
             UiState.Initializing -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -236,7 +260,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 statusText.text = "Initializing..."
-                wakeWordSwitch.isEnabled = false
+                wakeWordChip.visibility = View.GONE
             }
             UiState.ReadyToTalk -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -244,7 +268,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 mainButton.text = "Start Chat"
-                wakeWordSwitch.isEnabled = true
+                wakeWordChip.visibility = View.VISIBLE
                 statusText.text = if (viewModel.wakeWordEnabled.value) {
                     "Listening for wake word..."
                 } else {
@@ -260,7 +284,7 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Chat active - listening..."
-                wakeWordSwitch.isEnabled = false
+                wakeWordChip.visibility = View.GONE
                 // Listener is already active
             }
             is UiState.ExecutingAction -> {
@@ -270,7 +294,7 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Executing ${state.tool}..."
-                wakeWordSwitch.isEnabled = false
+                wakeWordChip.visibility = View.GONE
             }
             is UiState.Error -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -278,7 +302,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.VISIBLE
                 statusText.text = state.message
-                wakeWordSwitch.isEnabled = false
+                wakeWordChip.visibility = View.GONE
             }
         }
     }
@@ -327,7 +351,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateToolLogs(logs: List<ToolCallLog>) {
         if (logs.isEmpty()) {
-            toolLogText.text = "Tool call log will appear here..."
+            toolLogText.text = "Log will appear here..."
             return
         }
 
@@ -345,5 +369,35 @@ class MainActivity : AppCompatActivity() {
         }
 
         toolLogText.text = formattedLogs
+    }
+
+    private fun updateWakeWordChipAppearance(enabled: Boolean) {
+        if (enabled) {
+            // Filled style when enabled
+            wakeWordChip.backgroundTintList = ContextCompat.getColorStateList(this, R.color.colorAccent)
+            wakeWordChip.strokeWidth = 0
+        } else {
+            // Outlined style when disabled
+            wakeWordChip.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.transparent)
+            wakeWordChip.strokeWidth = (1 * resources.displayMetrics.density).toInt() // 1dp stroke
+        }
+    }
+
+    private fun updateLogExpandedState(isExpanded: Boolean) {
+        if (isExpanded) {
+            // Expand log content
+            logContentScroll.visibility = View.VISIBLE
+            ObjectAnimator.ofFloat(logChevronIcon, "rotation", 0f, 180f).apply {
+                duration = 300
+                start()
+            }
+        } else {
+            // Collapse log content
+            logContentScroll.visibility = View.GONE
+            ObjectAnimator.ofFloat(logChevronIcon, "rotation", 180f, 0f).apply {
+                duration = 300
+                start()
+            }
+        }
     }
 }

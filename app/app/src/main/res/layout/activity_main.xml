@@ -14,19 +14,7 @@
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize">
-
-            <!-- Wake word toggle switch -->
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/wakeWordSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="end"
-                android:layout_marginEnd="48dp"
-                android:text="👂"
-                android:textSize="18sp" />
-
-        </com.google.android.material.appbar.MaterialToolbar>
+            android:layout_height="?attr/actionBarSize" />
 
     </com.google.android.material.appbar.AppBarLayout>
 
@@ -86,33 +74,97 @@
         android:layout_marginTop="8dp"
         android:visibility="visible"
         app:backgroundTint="?attr/colorAccent"
-        app:layout_constraintBottom_toTopOf="@+id/toolLogContainer"
+        app:layout_constraintBottom_toTopOf="@+id/wakeWordChip"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/audioVisualizer" />
 
-    <ScrollView
-        android:id="@+id/toolLogContainer"
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/wakeWordChip"
+        android:layout_width="wrap_content"
+        android:layout_height="36dp"
+        android:text="👂 Wake Word"
+        android:textSize="14sp"
+        android:layout_marginTop="8dp"
+        android:visibility="gone"
+        android:contentDescription="Toggle wake word listening"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        app:layout_constraintBottom_toTopOf="@+id/toolLogCard"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/mainButton" />
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/toolLogCard"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginTop="24dp"
-        android:background="@color/surface_variant_light"
-        android:padding="8dp"
+        app:cardElevation="2dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/mainButton"
+        app:layout_constraintTop_toBottomOf="@+id/wakeWordChip"
         app:layout_constraintHeight_percent="0.3">
 
-        <TextView
-            android:id="@+id/toolLogText"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:text="Tool call log will appear here..."
-            android:textSize="12sp"
-            android:textColor="?attr/colorOnSurface" />
-    </ScrollView>
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <!-- Log Header -->
+            <LinearLayout
+                android:id="@+id/logHeaderContainer"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground">
+
+                <TextView
+                    android:id="@+id/logHeaderText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Log"
+                    android:textAppearance="@style/TextAppearance.MaterialComponents.Subtitle1"
+                    android:textColor="?attr/colorOnSurface" />
+
+                <ImageView
+                    android:id="@+id/logChevronIcon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_down"
+                    android:tint="?attr/colorOnSurface"
+                    android:contentDescription="Toggle log" />
+
+            </LinearLayout>
+
+            <!-- Log Content -->
+            <ScrollView
+                android:id="@+id/logContentScroll"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone"
+                android:padding="8dp"
+                android:background="@color/surface_variant_light">
+
+                <TextView
+                    android:id="@+id/toolLogText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:text="Log will appear here..."
+                    android:textSize="12sp"
+                    android:textColor="?attr/colorOnSurface" />
+
+            </ScrollView>
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
