@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
+import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.services.McpClientManager
@@ -17,7 +18,7 @@ import kotlin.system.exitProcess
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _settingsState = MutableStateFlow<SettingsState>(
-        SettingsState.Loaded("", "", "", 0, false)
+        SettingsState.Loaded("", "", "", 0, false, "")
     )
     val settingsState: StateFlow<SettingsState> = _settingsState
 
@@ -30,6 +31,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val (haUrl, haToken) = HAConfig.loadConfig(getApplication()) ?: Pair("Not configured", "")
             val projectId = FirebaseConfig.getProjectId(getApplication()) ?: "Not configured"
+            val geminiKey = GeminiConfig.getApiKey(getApplication()) ?: "Not configured"
             val profileCount = ProfileManager.getAllProfiles().size
 
             _settingsState.value = SettingsState.Loaded(
@@ -37,7 +39,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 haToken = haToken,
                 firebaseProjectId = projectId,
                 profileCount = profileCount,
-                isReadOnly = isChatActive
+                isReadOnly = isChatActive,
+                geminiApiKey = geminiKey
             )
         }
     }
@@ -87,6 +90,37 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 exitProcess(0)
             } catch (e: Exception) {
                 _settingsState.value = SettingsState.ConnectionFailed("Failed to update Firebase config: ${e.message}")
+                loadSettings()
+            }
+        }
+    }
+
+    fun saveGeminiApiKey(apiKey: String) {
+        viewModelScope.launch {
+            try {
+                if (apiKey.isBlank()) {
+                    _settingsState.value = SettingsState.ConnectionFailed("Gemini API key cannot be blank")
+                    return@launch
+                }
+
+                GeminiConfig.saveApiKey(getApplication(), apiKey)
+                _settingsState.value = SettingsState.ConnectionSuccess("Gemini API key saved successfully")
+                loadSettings()
+            } catch (e: Exception) {
+                _settingsState.value = SettingsState.ConnectionFailed("Failed to save Gemini API key: ${e.message}")
+                loadSettings()
+            }
+        }
+    }
+
+    fun clearGeminiApiKey() {
+        viewModelScope.launch {
+            try {
+                GeminiConfig.clearConfig(getApplication())
+                _settingsState.value = SettingsState.ConnectionSuccess("Gemini API key cleared successfully")
+                loadSettings()
+            } catch (e: Exception) {
+                _settingsState.value = SettingsState.ConnectionFailed("Failed to clear Gemini API key: ${e.message}")
                 loadSettings()
             }
         }

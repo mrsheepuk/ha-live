@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
+import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
@@ -14,14 +15,15 @@ import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.services.BeepHelper
 import uk.co.mrsheep.halive.services.GeminiMCPToolExecutor
-import uk.co.mrsheep.halive.services.GeminiService
-import uk.co.mrsheep.halive.services.GeminiSessionPreparer
+import uk.co.mrsheep.halive.services.SessionPreparer
 import uk.co.mrsheep.halive.services.McpClientManager
+import uk.co.mrsheep.halive.services.conversation.ConversationService
+import uk.co.mrsheep.halive.services.conversation.ConversationServiceFactory
+import uk.co.mrsheep.halive.services.conversation.ToolCall
+import uk.co.mrsheep.halive.services.conversation.ToolResponse
+import uk.co.mrsheep.halive.services.conversation.TranscriptInfo
 import uk.co.mrsheep.halive.services.WakeWordService
 import com.google.firebase.FirebaseApp
-import com.google.firebase.ai.type.FunctionCallPart
-import com.google.firebase.ai.type.FunctionResponsePart
-import com.google.firebase.ai.type.Transcription
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,8 +88,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var hasCheckedAutoStart = false
 
     private val app = application as HAGeminiApp
-    private val geminiService = GeminiService()
-    private lateinit var sessionPreparer: GeminiSessionPreparer
+    // ConversationService created by factory based on Gemini API key presence
+    private val conversationService: ConversationService by lazy {
+        Log.d(TAG, "Creating ConversationService via factory")
+        ConversationServiceFactory.create(getApplication())
+    }
+    private lateinit var sessionPreparer: SessionPreparer
 
     // Wake word service for foreground detection
     private val wakeWordService = WakeWordService(application) {
@@ -234,7 +240,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         try {
             val profile = ProfileManager.getProfileById(currentProfileId)
             val defaultPrompt = SystemPromptConfig.getSystemPrompt(getApplication())
-            sessionPreparer.prepareAndInitialize(profile, geminiService, defaultPrompt)
+            sessionPreparer.prepareAndInitialize(profile, conversationService, defaultPrompt)
         } catch (e: Exception) {
             // Error is already logged by preparer
             throw e
@@ -266,7 +272,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 app.toolExecutor = GeminiMCPToolExecutor(app.mcpClient!!)
 
                 // Now sessionPreparer needs to be recreated with the new mcpClient
-                sessionPreparer = GeminiSessionPreparer(
+                sessionPreparer = SessionPreparer(
                     mcpClient = app.mcpClient!!,
                     haApiClient = app.haApiClient!!,
                     toolExecutor = app.toolExecutor!!,
@@ -284,13 +290,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val profile = ProfileManager.getProfileById(currentProfileId)
 
                 // Create transcription handler based on profile setting
-                val transcriptHandler: ((Transcription?, Transcription?) -> Unit)? =
+                val domainTranscriptHandler: ((TranscriptInfo) -> Unit)? =
                     if (profile?.enableTranscription == true) {
-                        { userTranscription, modelTranscription ->
+                        { transcriptInfo ->
                             val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
 
                             // Log user transcription (only if not null/empty)
-                            userTranscription?.text?.takeIf { it.isNotBlank() }?.let { text ->
+                            transcriptInfo.userText?.takeIf { it.isNotBlank() }?.let { text ->
                                 addToolLog(
                                     ToolCallLog(
                                         timestamp = timestamp,
@@ -303,7 +309,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             }
 
                             // Log model transcription (only if not null/empty)
-                            modelTranscription?.text?.takeIf { it.isNotBlank() }?.let { text ->
+                            transcriptInfo.modelText?.takeIf { it.isNotBlank() }?.let { text ->
                                 addToolLog(
                                     ToolCallLog(
                                         timestamp = timestamp,
@@ -317,10 +323,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     } else null
 
-                // Start the session, passing our Task 2 executor as the handler
-                geminiService.startSession(
-                    functionCallHandler = ::executeHomeAssistantTool,
-                    transcriptHandler = transcriptHandler
+                // Tool call handler - uses domain types directly
+                val domainToolCallHandler: suspend (ToolCall) -> ToolResponse = ::executeHomeAssistantTool
+
+                // Start the session with the domain-level handlers
+                conversationService.startSession(
+                    onToolCall = domainToolCallHandler,
+                    onTranscript = domainTranscriptHandler
                 )
 
                 // Play ready beep to indicate session is active
@@ -330,7 +339,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 profile?.initialMessageToAgent?.let { initialText ->
                     if (initialText.isNotBlank()) {
                         try {
-                            geminiService.sendTextMessage(initialText)
+                            conversationService.sendText(initialText)
 
                             val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
                                 .format(java.util.Date())
@@ -363,6 +372,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } catch (e: Exception) {
+                // Log the full exception details to tool log for debugging
+                val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                    .format(java.util.Date())
+
+                addToolLog(
+                    ToolCallLog(
+                        timestamp = timestamp,
+                        toolName = "Session Start Error",
+                        parameters = "Failed to start conversation session",
+                        success = false,
+                        result = "Exception: ${e.javaClass.simpleName}\n" +
+                                "Message: ${e.message}\n\n" +
+                                "Stack trace:\n${e.stackTraceToString()}"
+                    )
+                )
+
                 // Clean up MCP connection if initialization failed
                 app.mcpClient?.shutdown()
                 app.mcpClient = null
@@ -380,7 +405,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun stopChat() {
         BeepHelper.playEndBeep(getApplication())
         try {
-            geminiService.stopSession()
+            conversationService.stopSession()
         } catch (e: Exception) {
             _uiState.value = UiState.Error("Failed to stop session: ${e.message}")
         }
@@ -430,10 +455,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * This is the function that is passed to `geminiService`.
-     * It directly connects the Gemini `functionCall` to the MCP executor.
+     * Execute a tool call from the AI using domain types.
+     * This method uses MCP to execute the tool against Home Assistant.
      */
-    private suspend fun executeHomeAssistantTool(call: FunctionCallPart): FunctionResponsePart {
+    private suspend fun executeHomeAssistantTool(call: ToolCall): ToolResponse {
         // Intercept EndConversation tool
         if (call.name == "EndConversation") {
             return handleEndConversation(call)
@@ -442,42 +467,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = UiState.ExecutingAction(call.name)
 
         // Prepare parameters string for logging
-        val paramsString = call.args.toString()
+        val paramsString = call.arguments.toString()
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
             .format(java.util.Date())
 
         // Execute the tool via MCP
         val result = try {
-            val response = app.toolExecutor?.executeTool(call) ?: FunctionResponsePart(
-                name = call.name,
-                response = buildJsonObject {
-                    put("error", "Repository not initialized")
-                },
-                id = call.id
-            )
-
-            // Log successful call
-            val isSuccess = !response.response.toString().contains("\"error\"")
-            addToolLog(
-                ToolCallLog(
-                    timestamp = timestamp,
-                    toolName = call.name,
-                    parameters = paramsString,
-                    success = isSuccess,
-                    result = response.response.toString()
+            val executor = app.toolExecutor
+            if (executor == null) {
+                ToolResponse(
+                    id = call.id,
+                    name = call.name,
+                    result = "",
+                    error = "Tool executor not initialized"
                 )
-            )
+            } else {
+                val mcpResult = executor.executeToolDirect(call.name, call.arguments)
 
-            response
+                // Extract result text from MCP response
+                val resultText = mcpResult.content
+                    .filter { it.type == "text" }
+                    .mapNotNull { it.text }
+                    .joinToString("\n")
+
+                // Check if it's an error
+                val isError = resultText.contains("\"error\"") || (mcpResult.isError == true)
+
+                // Log the call
+                addToolLog(
+                    ToolCallLog(
+                        timestamp = timestamp,
+                        toolName = call.name,
+                        parameters = paramsString,
+                        success = !isError,
+                        result = resultText
+                    )
+                )
+
+                ToolResponse(
+                    id = call.id,
+                    name = call.name,
+                    result = resultText,
+                    error = if (isError) resultText else null
+                )
+            }
         } catch (e: Exception) {
-            val errorResponse = FunctionResponsePart(
-                name = call.name,
-                response = buildJsonObject {
-                    put("error", "Failed to execute: ${e.message}")
-                },
-                id = call.id
-            )
-
             // Log failed call
             addToolLog(
                 ToolCallLog(
@@ -489,16 +523,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
 
-            errorResponse
+            ToolResponse(
+                id = call.id,
+                name = call.name,
+                result = "",
+                error = e.message ?: "Unknown error"
+            )
         }
 
         _uiState.value = UiState.ChatActive // Return to normal chat-active state
         return result
     }
 
-    private suspend fun handleEndConversation(call: FunctionCallPart): FunctionResponsePart {
+    private suspend fun handleEndConversation(call: ToolCall): ToolResponse {
         // Extract reason parameter
-        val reason = call.args["reason"]?.toString() ?: "Natural conclusion"
+        val reason = call.arguments["reason"]?.jsonPrimitive?.content ?: "Natural conclusion"
 
         // Create timestamp
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
@@ -509,30 +548,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ToolCallLog(
                 timestamp = timestamp,
                 toolName = call.name,
-                parameters = call.args.toString(),
+                parameters = call.arguments.toString(),
                 success = true,
                 result = "Conversation ended: $reason"
             )
         )
 
-        // Create the response first
-        val response = FunctionResponsePart(
-            name = call.name,
-            response = buildJsonObject {
-                put("success", true)
-                put("message", "Conversation ended: $reason")
-            },
-            id = call.id
-        )
-
-        // Schedule stop after minimal delay for SDK to process the response
+        // Schedule stop after minimal delay for service to process the response
         viewModelScope.launch {
-            delay(300) // Allow Firebase SDK to send the function response
+            delay(300) // Allow conversation service to send the function response
             stopChat()
         }
 
         // Return success response immediately
-        return response
+        return ToolResponse(
+            id = call.id,
+            name = call.name,
+            result = "Conversation ended: $reason"
+        )
     }
 
     private fun addToolLog(log: ToolCallLog) {
@@ -623,7 +656,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        geminiService.cleanup()
+        conversationService.cleanup()
         wakeWordService.destroy()
     }
 }

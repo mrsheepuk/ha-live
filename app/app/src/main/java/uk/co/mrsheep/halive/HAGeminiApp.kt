@@ -7,14 +7,13 @@ import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.services.McpClientManager
 import uk.co.mrsheep.halive.services.GeminiMCPToolExecutor
-import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.HomeAssistantApiClient
 import uk.co.mrsheep.halive.services.mcp.McpTool
 
 class HAGeminiApp : Application() {
     // Global MCP client - will be initialized after HA config
     var mcpClient: McpClientManager? = null
-    var toolExecutor: ToolExecutor? = null
+    var toolExecutor: GeminiMCPToolExecutor? = null
     var haApiClient: HomeAssistantApiClient? = null
     var lastAvailableTools: List<String>? = null
     var haUrl: String? = null

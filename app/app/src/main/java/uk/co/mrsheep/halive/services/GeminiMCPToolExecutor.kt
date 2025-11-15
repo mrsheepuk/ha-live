@@ -12,9 +12,20 @@ import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.mcp.*
 
 class GeminiMCPToolExecutor(
-    private val mcpClient: McpClientManager
+    val mcpClient: McpClientManager  // Make public for direct protocol access
 ) : ToolExecutor {
     private val json = Json { ignoreUnknownKeys = true }
+
+    /**
+     * Execute a tool directly with protocol format (for direct Gemini Live API).
+     * Bypasses Firebase SDK types.
+     */
+    suspend fun executeToolDirect(
+        name: String,
+        arguments: Map<String, JsonElement>
+    ): ToolCallResult {
+        return mcpClient.callTool(name, arguments)
+    }
 
     /**
      * Executes a tool via MCP and returns the result to Gemini.
