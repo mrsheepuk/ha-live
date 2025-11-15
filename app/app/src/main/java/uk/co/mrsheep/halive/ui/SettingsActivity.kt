@@ -38,6 +38,11 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var firebaseProjectIdText: TextView
     private lateinit var firebaseChangeButton: Button
 
+    // Gemini section
+    private lateinit var geminiApiKeyText: TextView
+    private lateinit var geminiEditButton: Button
+    private lateinit var geminiClearButton: Button
+
     // Debug section
     private lateinit var viewCrashLogsButton: Button
     private lateinit var shareCrashLogsButton: Button
@@ -104,6 +109,19 @@ class SettingsActivity : AppCompatActivity() {
             showFirebaseChangeDialog()
         }
 
+        // Gemini section
+        geminiApiKeyText = findViewById(R.id.geminiApiKeyText)
+        geminiEditButton = findViewById(R.id.geminiEditButton)
+        geminiClearButton = findViewById(R.id.geminiClearButton)
+
+        geminiEditButton.setOnClickListener {
+            showGeminiEditDialog()
+        }
+
+        geminiClearButton.setOnClickListener {
+            showGeminiClearDialog()
+        }
+
         // Debug section
         viewCrashLogsButton = findViewById(R.id.viewCrashLogsButton)
         shareCrashLogsButton = findViewById(R.id.shareCrashLogsButton)
@@ -136,6 +154,7 @@ class SettingsActivity : AppCompatActivity() {
                 haUrlText.text = state.haUrl
                 haTokenText.text = "••••••••" // Masked token
                 firebaseProjectIdText.text = state.firebaseProjectId
+                geminiApiKeyText.text = if (state.geminiApiKey != "Not configured") "••••••••" else "Not configured"
                 profileSummaryText.text = "${state.profileCount} profile(s) configured"
 
                 // Enable/disable buttons based on read-only state
@@ -143,6 +162,8 @@ class SettingsActivity : AppCompatActivity() {
                 haEditButton.isEnabled = !state.isReadOnly
                 haTestButton.isEnabled = !state.isReadOnly
                 firebaseChangeButton.isEnabled = !state.isReadOnly
+                geminiEditButton.isEnabled = !state.isReadOnly
+                geminiClearButton.isEnabled = !state.isReadOnly
 
                 // Show/hide read-only overlay
                 if (state.isReadOnly) {
@@ -232,6 +253,54 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showGeminiEditDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_gemini_config, null)
+        val apiKeyInput = dialogView.findViewById<android.widget.EditText>(R.id.geminiApiKeyInput)
+
+        // Load current API key from GeminiConfig
+        val currentApiKey = uk.co.mrsheep.halive.core.GeminiConfig.getApiKey(this) ?: ""
+        apiKeyInput.setText(currentApiKey)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Edit Gemini API Key")
+            .setView(dialogView)
+            .setPositiveButton("Save", null) // Set to null, we'll override below
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            saveButton.setOnClickListener {
+                val newApiKey = apiKeyInput.text.toString().trim()
+
+                // Validate input
+                if (newApiKey.isBlank()) {
+                    apiKeyInput.error = "API key is required"
+                    return@setOnClickListener
+                }
+
+                // Save API key
+                viewModel.saveGeminiApiKey(newApiKey)
+
+                // Close dialog
+                dialog.dismiss()
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun showGeminiClearDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Remove Gemini API Key?")
+            .setMessage("Remove Gemini API key? App will use Firebase SDK instead.")
+            .setPositiveButton("Remove") { _, _ ->
+                viewModel.clearGeminiApiKey()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun showSuccessDialog(message: String) {
         AlertDialog.Builder(this)
             .setTitle("Success")
@@ -313,7 +382,8 @@ sealed class SettingsState {
         val haToken: String,
         val firebaseProjectId: String,
         val profileCount: Int,
-        val isReadOnly: Boolean
+        val isReadOnly: Boolean,
+        val geminiApiKey: String
     ) : SettingsState()
     object TestingConnection : SettingsState()
     data class ConnectionSuccess(val message: String) : SettingsState()

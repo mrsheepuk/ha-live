@@ -228,33 +228,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun showGeminiApiKeyDialog() {
-        // Create EditText programmatically
-        val editText = EditText(this).apply {
-            hint = "Enter your Gemini API key"
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setPadding(60, 40, 60, 40)
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("Gemini API Key Required")
-            .setMessage("Direct protocol mode requires a Gemini API key. Get one from https://aistudio.google.com/apikey")
-            .setView(editText)
-            .setPositiveButton("Save") { _, _ ->
-                val apiKey = editText.text.toString().trim()
-                if (apiKey.isNotBlank()) {
-                    viewModel.saveGeminiApiKey(apiKey)
-                } else {
-                    Toast.makeText(this, "API key cannot be empty", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton("Cancel") { _, _ ->
-                finish() // Exit app if user cancels
-            }
-            .setCancelable(false)
-            .show()
-    }
-
     private fun updateUiForState(state: UiState) {
         when (state) {
             UiState.Loading -> {
@@ -283,15 +256,6 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Please complete onboarding"
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
-            }
-            UiState.GeminiConfigNeeded -> {
-                audioVisualizer.setState(VisualizerState.DORMANT)
-                // Show dialog to enter Gemini API key
-                showGeminiApiKeyDialog()
-                mainButton.isEnabled = false
-                mainButton.visibility = View.VISIBLE
-                statusText.text = "Gemini API key required"
-                wakeWordSwitch.isEnabled = false
             }
             UiState.Initializing -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
