@@ -19,11 +19,11 @@ import uk.co.mrsheep.halive.services.audio.GeminiAudioManager
 import uk.co.mrsheep.halive.services.protocol.ClientContent
 import uk.co.mrsheep.halive.services.protocol.ClientContentMessage
 import uk.co.mrsheep.halive.services.protocol.ClientMessage
+import uk.co.mrsheep.halive.services.protocol.Content
 import uk.co.mrsheep.halive.services.protocol.FunctionCall
 import uk.co.mrsheep.halive.services.protocol.FunctionResponse
 import uk.co.mrsheep.halive.services.protocol.GenerationConfig
 import uk.co.mrsheep.halive.services.protocol.MediaChunk
-import uk.co.mrsheep.halive.services.protocol.Part
 import uk.co.mrsheep.halive.services.protocol.PrebuiltVoiceConfig
 import uk.co.mrsheep.halive.services.protocol.RealtimeInput
 import uk.co.mrsheep.halive.services.protocol.RealtimeInputMessage
@@ -31,7 +31,7 @@ import uk.co.mrsheep.halive.services.protocol.ServerMessage
 import uk.co.mrsheep.halive.services.protocol.ServerPart
 import uk.co.mrsheep.halive.services.protocol.SetupMessage
 import uk.co.mrsheep.halive.services.protocol.SpeechConfig
-import uk.co.mrsheep.halive.services.protocol.SystemInstruction
+import uk.co.mrsheep.halive.services.protocol.TextPart
 import uk.co.mrsheep.halive.services.protocol.ToolDeclaration
 import uk.co.mrsheep.halive.services.protocol.ToolResponse
 import uk.co.mrsheep.halive.services.protocol.ToolResponseMessage
@@ -127,7 +127,7 @@ class GeminiLiveSession(
             // Step 2: Send setup message
             val setupMessage = ClientMessage(
                 setup = SetupMessage(
-                    model = model,
+                    model = "models/$model",
                     generationConfig = GenerationConfig(
                         responseModalities = listOf("AUDIO"),
                         speechConfig = SpeechConfig(
@@ -136,8 +136,9 @@ class GeminiLiveSession(
                             )
                         )
                     ),
-                    systemInstruction = SystemInstruction(
-                        parts = listOf(Part.Text(systemPrompt))
+                    systemInstruction = Content(
+                        role = null,
+                        parts = listOf(TextPart(systemPrompt))
                     ),
                     tools = tools.takeIf { it.isNotEmpty() }
                 )
@@ -423,7 +424,7 @@ class GeminiLiveSession(
                         turns = listOf(
                             Turn(
                                 role = "user",
-                                parts = listOf(Part.Text(text))
+                                parts = listOf(TextPart(text))
                             )
                         )
                     )

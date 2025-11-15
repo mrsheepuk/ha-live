@@ -12,6 +12,7 @@ import okhttp3.Request
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import uk.co.mrsheep.halive.services.protocol.ServerMessage
+import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 
 /**
@@ -25,7 +26,8 @@ class GeminiLiveClient(
 
     companion object {
         private const val TAG = "GeminiLiveClient"
-        private const val API_ENDPOINT = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
+        private const val API_ENDPOINT_V1ALPHA = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
+        private const val API_ENDPOINT_V1BETA = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
         private const val MESSAGE_QUEUE_CAPACITY = 64
         private const val CONNECTION_TIMEOUT_MS = 5000L
     }
@@ -81,7 +83,7 @@ class GeminiLiveClient(
                 // Create a new deferred for this connection attempt
                 connectionDeferred = CompletableDeferred()
 
-                val url = "$API_ENDPOINT?key=$apiKey"
+                val url = "$API_ENDPOINT_V1BETA?key=$apiKey"
                 val request = Request.Builder()
                     .url(url)
                     .build()
@@ -192,17 +194,25 @@ class GeminiLiveClient(
 
     override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
         Log.d(TAG, "Received binary message of size ${bytes.size}")
-        // Binary frames are not typically used in Gemini Live protocol
-        // (audio is sent as base64-encoded strings in JSON)
+        // TODO: Check what type of binary data we've got! 
+        // For now, just coerce to string (feels wrong but let's see)
+        try {
+            val message = json.decodeFromString(ServerMessage.serializer(), bytes.string(Charset.defaultCharset()))
+            scope.launch {
+                messageFlow.emit(message)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to deserialize message", e)
+        }
     }
 
     override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-        Log.d(TAG, "WebSocket closing: code=$code, reason=$reason")
+        Log.w(TAG, "WebSocket closing:\ncode=$code\nreason=$reason")
         webSocket.close(1000, null)
     }
 
     override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-        Log.d(TAG, "WebSocket closed: code=$code, reason=$reason")
+        Log.w(TAG, "WebSocket closed: code=$code, reason=$reason")
         scope.launch {
             connectionMutex.withLock {
                 isConnected = false

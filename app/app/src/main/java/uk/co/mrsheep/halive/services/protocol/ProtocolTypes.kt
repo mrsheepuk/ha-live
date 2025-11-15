@@ -8,19 +8,17 @@ import kotlinx.serialization.json.JsonClassDiscriminator
 
 // --- Part (text and inlineData variants) ---
 
-@Serializable
-@JsonClassDiscriminator("") // Suppress the "type" field - discriminator is implicit from field presence
-sealed class Part {
-    @Serializable
-    @SerialName("text")
-    data class Text(val text: String) : Part()
 
-    @Serializable
-    @SerialName("inlineData")
-    data class InlineDataPart(
-        @SerialName("inline_data")
-        val inlineData: InlineData
-    ) : Part()
+/** Interface representing data sent to and received from requests. */
+public interface Part {
+}
+
+/** Represents text or string based data sent to and received from requests. */
+@Serializable
+public class TextPart
+constructor(
+    public val text: String,
+) : Part {
 }
 
 // --- InlineData (for embedding binary data like audio) ---
@@ -44,8 +42,9 @@ data class MediaChunk(
 // --- SystemInstruction (system prompt) ---
 
 @Serializable
-data class SystemInstruction(
-    val parts: List<Part>
+data class Content(
+    val role: String?,
+    val parts: List<TextPart>
 )
 
 // --- Tool definitions ---
@@ -74,6 +73,4 @@ data class Schema(
     val description: String? = null,
     val enum: List<String>? = null,
     val items: Schema? = null,
-    @SerialName("additionalProperties")
-    val additionalProperties: JsonElement? = null
 )

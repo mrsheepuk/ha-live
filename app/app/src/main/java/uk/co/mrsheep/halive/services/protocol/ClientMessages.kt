@@ -28,7 +28,7 @@ data class SetupMessage(
     @SerialName("generation_config")
     val generationConfig: GenerationConfig,
     @SerialName("system_instruction")
-    val systemInstruction: SystemInstruction? = null,
+    val systemInstruction: Content? = null,
     val tools: List<ToolDeclaration>? = null
 )
 
