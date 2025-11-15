@@ -37,7 +37,6 @@ import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ToolFilterMode
-import uk.co.mrsheep.halive.services.GeminiService
 import uk.co.mrsheep.halive.services.ProfileTestManager
 import uk.co.mrsheep.halive.ui.adapters.SelectableTool
 import uk.co.mrsheep.halive.ui.adapters.ToolSelectionAdapter

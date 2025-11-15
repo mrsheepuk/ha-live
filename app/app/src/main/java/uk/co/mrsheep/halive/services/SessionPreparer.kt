@@ -2,7 +2,6 @@ package uk.co.mrsheep.halive.services
 
 import android.util.Log
 import com.google.firebase.ai.type.FunctionCallPart
-import com.google.firebase.ai.type.Tool
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import uk.co.mrsheep.halive.core.Profile
@@ -11,12 +10,11 @@ import uk.co.mrsheep.halive.core.ToolFilterMode
 import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
 import uk.co.mrsheep.halive.services.ToolExecutor
-import uk.co.mrsheep.halive.services.LocalToolDefinitions
-import uk.co.mrsheep.halive.services.protocol.ToolDeclaration
+import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.ui.ToolCallLog
 
 /**
- * Encapsulates the heavy initialization logic for preparing a Gemini session.
+ * Encapsulates the heavy initialization logic for preparing a conversation session.
  * Extracts all logic from MainViewModel.initializeGemini() for better separation of concerns.
  *
  * This class:
@@ -25,29 +23,29 @@ import uk.co.mrsheep.halive.ui.ToolCallLog
  * - Renders Jinja2 templates from the HA API
  * - Fetches live context if enabled
  * - Builds the final system prompt with all sections
- * - Initializes the Gemini model with tools and prompt
+ * - Initializes the conversation service with tools and prompt
  */
-class GeminiSessionPreparer(
+class SessionPreparer(
     private val mcpClient: McpClientManager,
     private val haApiClient: HomeAssistantApiClient,
     private val toolExecutor: ToolExecutor,
     private val onLogEntry: (ToolCallLog) -> Unit
 ) {
     companion object {
-        private const val TAG = "GeminiSessionPreparer"
+        private const val TAG = "SessionPreparer"
     }
 
     /**
-     * Main entry point: prepares and initializes the Gemini session.
+     * Main entry point: prepares and initializes the conversation session.
      *
      * @param profile The active profile (may be null to use defaults)
-     * @param geminiService The Gemini service to initialize with tools and prompt
+     * @param conversationService The conversation service to initialize with tools and prompt
      * @param defaultSystemPrompt Fallback system prompt if profile is null
      * @throws Exception on any failure (caller handles state transitions)
      */
     suspend fun prepareAndInitialize(
         profile: Profile?,
-        geminiService: GeminiService,
+        conversationService: ConversationService,
         defaultSystemPrompt: String
     ) {
         val timestamp = createTimestamp()
@@ -56,29 +54,8 @@ class GeminiSessionPreparer(
             // Fetch raw MCP tools and apply filtering
             val (filteredTools, toolNames, totalToolCount) = fetchAndFilterTools(profile)
 
-            // Transform filtered tools to Firebase Gemini format (for SDK mode)
-            val mcpTools = filteredTools?.let {
-                GeminiMCPToolTransformer.transform(
-                    McpToolsListResult(it)
-                )
-            } ?: emptyList()
-
-            // Transform filtered tools to protocol format (for direct protocol mode)
-            val protocolTools = filteredTools?.let {
-                GeminiProtocolToolTransformer.transform(
-                    McpToolsListResult(it)
-                )
-            } ?: emptyList()
-
-            // Create local tool declarations and wrap in Tool
-            val localFunctionDeclarations = listOf(LocalToolDefinitions.createEndConversationTool())
-            val localTools = Tool.functionDeclarations(localFunctionDeclarations)
-
-            // Combine MCP tools with local tools (Firebase format)
-            val tools = mcpTools + localTools
-
-            // Update toolNames to include synthetic tools
-            val updatedToolNames = (toolNames + "EndConversation").sorted()
+            // Create McpToolsListResult with filtered tools
+            val mcpToolsResult = McpToolsListResult(filteredTools ?: emptyList())
 
             // Render background info template if present
             val renderedBackgroundInfo = renderBackgroundInfo(profile)
@@ -109,9 +86,9 @@ class GeminiSessionPreparer(
                 "Filter Mode: ALL"
             }
 
-            val toolsSection = if (updatedToolNames.isNotEmpty()) {
-                "$filterInfo\nAvailable Tools (${updatedToolNames.size}):\n" +
-                    updatedToolNames.joinToString("\n") { "- $it" }
+            val toolsSection = if (toolNames.isNotEmpty()) {
+                "$filterInfo\nAvailable Tools (${toolNames.size}):\n" +
+                    toolNames.joinToString("\n") { "- $it" }
             } else {
                 "$filterInfo\nNo tools available"
             }
@@ -127,8 +104,8 @@ class GeminiSessionPreparer(
                 )
             )
 
-            // Initialize the Gemini model with both Firebase and protocol tools
-            geminiService.initializeModel(tools, systemPrompt, model, voice, protocolTools)
+            // Initialize the conversation service with tools and prompt
+            conversationService.initialize(mcpToolsResult, systemPrompt, model, voice)
 
         } catch (e: Exception) {
             // Log initialization error to tool log

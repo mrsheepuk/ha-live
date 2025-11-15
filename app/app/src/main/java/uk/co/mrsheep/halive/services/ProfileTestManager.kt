@@ -5,7 +5,12 @@ import android.util.Log
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.SystemPromptConfig
+import uk.co.mrsheep.halive.services.conversation.ConversationService
+import uk.co.mrsheep.halive.services.conversation.ConversationServiceFactory
+import uk.co.mrsheep.halive.services.conversation.ToolCall
+import uk.co.mrsheep.halive.services.conversation.ToolResponse
 import uk.co.mrsheep.halive.ui.ToolCallLog
+import com.google.firebase.ai.type.FunctionCallPart
 
 /**
  * Manages the lifecycle of testing a profile with MockToolExecutor.
@@ -69,10 +74,11 @@ class ProfileTestManager(
     }
 
     /**
-     * Separate Gemini service instance for testing (not shared with main app).
-     * Uses Firebase SDK mode (useDirectProtocol = false) for testing.
+     * Separate conversation service instance for testing (not shared with main app).
+     * Uses factory pattern to select appropriate implementation.
      */
-    private val testGeminiService = GeminiService(app.applicationContext, useDirectProtocol = false)
+    private val testConversationService: ConversationService =
+        ConversationServiceFactory.create(app.applicationContext)
 
     /**
      * Mock tool executor with pass-through for read-only tools.
@@ -84,7 +90,7 @@ class ProfileTestManager(
     /**
      * Session preparer that handles initialization (fetching tools, rendering templates, etc.).
      */
-    private var sessionPreparer: GeminiSessionPreparer? = null
+    private var sessionPreparer: SessionPreparer? = null
 
     /**
      * Fresh MCP connection created for this test session (separate from app's shared connection).
@@ -102,10 +108,10 @@ class ProfileTestManager(
      *
      * This method:
      * 1. Transitions to "Initializing..." state
-     * 2. Creates a GeminiSessionPreparer with MockToolExecutor
+     * 2. Creates a SessionPreparer with MockToolExecutor
      * 3. Gets the default system prompt from SystemPromptConfig
      * 4. Prepares the session with the profile (fetches tools, renders templates, etc.)
-     * 5. Initializes the Gemini model with mock tools
+     * 5. Initializes the conversation service with mock tools
      * 6. Starts an audio conversation session
      * 7. Transitions to "Active" state
      *
@@ -142,7 +148,7 @@ class ProfileTestManager(
             mockToolExecutor = MockToolExecutor(realExecutor = toolExecutor)
 
             // Create a new session preparer for this test using MockToolExecutor
-            sessionPreparer = GeminiSessionPreparer(
+            sessionPreparer = SessionPreparer(
                 mcpClient = mcpClient!!,
                 haApiClient = haApiClient,
                 toolExecutor = mockToolExecutor!!,
@@ -152,19 +158,35 @@ class ProfileTestManager(
             // Get default system prompt from SystemPromptConfig
             val defaultSystemPrompt = SystemPromptConfig.getSystemPrompt(context)
 
-            // Prepare and initialize the Gemini session with the profile
+            // Prepare and initialize the conversation session with the profile
             sessionPreparer?.prepareAndInitialize(
                 profile = profile,
-                geminiService = testGeminiService,
+                conversationService = testConversationService,
                 defaultSystemPrompt = defaultSystemPrompt
             )
 
-            // Start the audio conversation with mock function handler
-            testGeminiService.startSession(
-                functionCallHandler = { call ->
-                    mockToolExecutor!!.executeTool(call)
+            // Start the audio conversation with mock tool call handler
+            testConversationService.startSession(
+                onToolCall = { domainCall: ToolCall ->
+                    // Convert domain ToolCall to Firebase FunctionCallPart for MockToolExecutor
+                    val firebaseCall = FunctionCallPart(
+                        name = domainCall.name,
+                        id = domainCall.id,
+                        args = domainCall.arguments
+                    )
+
+                    // Execute with mock executor (uses Firebase types)
+                    val firebaseResponse = mockToolExecutor!!.executeTool(firebaseCall)
+
+                    // Convert Firebase FunctionResponsePart to domain ToolResponse
+                    val resultText = firebaseResponse.response?.toString() ?: ""
+                    ToolResponse(
+                        id = domainCall.id,
+                        name = domainCall.name,
+                        result = resultText
+                    )
                 },
-                transcriptHandler = null
+                onTranscript = null
             )
 
             isTestActive = true
@@ -193,17 +215,17 @@ class ProfileTestManager(
      * Stops the active test session.
      *
      * This method:
-     * 1. Stops the Gemini service audio session
+     * 1. Stops the conversation service audio session
      * 2. Sets isTestActive to false
      * 3. Transitions to "Stopped" state
      * 4. Clears the MockToolExecutor call history
      *
      * Safe to call even if no session is active.
      */
-    fun stopTest() {
+    suspend fun stopTest() {
         try {
             if (isTestActive) {
-                testGeminiService.stopSession()
+                testConversationService.stopSession()
                 Log.d(TAG, "Test session stopped")
             }
 
