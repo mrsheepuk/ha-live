@@ -363,8 +363,8 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Format logs in reverse order (newest first)
-        val formattedLogs = logs.reversed().joinToString("\n\n") { log ->
+        // Format logs in chronological order (oldest first)
+        val formattedLogs = logs.joinToString("\n\n") { log ->
             val statusIcon = if (log.success) "✓" else "✗"
             val statusColor = if (log.success) "SUCCESS" else "FAILED"
 
@@ -377,6 +377,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         toolLogText.text = formattedLogs
+
+        // Auto-scroll to bottom to show most recent log entry
+        logContentScroll.post {
+            logContentScroll.fullScroll(View.FOCUS_DOWN)
+        }
     }
 
     private fun updateWakeWordChipAppearance(enabled: Boolean) {
