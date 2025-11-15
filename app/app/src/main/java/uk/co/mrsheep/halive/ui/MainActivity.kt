@@ -236,7 +236,8 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 statusText.text = "Loading..."
-                wakeWordChip.visibility = View.GONE
+                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.isEnabled = false
             }
             UiState.FirebaseConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -244,7 +245,8 @@ class MainActivity : AppCompatActivity() {
                 mainButton.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 statusText.text = "Please complete onboarding"
-                wakeWordChip.visibility = View.GONE
+                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.isEnabled = false
             }
             UiState.HAConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -252,7 +254,8 @@ class MainActivity : AppCompatActivity() {
                 mainButton.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 statusText.text = "Please complete onboarding"
-                wakeWordChip.visibility = View.GONE
+                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.isEnabled = false
             }
             UiState.Initializing -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -260,7 +263,8 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 statusText.text = "Initializing..."
-                wakeWordChip.visibility = View.GONE
+                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.isEnabled = false
             }
             UiState.ReadyToTalk -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -269,6 +273,7 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Start Chat"
                 wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.isEnabled = true
                 statusText.text = if (viewModel.wakeWordEnabled.value) {
                     "Listening for wake word..."
                 } else {
@@ -284,7 +289,8 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Chat active - listening..."
-                wakeWordChip.visibility = View.GONE
+                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.isEnabled = false
                 // Listener is already active
             }
             is UiState.ExecutingAction -> {
@@ -294,7 +300,8 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Executing ${state.tool}..."
-                wakeWordChip.visibility = View.GONE
+                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.isEnabled = false
             }
             is UiState.Error -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -302,7 +309,8 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.VISIBLE
                 statusText.text = state.message
-                wakeWordChip.visibility = View.GONE
+                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.isEnabled = false
             }
         }
     }
