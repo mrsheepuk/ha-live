@@ -12,6 +12,7 @@ import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
 import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.LocalToolDefinitions
+import uk.co.mrsheep.halive.services.protocol.ToolDeclaration
 import uk.co.mrsheep.halive.ui.ToolCallLog
 
 /**
@@ -55,9 +56,16 @@ class GeminiSessionPreparer(
             // Fetch raw MCP tools and apply filtering
             val (filteredTools, toolNames, totalToolCount) = fetchAndFilterTools(profile)
 
-            // Transform filtered tools to Gemini format
+            // Transform filtered tools to Firebase Gemini format (for SDK mode)
             val mcpTools = filteredTools?.let {
                 GeminiMCPToolTransformer.transform(
+                    McpToolsListResult(it)
+                )
+            } ?: emptyList()
+
+            // Transform filtered tools to protocol format (for direct protocol mode)
+            val protocolTools = filteredTools?.let {
+                GeminiProtocolToolTransformer.transform(
                     McpToolsListResult(it)
                 )
             } ?: emptyList()
@@ -66,7 +74,7 @@ class GeminiSessionPreparer(
             val localFunctionDeclarations = listOf(LocalToolDefinitions.createEndConversationTool())
             val localTools = Tool.functionDeclarations(localFunctionDeclarations)
 
-            // Combine MCP tools with local tools
+            // Combine MCP tools with local tools (Firebase format)
             val tools = mcpTools + localTools
 
             // Update toolNames to include synthetic tools
@@ -119,8 +127,8 @@ class GeminiSessionPreparer(
                 )
             )
 
-            // Initialize the Gemini model
-            geminiService.initializeModel(tools, systemPrompt, model, voice)
+            // Initialize the Gemini model with both Firebase and protocol tools
+            geminiService.initializeModel(tools, systemPrompt, model, voice, protocolTools)
 
         } catch (e: Exception) {
             // Log initialization error to tool log

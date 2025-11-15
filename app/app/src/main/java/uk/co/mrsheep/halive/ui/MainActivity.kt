@@ -228,6 +228,32 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showGeminiApiKeyDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_text_input, null)
+        val editText = dialogView.findViewById<EditText>(R.id.inputText)
+        editText.hint = "Enter your Gemini API key"
+
+        AlertDialog.Builder(this)
+            .setTitle("Gemini API Key Required")
+            .setMessage("Direct protocol mode requires a Gemini API key. Get one from https://aistudio.google.com/apikey")
+            .setView(dialogView)
+            .setPositiveButton("Save") { dialog, _ ->
+                val apiKey = editText.text.toString().trim()
+                if (apiKey.isNotBlank()) {
+                    viewModel.saveGeminiApiKey(apiKey)
+                    dialog.dismiss()
+                } else {
+                    Toast.makeText(this, "API key cannot be empty", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel") { dialog, _ ->
+                dialog.dismiss()
+                finish() // Exit app if user cancels
+            }
+            .setCancelable(false)
+            .show()
+    }
+
     private fun updateUiForState(state: UiState) {
         when (state) {
             UiState.Loading -> {
@@ -256,6 +282,15 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Please complete onboarding"
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
+            }
+            UiState.GeminiConfigNeeded -> {
+                audioVisualizer.setState(VisualizerState.DORMANT)
+                // Show dialog to enter Gemini API key
+                showGeminiApiKeyDialog()
+                mainButton.isEnabled = false
+                mainButton.visibility = View.VISIBLE
+                statusText.text = "Gemini API key required"
+                wakeWordSwitch.isEnabled = false
             }
             UiState.Initializing -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)

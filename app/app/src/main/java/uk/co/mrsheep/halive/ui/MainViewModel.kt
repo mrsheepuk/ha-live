@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
+import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
@@ -36,6 +37,7 @@ sealed class UiState {
     object Loading : UiState()
     object FirebaseConfigNeeded : UiState()  // Need google-services.json
     object HAConfigNeeded : UiState()        // Need HA URL + token
+    object GeminiConfigNeeded : UiState()    // Need Gemini API key (direct protocol mode)
     object ReadyToTalk : UiState()           // Everything initialized, ready to start chat
     object Initializing : UiState()          // Initializing Gemini model when starting chat
     object ChatActive : UiState()            // Chat session is active (listening or executing)
@@ -86,7 +88,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var hasCheckedAutoStart = false
 
     private val app = application as HAGeminiApp
-    private val geminiService = GeminiService()
+    // GeminiService with direct protocol mode enabled by default
+    private val geminiService = GeminiService(application, useDirectProtocol = true)
     private lateinit var sessionPreparer: GeminiSessionPreparer
 
     // Wake word service for foreground detection
@@ -134,7 +137,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            // Step 3: Store HA credentials and initialize API client (MCP connection created per-session)
+            // Step 3: Check Gemini API key (if using direct protocol)
+            if (!GeminiConfig.isConfigured(getApplication())) {
+                _uiState.value = UiState.GeminiConfigNeeded
+                return@launch
+            }
+
+            // Step 4: Store HA credentials and initialize API client (MCP connection created per-session)
             try {
                 val (haUrl, haToken) = HAConfig.loadConfig(getApplication())!!
                 app.initializeHomeAssistant(haUrl, haToken)
@@ -224,6 +233,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Clear bad config
                 HAConfig.clearConfig(getApplication())
             }
+        }
+    }
+
+    /**
+     * Called by MainActivity when user provides Gemini API key.
+     * Saves the API key and checks configuration again.
+     */
+    fun saveGeminiApiKey(apiKey: String) {
+        try {
+            // Validate input
+            if (apiKey.isBlank()) {
+                _uiState.value = UiState.Error("API key cannot be empty")
+                return
+            }
+
+            // Save API key
+            GeminiConfig.saveApiKey(getApplication(), apiKey)
+            Log.d(TAG, "Gemini API key saved")
+
+            // Re-check configuration (should move to ReadyToTalk if all configs are present)
+            checkConfiguration()
+        } catch (e: Exception) {
+            _uiState.value = UiState.Error("Failed to save Gemini API key: ${e.message}")
         }
     }
 
