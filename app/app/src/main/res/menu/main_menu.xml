@@ -4,11 +4,11 @@
     <item
         android:id="@+id/action_profiles"
         android:title="Switch Profile"
-        android:icon="@android:drawable/ic_menu_agenda"
+        android:icon="@drawable/ic_profiles"
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_settings"
         android:title="Settings"
-        android:icon="@android:drawable/ic_menu_preferences"
+        android:icon="@drawable/ic_settings"
         app:showAsAction="ifRoom" />
 </menu>

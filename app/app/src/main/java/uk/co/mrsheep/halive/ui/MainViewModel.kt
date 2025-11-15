@@ -78,6 +78,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _wakeWordEnabled = MutableStateFlow(false)
     val wakeWordEnabled: StateFlow<Boolean> = _wakeWordEnabled
 
+    // Log expanded state (for collapsible log UI)
+    private val _logExpanded = MutableStateFlow(false)
+    val logExpanded: StateFlow<Boolean> = _logExpanded
+
     // Track if this is the first initialization (survives activity recreation, not process death)
     private var hasCheckedAutoStart = false
 
@@ -415,6 +419,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // User turned it ON and we're ready -> start listening
             startWakeWordListening()
         }
+    }
+
+    /**
+     * Toggle log expanded state.
+     * Called by UI when user clicks to expand/collapse the tool call logs.
+     */
+    fun toggleLogExpanded() {
+        _logExpanded.value = !_logExpanded.value
     }
 
     /**
