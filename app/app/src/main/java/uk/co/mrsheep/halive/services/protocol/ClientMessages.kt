@@ -17,7 +17,7 @@ data class ClientMessage(
     @SerialName("tool_response")
     val toolResponse: ToolResponseMessage? = null,
     @SerialName("client_content")
-    val clientContent: ClientContentMessage? = null
+    val clientContent: ClientContent? = null  // Direct reference, no wrapper
 )
 
 // --- SetupMessage (first message after connection) ---
@@ -97,13 +97,7 @@ data class FunctionResponse(
     val response: JsonElement? = null // The result of tool execution
 )
 
-// --- ClientContentMessage (send text) ---
-
-@Serializable
-data class ClientContentMessage(
-    @SerialName("client_content")
-    val clientContent: ClientContent
-)
+// --- ClientContent (send text) ---
 
 @Serializable
 data class ClientContent(

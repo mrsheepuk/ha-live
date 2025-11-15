@@ -419,13 +419,11 @@ class GeminiLiveSession(
             Log.d(TAG, "Sending text: $text")
 
             val message = ClientMessage(
-                clientContent = ClientContentMessage(
-                    clientContent = ClientContent(
-                        turns = listOf(
-                            Turn(
-                                role = "user",
-                                parts = listOf(TextPart(text))
-                            )
+                clientContent = ClientContent(
+                    turns = listOf(
+                        Turn(
+                            role = "user",
+                            parts = listOf(TextPart(text))
                         )
                     )
                 )
