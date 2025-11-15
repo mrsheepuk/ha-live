@@ -27,6 +27,7 @@ class GeminiLiveClient(
         private const val TAG = "GeminiLiveClient"
         private const val API_ENDPOINT = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
         private const val MESSAGE_QUEUE_CAPACITY = 64
+        private const val CONNECTION_TIMEOUT_MS = 5000L
     }
 
     private val json = Json {
@@ -50,13 +51,22 @@ class GeminiLiveClient(
     private var isConnected = false
     private val connectionMutex = Mutex()
 
+    // Deferred to signal when the WebSocket connection is actually open
+    private var connectionDeferred: CompletableDeferred<Boolean>? = null
+
     /**
      * Expose the message flow for consumers
      */
     fun messages(): Flow<ServerMessage> = messageFlow
 
     /**
-     * Establish WebSocket connection to Gemini Live API
+     * Establish WebSocket connection to Gemini Live API.
+     *
+     * This function initiates the WebSocket connection and waits for the onOpen callback
+     * to be called before returning. It will timeout if the connection doesn't establish
+     * within CONNECTION_TIMEOUT_MS.
+     *
+     * @return true if connection succeeded, false if it failed or timed out
      */
     suspend fun connect(): Boolean {
         return connectionMutex.withLock {
@@ -68,21 +78,41 @@ class GeminiLiveClient(
 
                 Log.d(TAG, "Connecting to Gemini Live API...")
 
+                // Create a new deferred for this connection attempt
+                connectionDeferred = CompletableDeferred()
+
                 val url = "$API_ENDPOINT?key=$apiKey"
                 val request = Request.Builder()
                     .url(url)
                     .build()
 
+                // Initiate the WebSocket connection (asynchronous)
                 webSocket = httpClient.newWebSocket(request, this@GeminiLiveClient)
+                Log.d(TAG, "WebSocket connection initiated, waiting for onOpen...")
 
-                // Wait for connection to establish
-                isConnected = true
-                Log.d(TAG, "WebSocket connection initiated")
-                true
+                // Wait for onOpen() to complete the deferred, or timeout
+                val connected = withTimeoutOrNull(CONNECTION_TIMEOUT_MS) {
+                    connectionDeferred?.await()
+                } ?: false
+
+                if (connected) {
+                    Log.d(TAG, "WebSocket connected successfully")
+                    true
+                } else {
+                    Log.e(TAG, "WebSocket connection timed out after ${CONNECTION_TIMEOUT_MS}ms")
+                    webSocket?.close(1000, "Connection timeout")
+                    webSocket = null
+                    isConnected = false
+                    false
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Connection failed", e)
+                webSocket?.close(1000, "Connection error")
+                webSocket = null
                 isConnected = false
                 false
+            } finally {
+                connectionDeferred = null
             }
         }
     }
@@ -136,6 +166,8 @@ class GeminiLiveClient(
         scope.launch {
             connectionMutex.withLock {
                 isConnected = true
+                // Signal that the connection is ready
+                connectionDeferred?.complete(true)
             }
         }
     }
@@ -179,6 +211,8 @@ class GeminiLiveClient(
         scope.launch {
             connectionMutex.withLock {
                 isConnected = false
+                // Signal connection failure if we're still waiting for connection
+                connectionDeferred?.complete(false)
             }
         }
     }
