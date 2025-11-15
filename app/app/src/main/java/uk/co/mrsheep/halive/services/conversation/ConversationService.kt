@@ -52,7 +52,7 @@ interface ConversationService {
     /**
      * Stop the current session.
      */
-    suspend fun stopSession()
+    fun stopSession()
 
     /**
      * Clean up resources.

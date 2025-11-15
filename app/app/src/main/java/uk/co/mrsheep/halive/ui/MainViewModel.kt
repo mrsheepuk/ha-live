@@ -389,9 +389,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun stopChat() {
         BeepHelper.playEndBeep(getApplication())
         try {
-            viewModelScope.launch {
-                conversationService.stopSession()
-            }
+            conversationService.stopSession()
         } catch (e: Exception) {
             _uiState.value = UiState.Error("Failed to stop session: ${e.message}")
         }
@@ -477,7 +475,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .joinToString("\n")
 
                 // Check if it's an error
-                val isError = resultText.contains("\"error\"") || !mcpResult.isSuccess
+                val isError = resultText.contains("\"error\"") || (mcpResult.isError == true)
 
                 // Log the call
                 addToolLog(

@@ -195,7 +195,7 @@ class FirebaseConversationService(private val context: Context) : ConversationSe
      * Gracefully closes the WebSocket connection and cleans up resources.
      */
     @OptIn(PublicPreviewAPI::class)
-    override suspend fun stopSession() {
+    override fun stopSession() {
         try {
             if (liveSession != null) {
                 runBlocking {

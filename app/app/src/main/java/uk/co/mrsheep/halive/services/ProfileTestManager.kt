@@ -222,7 +222,7 @@ class ProfileTestManager(
      *
      * Safe to call even if no session is active.
      */
-    suspend fun stopTest() {
+    fun stopTest() {
         try {
             if (isTestActive) {
                 testConversationService.stopSession()

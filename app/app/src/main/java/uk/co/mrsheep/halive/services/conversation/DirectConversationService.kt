@@ -184,7 +184,7 @@ class DirectConversationService(private val context: Context) : ConversationServ
     /**
      * Stop the current session.
      */
-    override suspend fun stopSession() {
+    override fun stopSession() {
         try {
             session?.close()
             session = null
