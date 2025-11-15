@@ -25,7 +25,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import uk.co.mrsheep.halive.core.GeminiConfig
+import uk.co.mrsheep.halive.services.GeminiMCPToolExecutor
 import uk.co.mrsheep.halive.services.protocol.FunctionCall
 import uk.co.mrsheep.halive.services.protocol.FunctionResponse
 import uk.co.mrsheep.halive.services.protocol.ToolCallData
@@ -93,10 +96,12 @@ class GeminiService(
     suspend fun startSession(
         // The ViewModel passes a lambda that knows how to call the repository
         functionCallHandler: suspend (FunctionCallPart) -> FunctionResponsePart,
-        transcriptHandler: ((Transcription?, Transcription?) -> Unit)? = null
+        transcriptHandler: ((Transcription?, Transcription?) -> Unit)? = null,
+        // Direct protocol needs the tool executor directly to avoid Firebase internal constructors
+        toolExecutor: GeminiMCPToolExecutor? = null
     ) {
         if (useDirectProtocol) {
-            startDirectSession(functionCallHandler, transcriptHandler)
+            startDirectSession(toolExecutor, transcriptHandler)
         } else {
             startFirebaseSession(functionCallHandler, transcriptHandler)
         }
@@ -135,10 +140,10 @@ class GeminiService(
 
     /**
      * Start direct protocol session
-     * Adapts protocol callbacks (FunctionCall) to Firebase format (FunctionCallPart)
+     * Bypasses Firebase types to avoid internal constructor issues
      */
     private suspend fun startDirectSession(
-        functionCallHandler: suspend (FunctionCallPart) -> FunctionResponsePart,
+        toolExecutor: GeminiMCPToolExecutor?,
         transcriptHandler: ((Transcription?, Transcription?) -> Unit)? = null
     ) {
         try {
@@ -148,38 +153,43 @@ class GeminiService(
 
             Log.d(TAG, "Starting direct protocol session with API key")
 
+            val executor = toolExecutor ?: throw IllegalStateException("Tool executor required for direct protocol mode")
+
             // Create session
             directSession = GeminiLiveSession(apiKey, context)
 
-            // Adapt protocol callbacks to Firebase format
-            val adaptedToolCallHandler: suspend (FunctionCall) -> FunctionResponse = { protocolCall ->
+            // Direct tool call handler - bypasses Firebase types entirely
+            val directToolCallHandler: suspend (FunctionCall) -> FunctionResponse = { protocolCall ->
                 try {
-                    // Convert JsonElement to Map<String, Any> for Firebase SDK
+                    // Convert JsonElement args to Map<String, JsonElement> for executor
                     val argsMap = protocolCall.args?.let { jsonElement ->
                         if (jsonElement is kotlinx.serialization.json.JsonObject) {
-                            jsonElement.toMap().mapValues { (_, value) ->
-                                convertJsonElementToAny(value)
-                            }
+                            jsonElement.toMap()
                         } else {
                             emptyMap()
                         }
                     } ?: emptyMap()
 
-                    // Convert protocol format to Firebase format
-                    val firebaseCall = FunctionCallPart(
+                    // Execute via MCP executor directly
+                    val mcpCall = uk.co.mrsheep.halive.services.mcp.ToolCall(
                         name = protocolCall.name,
-                        args = argsMap,
-                        id = protocolCall.id
+                        arguments = argsMap
                     )
 
-                    // Execute via Firebase handler
-                    val firebaseResponse = functionCallHandler(firebaseCall)
+                    val result = executor.mcpClient.callTool(protocolCall.name, argsMap)
 
-                    // Convert back to protocol format
+                    // Build JSON response from MCP result
+                    val resultJson = buildJsonObject {
+                        result.content.filter { it.type == "text" }.mapNotNull { it.text }.joinToString("\n").let {
+                            put("result", kotlinx.serialization.json.Json.parseToJsonElement(it))
+                        }
+                    }
+
+                    // Convert to protocol format
                     FunctionResponse(
                         id = protocolCall.id,
                         name = protocolCall.name,
-                        response = firebaseResponse.response
+                        response = resultJson
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Error executing tool call", e)
@@ -191,13 +201,14 @@ class GeminiService(
                 }
             }
 
-            // Adapt transcription callback
-            val adaptedTranscriptionHandler: ((String?, String?) -> Unit)? =
+            // Simple transcription callback - just pass strings
+            val simpleTranscriptionHandler: ((String?, String?) -> Unit)? =
                 if (transcriptHandler != null) {
                     { userText: String?, modelText: String? ->
-                        val userTranscription = userText?.let { Transcription(it) }
-                        val modelTranscription = modelText?.let { Transcription(it) }
-                        transcriptHandler(userTranscription, modelTranscription)
+                        // Can't create Transcription objects (internal constructor)
+                        // For now, skip transcriptions in direct protocol mode
+                        // TODO: Add transcription support without Firebase types
+                        Log.d(TAG, "Transcription: user='$userText', model='$modelText'")
                     }
                 } else {
                     null
@@ -209,8 +220,8 @@ class GeminiService(
                 systemPrompt = directProtocolSystemPrompt ?: "",
                 tools = directProtocolTools ?: emptyList(),
                 voiceName = directProtocolVoice ?: "Aoede",
-                onToolCall = adaptedToolCallHandler,
-                onTranscription = adaptedTranscriptionHandler
+                onToolCall = directToolCallHandler,
+                onTranscription = simpleTranscriptionHandler
             )
 
             Log.d(TAG, "Direct protocol session started successfully")
@@ -277,34 +288,6 @@ class GeminiService(
         directProtocolModel = null
         directProtocolVoice = null
         generativeModel = null
-    }
-
-    /**
-     * Convert JsonElement to Any for Firebase SDK compatibility.
-     * Handles primitives, objects, and arrays recursively.
-     */
-    private fun convertJsonElementToAny(element: JsonElement): Any? {
-        return when (element) {
-            is kotlinx.serialization.json.JsonPrimitive -> {
-                when {
-                    element.isString -> element.content
-                    element.content == "null" -> null
-                    element.content == "true" -> true
-                    element.content == "false" -> false
-                    element.content.toIntOrNull() != null -> element.content.toInt()
-                    element.content.toLongOrNull() != null -> element.content.toLong()
-                    element.content.toDoubleOrNull() != null -> element.content.toDouble()
-                    else -> element.content
-                }
-            }
-            is kotlinx.serialization.json.JsonObject -> {
-                element.toMap().mapValues { (_, value) -> convertJsonElementToAny(value) }
-            }
-            is kotlinx.serialization.json.JsonArray -> {
-                element.map { convertJsonElementToAny(it) }
-            }
-            else -> null
-        }
     }
 
     companion object {

@@ -229,25 +229,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showGeminiApiKeyDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_text_input, null)
-        val editText = dialogView.findViewById<EditText>(R.id.inputText)
-        editText.hint = "Enter your Gemini API key"
+        // Create EditText programmatically
+        val editText = EditText(this).apply {
+            hint = "Enter your Gemini API key"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setPadding(60, 40, 60, 40)
+        }
 
         AlertDialog.Builder(this)
             .setTitle("Gemini API Key Required")
             .setMessage("Direct protocol mode requires a Gemini API key. Get one from https://aistudio.google.com/apikey")
-            .setView(dialogView)
-            .setPositiveButton("Save") { dialog, _ ->
+            .setView(editText)
+            .setPositiveButton("Save") { _, _ ->
                 val apiKey = editText.text.toString().trim()
                 if (apiKey.isNotBlank()) {
                     viewModel.saveGeminiApiKey(apiKey)
-                    dialog.dismiss()
                 } else {
                     Toast.makeText(this, "API key cannot be empty", Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton("Cancel") { dialog, _ ->
-                dialog.dismiss()
+            .setNegativeButton("Cancel") { _, _ ->
                 finish() // Exit app if user cancels
             }
             .setCancelable(false)

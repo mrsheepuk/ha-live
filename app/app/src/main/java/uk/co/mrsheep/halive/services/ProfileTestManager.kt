@@ -70,8 +70,9 @@ class ProfileTestManager(
 
     /**
      * Separate Gemini service instance for testing (not shared with main app).
+     * Uses Firebase SDK mode (useDirectProtocol = false) for testing.
      */
-    private val testGeminiService = GeminiService()
+    private val testGeminiService = GeminiService(app.applicationContext, useDirectProtocol = false)
 
     /**
      * Mock tool executor with pass-through for read-only tools.

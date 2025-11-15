@@ -352,7 +352,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Start the session, passing our Task 2 executor as the handler
                 geminiService.startSession(
                     functionCallHandler = ::executeHomeAssistantTool,
-                    transcriptHandler = transcriptHandler
+                    transcriptHandler = transcriptHandler,
+                    toolExecutor = app.toolExecutor // For direct protocol mode
                 )
 
                 // Play ready beep to indicate session is active

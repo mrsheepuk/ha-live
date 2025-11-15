@@ -4,6 +4,8 @@ import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -46,7 +48,7 @@ class GeminiLiveClient(
     )
 
     private var isConnected = false
-    private val connectionMutex = kotlinx.coroutines.sync.Mutex()
+    private val connectionMutex = Mutex()
 
     /**
      * Expose the message flow for consumers
@@ -56,12 +58,12 @@ class GeminiLiveClient(
     /**
      * Establish WebSocket connection to Gemini Live API
      */
-    suspend fun connect(): Boolean = withContext(Dispatchers.IO) {
-        connectionMutex.withLock {
+    suspend fun connect(): Boolean {
+        return connectionMutex.withLock {
             try {
                 if (isConnected) {
                     Log.d(TAG, "Already connected")
-                    return@withContext true
+                    return@withLock true
                 }
 
                 Log.d(TAG, "Connecting to Gemini Live API...")

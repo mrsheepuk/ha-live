@@ -7,10 +7,13 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -254,20 +257,24 @@ class GeminiAudioManager {
             Log.d(TAG, "Starting playback: bufferSize=$bufferSize bytes")
 
             try {
-                // Initialize AudioTrack with modern API (requires API 21+)
-                audioTrack = AudioTrack(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build(),
-                    AudioFormat.Builder()
-                        .setSampleRate(PLAYBACK_SAMPLE_RATE)
-                        .setChannelMask(PLAYBACK_CHANNEL_CONFIG)
-                        .setEncoding(PLAYBACK_AUDIO_FORMAT)
-                        .build(),
-                    bufferSize,
-                    AudioTrack.MODE_STREAM
-                )
+                // Initialize AudioTrack with Builder API (requires API 23+)
+                audioTrack = AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setSampleRate(PLAYBACK_SAMPLE_RATE)
+                            .setChannelMask(PLAYBACK_CHANNEL_CONFIG)
+                            .setEncoding(PLAYBACK_AUDIO_FORMAT)
+                            .build()
+                    )
+                    .setBufferSizeInBytes(bufferSize)
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .build()
 
                 val track = audioTrack ?: throw IllegalStateException("Failed to create AudioTrack")
 
