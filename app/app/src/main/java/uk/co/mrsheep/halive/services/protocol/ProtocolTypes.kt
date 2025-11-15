@@ -4,10 +4,12 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.json.JsonClassDiscriminator
 
 // --- Part (text and inlineData variants) ---
 
 @Serializable
+@JsonClassDiscriminator("") // Suppress the "type" field - discriminator is implicit from field presence
 sealed class Part {
     @Serializable
     @SerialName("text")
