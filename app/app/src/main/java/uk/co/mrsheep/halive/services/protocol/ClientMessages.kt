@@ -113,5 +113,5 @@ data class ClientContent(
 @Serializable
 data class Turn(
     val role: String, // "user"
-    val parts: List<Part>
+    val parts: List<TextPart>  // Use TextPart directly instead of polymorphic Part
 )
