@@ -13,11 +13,11 @@ import kotlinx.serialization.json.JsonElement
 data class ClientMessage(
     val setup: SetupMessage? = null,
     @SerialName("realtime_input")
-    val realtimeInput: RealtimeInputMessage? = null,
+    val realtimeInput: RealtimeInput? = null,
     @SerialName("tool_response")
-    val toolResponse: ToolResponseMessage? = null,
+    val toolResponse: ToolResponse? = null,
     @SerialName("client_content")
-    val clientContent: ClientContent? = null  // Direct reference, no wrapper
+    val clientContent: ClientContent? = null
 )
 
 // --- SetupMessage (first message after connection) ---
@@ -64,11 +64,6 @@ data class PrebuiltVoiceConfig(
 
 // --- RealtimeInputMessage (streaming audio) ---
 
-@Serializable
-data class RealtimeInputMessage(
-    @SerialName("realtime_input")
-    val realtimeInput: RealtimeInput
-)
 
 @Serializable
 data class RealtimeInput(
@@ -77,12 +72,6 @@ data class RealtimeInput(
 )
 
 // --- ToolResponseMessage (reply to function calls) ---
-
-@Serializable
-data class ToolResponseMessage(
-    @SerialName("tool_response")
-    val toolResponse: ToolResponse
-)
 
 @Serializable
 data class ToolResponse(

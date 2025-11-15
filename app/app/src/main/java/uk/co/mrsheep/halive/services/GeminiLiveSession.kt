@@ -17,7 +17,6 @@ import kotlinx.serialization.json.Json
 import java.util.concurrent.TimeoutException
 import uk.co.mrsheep.halive.services.audio.GeminiAudioManager
 import uk.co.mrsheep.halive.services.protocol.ClientContent
-import uk.co.mrsheep.halive.services.protocol.ClientContentMessage
 import uk.co.mrsheep.halive.services.protocol.ClientMessage
 import uk.co.mrsheep.halive.services.protocol.Content
 import uk.co.mrsheep.halive.services.protocol.FunctionCall
@@ -26,7 +25,6 @@ import uk.co.mrsheep.halive.services.protocol.GenerationConfig
 import uk.co.mrsheep.halive.services.protocol.MediaChunk
 import uk.co.mrsheep.halive.services.protocol.PrebuiltVoiceConfig
 import uk.co.mrsheep.halive.services.protocol.RealtimeInput
-import uk.co.mrsheep.halive.services.protocol.RealtimeInputMessage
 import uk.co.mrsheep.halive.services.protocol.ServerMessage
 import uk.co.mrsheep.halive.services.protocol.ServerPart
 import uk.co.mrsheep.halive.services.protocol.SetupMessage
@@ -34,7 +32,6 @@ import uk.co.mrsheep.halive.services.protocol.SpeechConfig
 import uk.co.mrsheep.halive.services.protocol.TextPart
 import uk.co.mrsheep.halive.services.protocol.ToolDeclaration
 import uk.co.mrsheep.halive.services.protocol.ToolResponse
-import uk.co.mrsheep.halive.services.protocol.ToolResponseMessage
 import uk.co.mrsheep.halive.services.protocol.Turn
 import uk.co.mrsheep.halive.services.protocol.VoiceConfig
 
@@ -208,13 +205,11 @@ class GeminiLiveSession(
 
                 // Build RealtimeInputMessage
                 val message = ClientMessage(
-                    realtimeInput = RealtimeInputMessage(
-                        realtimeInput = RealtimeInput(
-                            mediaChunks = listOf(
-                                MediaChunk(
-                                    mimeType = "audio/pcm",
-                                    data = base64Audio
-                                )
+                    realtimeInput = RealtimeInput(
+                        mediaChunks = listOf(
+                            MediaChunk(
+                                mimeType = "audio/pcm",
+                                data = base64Audio
                             )
                         )
                     )
@@ -360,10 +355,8 @@ class GeminiLiveSession(
 
                 // Send response back to server
                 val responseMessage = ClientMessage(
-                    toolResponse = ToolResponseMessage(
-                        toolResponse = ToolResponse(
-                            functionResponses = listOf(response)
-                        )
+                    toolResponse = ToolResponse(
+                        functionResponses = listOf(response)
                     )
                 )
 
@@ -378,14 +371,12 @@ class GeminiLiveSession(
                 // Send error response
                 try {
                     val errorResponse = ClientMessage(
-                        toolResponse = ToolResponseMessage(
-                            toolResponse = ToolResponse(
-                                functionResponses = listOf(
-                                    FunctionResponse(
-                                        id = functionCall.id,
-                                        name = functionCall.name,
-                                        response = null // Tool executor should handle error
-                                    )
+                        toolResponse = ToolResponse(
+                            functionResponses = listOf(
+                                FunctionResponse(
+                                    id = functionCall.id,
+                                    name = functionCall.name,
+                                    response = null // Tool executor should handle error
                                 )
                             )
                         )
