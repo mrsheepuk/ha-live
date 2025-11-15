@@ -255,6 +255,8 @@ class GeminiLiveSession(
                     return@collect
                 }
 
+                Log.d(TAG, "Message received")
+
                 when (message) {
                     is ServerMessage.Content -> {
                         handleContentMessage(message, onTranscription)

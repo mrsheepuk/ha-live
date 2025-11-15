@@ -6,11 +6,7 @@ import android.graphics.Color
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
-import android.util.Log
 import android.view.View
-import android.view.ViewGroup
-import android.view.animation.Animation
-import android.view.animation.Transformation
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.Button
@@ -119,7 +115,7 @@ class ProfileEditorActivity : AppCompatActivity() {
     private lateinit var testToolLogText: TextView
     private var testManager: ProfileTestManager? = null
     private var isTestActive = false
-    private val testLogs = mutableListOf<ToolCallLog>()
+    private val testLogs = mutableListOf<LogEntry>()
 
     // Expansion state
     private var isSystemPromptExpanded = true
@@ -192,7 +188,7 @@ class ProfileEditorActivity : AppCompatActivity() {
         voiceInput = findViewById(R.id.voiceInput)
 
         // Setup model dropdown - hardcoded single option for now
-        val modelOptions = arrayOf("gemini-live-2.5-flash-preview", "gemini-live-2.5-flash-preview-native-audio-09-2025")
+        val modelOptions = arrayOf("gemini-live-2.5-flash-preview", "gemini-2.5-flash-native-audio-preview-09-2025")
         val modelAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, modelOptions)
         modelInput.setAdapter(modelAdapter)
         modelInput.setText(modelOptions[0], false) // Set default

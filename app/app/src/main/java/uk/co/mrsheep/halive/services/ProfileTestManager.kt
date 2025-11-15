@@ -9,7 +9,7 @@ import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.conversation.ConversationServiceFactory
 import uk.co.mrsheep.halive.services.conversation.ToolCall
 import uk.co.mrsheep.halive.services.conversation.ToolResponse
-import uk.co.mrsheep.halive.ui.ToolCallLog
+import uk.co.mrsheep.halive.ui.LogEntry
 import com.google.firebase.ai.type.FunctionCallPart
 
 /**
@@ -54,7 +54,7 @@ import com.google.firebase.ai.type.FunctionCallPart
  */
 class ProfileTestManager(
     private val app: HAGeminiApp,
-    private val onLogEntry: (ToolCallLog) -> Unit,
+    private val onLogEntry: (LogEntry) -> Unit,
     private val onStatusChange: (TestStatus) -> Unit
 ) {
 

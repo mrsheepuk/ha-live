@@ -26,9 +26,6 @@ import com.google.android.material.button.MaterialButton
 import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.HAConfig
-import uk.co.mrsheep.halive.core.Profile
-import uk.co.mrsheep.halive.ui.AudioVisualizerView
-import uk.co.mrsheep.halive.ui.VisualizerState
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -356,7 +353,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateToolLogs(logs: List<ToolCallLog>) {
+    private fun updateToolLogs(logs: List<LogEntry>) {
         if (logs.isEmpty()) {
             toolLogText.text = "Log will appear here..."
             return

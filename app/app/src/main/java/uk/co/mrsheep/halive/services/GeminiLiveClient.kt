@@ -99,6 +99,7 @@ class GeminiLiveClient(
 
                 if (connected) {
                     Log.d(TAG, "WebSocket connected successfully")
+                    isConnected = true
                     true
                 } else {
                     Log.e(TAG, "WebSocket connection timed out after ${CONNECTION_TIMEOUT_MS}ms")
@@ -169,13 +170,6 @@ class GeminiLiveClient(
         // Signal that the connection is ready FIRST (before acquiring mutex)
         // This prevents deadlock with connect() which holds the mutex while waiting
         connectionDeferred?.complete(true)
-
-        // Then update isConnected under mutex
-        scope.launch {
-            connectionMutex.withLock {
-                isConnected = true
-            }
-        }
     }
 
     override fun onMessage(webSocket: WebSocket, text: String) {
@@ -198,6 +192,7 @@ class GeminiLiveClient(
         // For now, just coerce to string (feels wrong but let's see)
         try {
             val message = json.decodeFromString(ServerMessage.serializer(), bytes.string(Charset.defaultCharset()))
+            Log.d(TAG, "Received JSON $message")
             scope.launch {
                 messageFlow.emit(message)
             }

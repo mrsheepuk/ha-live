@@ -7,9 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
-import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
-import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.core.WakeWordConfig
@@ -28,10 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 
 // Define the different states our UI can be in
 sealed class UiState {
@@ -46,7 +41,7 @@ sealed class UiState {
 }
 
 // Represents a tool call log entry
-data class ToolCallLog(
+data class LogEntry(
     val timestamp: String,
     val toolName: String,
     val parameters: String,
@@ -54,7 +49,11 @@ data class ToolCallLog(
     val result: String
 )
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+public interface AppLogger {
+    fun addLogEntry(log: LogEntry)
+}
+
+class MainViewModel(application: Application) : AndroidViewModel(application), AppLogger {
 
     companion object {
         private const val TAG = "MainViewModel"
@@ -66,8 +65,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState
 
-    private val _toolLogs = MutableStateFlow<List<ToolCallLog>>(emptyList())
-    val toolLogs: StateFlow<List<ToolCallLog>> = _toolLogs
+    private val _toolLogs = MutableStateFlow<List<LogEntry>>(emptyList())
+    val toolLogs: StateFlow<List<LogEntry>> = _toolLogs
 
     private val _systemPrompt = MutableStateFlow("")
     val systemPrompt: StateFlow<String> = _systemPrompt
@@ -276,7 +275,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     mcpClient = app.mcpClient!!,
                     haApiClient = app.haApiClient!!,
                     toolExecutor = app.toolExecutor!!,
-                    onLogEntry = ::addToolLog
+                    onLogEntry = ::addLogEntry
                 )
 
                 // Initialize Gemini with fresh tools and system prompt
@@ -297,8 +296,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                             // Log user transcription (only if not null/empty)
                             transcriptInfo.userText?.takeIf { it.isNotBlank() }?.let { text ->
-                                addToolLog(
-                                    ToolCallLog(
+                                addLogEntry(
+                                    LogEntry(
                                         timestamp = timestamp,
                                         toolName = "🎤 User",
                                         parameters = "",
@@ -310,8 +309,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                             // Log model transcription (only if not null/empty)
                             transcriptInfo.modelText?.takeIf { it.isNotBlank() }?.let { text ->
-                                addToolLog(
-                                    ToolCallLog(
+                                addLogEntry(
+                                    LogEntry(
                                         timestamp = timestamp,
                                         toolName = "🔊 Model",
                                         parameters = "",
@@ -345,8 +344,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 .format(java.util.Date())
 
                             // Log it to tool logs
-                            addToolLog(
-                                ToolCallLog(
+                            addLogEntry(
+                                LogEntry(
                                     timestamp = timestamp,
                                     toolName = "System Startup",
                                     parameters = "Initial Message to Agent",
@@ -358,8 +357,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
                                 .format(java.util.Date())
 
-                            addToolLog(
-                                ToolCallLog(
+                            addLogEntry(
+                                LogEntry(
                                     timestamp = timestamp,
                                     toolName = "System Startup",
                                     parameters = "Initial Message to Agent",
@@ -376,8 +375,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
                     .format(java.util.Date())
 
-                addToolLog(
-                    ToolCallLog(
+                addLogEntry(
+                    LogEntry(
                         timestamp = timestamp,
                         toolName = "Session Start Error",
                         parameters = "Failed to start conversation session",
@@ -494,8 +493,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val isError = resultText.contains("\"error\"") || (mcpResult.isError == true)
 
                 // Log the call
-                addToolLog(
-                    ToolCallLog(
+                addLogEntry(
+                    LogEntry(
                         timestamp = timestamp,
                         toolName = call.name,
                         parameters = paramsString,
@@ -513,8 +512,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         } catch (e: Exception) {
             // Log failed call
-            addToolLog(
-                ToolCallLog(
+            addLogEntry(
+                LogEntry(
                     timestamp = timestamp,
                     toolName = call.name,
                     parameters = paramsString,
@@ -544,8 +543,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .format(java.util.Date())
 
         // Log the tool call
-        addToolLog(
-            ToolCallLog(
+        addLogEntry(
+            LogEntry(
                 timestamp = timestamp,
                 toolName = call.name,
                 parameters = call.arguments.toString(),
@@ -568,7 +567,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun addToolLog(log: ToolCallLog) {
+    override fun addLogEntry(log: LogEntry) {
         _toolLogs.value = _toolLogs.value + log
     }
 

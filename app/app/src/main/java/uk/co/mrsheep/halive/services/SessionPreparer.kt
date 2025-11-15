@@ -9,9 +9,8 @@ import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.core.ToolFilterMode
 import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
-import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.conversation.ConversationService
-import uk.co.mrsheep.halive.ui.ToolCallLog
+import uk.co.mrsheep.halive.ui.LogEntry
 
 /**
  * Encapsulates the heavy initialization logic for preparing a conversation session.
@@ -29,7 +28,7 @@ class SessionPreparer(
     private val mcpClient: McpClientManager,
     private val haApiClient: HomeAssistantApiClient,
     private val toolExecutor: ToolExecutor,
-    private val onLogEntry: (ToolCallLog) -> Unit
+    private val onLogEntry: (LogEntry) -> Unit
 ) {
     companion object {
         private const val TAG = "SessionPreparer"
@@ -95,7 +94,7 @@ class SessionPreparer(
 
             // Log the full generated system prompt
             onLogEntry(
-                ToolCallLog(
+                LogEntry(
                     timestamp = timestamp,
                     toolName = "System Startup",
                     parameters = "Model: $model, Voice: $voice",
@@ -110,7 +109,7 @@ class SessionPreparer(
         } catch (e: Exception) {
             // Log initialization error to tool log
             onLogEntry(
-                ToolCallLog(
+                LogEntry(
                     timestamp = timestamp,
                     toolName = "System Startup",
                     parameters = "Gemini Initialization",
@@ -156,7 +155,7 @@ class SessionPreparer(
                     val missing = selected - available.map { it.name }.toSet()
                     if (missing.isNotEmpty()) {
                         onLogEntry(
-                            ToolCallLog(
+                            LogEntry(
                                 timestamp = timestamp,
                                 toolName = "System Startup",
                                 parameters = "Tool Filtering",
@@ -222,7 +221,7 @@ class SessionPreparer(
             Log.w(TAG, "Failed to fetch live context: ${e.message}")
             // Log the error to the tool log
             onLogEntry(
-                ToolCallLog(
+                LogEntry(
                     timestamp = timestamp,
                     toolName = "System Startup",
                     parameters = "GetLiveContext",
