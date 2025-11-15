@@ -16,6 +16,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.CrashLogger
+import uk.co.mrsheep.halive.core.GeminiConfig
 import kotlinx.coroutines.launch
 
 class SettingsActivity : AppCompatActivity() {
@@ -258,7 +259,7 @@ class SettingsActivity : AppCompatActivity() {
         val apiKeyInput = dialogView.findViewById<android.widget.EditText>(R.id.geminiApiKeyInput)
 
         // Load current API key from GeminiConfig
-        val currentApiKey = uk.co.mrsheep.halive.core.GeminiConfig.getApiKey(this) ?: ""
+        val currentApiKey = GeminiConfig.getApiKey(this) ?: ""
         apiKeyInput.setText(currentApiKey)
 
         val dialog = AlertDialog.Builder(this)
