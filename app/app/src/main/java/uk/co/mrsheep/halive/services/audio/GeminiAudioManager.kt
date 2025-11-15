@@ -13,8 +13,8 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * GeminiAudioManager handles audio recording and playback for Gemini Live API.
@@ -109,71 +109,69 @@ class GeminiAudioManager {
             throw IllegalStateException("Recording already in progress")
         }
 
-        withContext(Dispatchers.IO) {
-            try {
-                val bufferSize = getRecordingBufferSize()
-                Log.d(TAG, "Starting recording: bufferSize=$bufferSize bytes")
+        try {
+            val bufferSize = getRecordingBufferSize()
+            Log.d(TAG, "Starting recording: bufferSize=$bufferSize bytes")
 
-                // Initialize AudioRecord
-                audioRecord = AudioRecord(
-                    RECORDING_SOURCE,
-                    RECORDING_SAMPLE_RATE,
-                    RECORDING_CHANNEL_CONFIG,
-                    RECORDING_AUDIO_FORMAT,
-                    bufferSize
-                )
+            // Initialize AudioRecord
+            audioRecord = AudioRecord(
+                RECORDING_SOURCE,
+                RECORDING_SAMPLE_RATE,
+                RECORDING_CHANNEL_CONFIG,
+                RECORDING_AUDIO_FORMAT,
+                bufferSize
+            )
 
-                val record = audioRecord ?: throw IllegalStateException("Failed to create AudioRecord")
+            val record = audioRecord ?: throw IllegalStateException("Failed to create AudioRecord")
 
-                // Check recording initialization
-                if (record.state != AudioRecord.STATE_INITIALIZED) {
-                    throw IllegalStateException("AudioRecord initialization failed, state=${record.state}")
-                }
-
-                // Try to enable Acoustic Echo Cancellation if available
-                try {
-                    if (AcousticEchoCanceler.isAvailable()) {
-                        acousticEchoCanceler = AcousticEchoCanceler.create(record.audioSessionId)
-                        if (acousticEchoCanceler?.enabled == false) {
-                            acousticEchoCanceler?.enabled = true
-                            Log.d(TAG, "Acoustic Echo Cancellation enabled")
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Could not enable Acoustic Echo Cancellation", e)
-                    acousticEchoCanceler = null
-                }
-
-                isRecording = true
-                record.startRecording()
-                Log.d(TAG, "AudioRecord started, state=${record.recordingState}")
-
-                // Emit chunks in loop
-                val buffer = ByteArray(bufferSize)
-                while (isRecording && record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                    val bytesRead = record.read(buffer, 0, buffer.size)
-                    if (bytesRead > 0) {
-                        // Emit only the bytes actually read
-                        val chunk = buffer.copyOfRange(0, bytesRead)
-                        emit(chunk)
-                        Log.v(TAG, "Recording chunk emitted: ${chunk.size} bytes")
-                    } else if (bytesRead < 0) {
-                        Log.w(TAG, "AudioRecord read error: $bytesRead")
-                        break
-                    }
-                }
-
-            } catch (e: SecurityException) {
-                Log.e(TAG, "RECORD_AUDIO permission not granted", e)
-                throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "Recording error", e)
-                throw e
-            } finally {
-                stopRecording()
+            // Check recording initialization
+            if (record.state != AudioRecord.STATE_INITIALIZED) {
+                throw IllegalStateException("AudioRecord initialization failed, state=${record.state}")
             }
+
+            // Try to enable Acoustic Echo Cancellation if available
+            try {
+                if (AcousticEchoCanceler.isAvailable()) {
+                    acousticEchoCanceler = AcousticEchoCanceler.create(record.audioSessionId)
+                    if (acousticEchoCanceler?.enabled == false) {
+                        acousticEchoCanceler?.enabled = true
+                        Log.d(TAG, "Acoustic Echo Cancellation enabled")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not enable Acoustic Echo Cancellation", e)
+                acousticEchoCanceler = null
+            }
+
+            isRecording = true
+            record.startRecording()
+            Log.d(TAG, "AudioRecord started, state=${record.recordingState}")
+
+            // Emit chunks in loop
+            val buffer = ByteArray(bufferSize)
+            while (isRecording && record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                val bytesRead = record.read(buffer, 0, buffer.size)
+                if (bytesRead > 0) {
+                    // Emit only the bytes actually read
+                    val chunk = buffer.copyOfRange(0, bytesRead)
+                    emit(chunk)
+                    Log.v(TAG, "Recording chunk emitted: ${chunk.size} bytes")
+                } else if (bytesRead < 0) {
+                    Log.w(TAG, "AudioRecord read error: $bytesRead")
+                    break
+                }
+            }
+
+        } catch (e: SecurityException) {
+            Log.e(TAG, "RECORD_AUDIO permission not granted", e)
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Recording error", e)
+            throw e
+        } finally {
+            stopRecording()
         }
-    }
+    }.flowOn(Dispatchers.IO)  // Run the flow builder on IO dispatcher
 
     /**
      * Stop recording and clean up resources.
