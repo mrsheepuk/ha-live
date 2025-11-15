@@ -207,7 +207,14 @@ class GeminiLiveClient(
     }
 
     override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) {
-        Log.e(TAG, "WebSocket error", t)
+        val responseInfo = response?.let {
+            "Response code: ${it.code}, message: ${it.message}, body: ${it.body?.string()}"
+        } ?: "No response"
+
+        Log.e(TAG, "WebSocket error - $responseInfo", t)
+        Log.e(TAG, "Exception details: ${t.javaClass.simpleName}: ${t.message}")
+        Log.e(TAG, "Stack trace: ${t.stackTraceToString()}")
+
         scope.launch {
             connectionMutex.withLock {
                 isConnected = false

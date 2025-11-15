@@ -112,7 +112,15 @@ class GeminiLiveSession(
 
             // Step 1: Connect to Gemini Live API
             if (!client.connect()) {
-                throw IllegalStateException("Failed to connect to Gemini Live API WebSocket")
+                throw IllegalStateException(
+                    "Failed to connect to Gemini Live API WebSocket. " +
+                    "This could be due to:\n" +
+                    "1. Network connectivity issues\n" +
+                    "2. Invalid API key\n" +
+                    "3. Connection timeout (5 seconds)\n" +
+                    "4. Firewall blocking the connection\n" +
+                    "Check logcat for detailed error from GeminiLiveClient"
+                )
             }
             Log.d(TAG, "WebSocket connected")
 

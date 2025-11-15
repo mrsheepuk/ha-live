@@ -372,6 +372,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } catch (e: Exception) {
+                // Log the full exception details to tool log for debugging
+                val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                    .format(java.util.Date())
+
+                addToolLog(
+                    ToolCallLog(
+                        timestamp = timestamp,
+                        toolName = "Session Start Error",
+                        parameters = "Failed to start conversation session",
+                        success = false,
+                        result = "Exception: ${e.javaClass.simpleName}\n" +
+                                "Message: ${e.message}\n\n" +
+                                "Stack trace:\n${e.stackTraceToString()}"
+                    )
+                )
+
                 // Clean up MCP connection if initialization failed
                 app.mcpClient?.shutdown()
                 app.mcpClient = null
