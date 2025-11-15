@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
@@ -145,11 +146,19 @@ class GeminiLiveSession(
             client.send(setupJson)
             Log.d(TAG, "Setup message sent with ${tools.size} tools")
 
-            // Step 3: Wait for SetupComplete message (timeout after 10 seconds)
+            // Step 3: Start message handling loop FIRST (before waiting for setup)
+            // This ensures we don't miss any messages
+            val setupCompleteDeferred = CompletableDeferred<Boolean>()
+
+            sessionScope.launch {
+                messageHandlingLoop(onToolCall, onTranscription, setupCompleteDeferred)
+            }
+            Log.d(TAG, "Message handling loop coroutine launched")
+
+            // Step 4: Wait for SetupComplete message (timeout after 10 seconds)
             val setupCompleted = withTimeoutOrNull(SETUP_TIMEOUT_MS) {
-                client.messages().firstOrNull { message ->
-                    message is ServerMessage.SetupComplete
-                }
+                setupCompleteDeferred.await()
+                true
             }
 
             if (setupCompleted == null) {
@@ -157,21 +166,15 @@ class GeminiLiveSession(
             }
             Log.d(TAG, "Setup completed successfully")
 
-            // Step 4: Start audio playback
+            // Step 5: Start audio playback
             playbackChannel = audioManager.startPlayback()
             Log.d(TAG, "Audio playback started")
 
-            // Step 5: Launch recording loop
+            // Step 6: Launch recording loop
             sessionScope.launch {
                 recordingLoop()
             }
             Log.d(TAG, "Recording loop coroutine launched")
-
-            // Step 6: Launch message handling loop
-            sessionScope.launch {
-                messageHandlingLoop(onToolCall, onTranscription)
-            }
-            Log.d(TAG, "Message handling loop coroutine launched")
 
             Log.i(TAG, "Gemini Live session started successfully")
 
@@ -244,7 +247,8 @@ class GeminiLiveSession(
      */
     private suspend fun messageHandlingLoop(
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
-        onTranscription: ((String?, String?) -> Unit)? = null
+        onTranscription: ((String?, String?) -> Unit)? = null,
+        setupCompleteDeferred: CompletableDeferred<Boolean>? = null
     ) {
         try {
             Log.d(TAG, "Message handling loop started")
@@ -255,7 +259,7 @@ class GeminiLiveSession(
                     return@collect
                 }
 
-                Log.d(TAG, "Message received")
+                Log.d(TAG, "Message received: ${message.javaClass.simpleName}")
 
                 when (message) {
                     is ServerMessage.Content -> {
@@ -267,7 +271,8 @@ class GeminiLiveSession(
                     }
 
                     is ServerMessage.SetupComplete -> {
-                        Log.d(TAG, "SetupComplete received during active session (expected during startup)")
+                        Log.d(TAG, "SetupComplete received")
+                        setupCompleteDeferred?.complete(true)
                     }
 
                     is ServerMessage.ToolCallCancellation -> {
