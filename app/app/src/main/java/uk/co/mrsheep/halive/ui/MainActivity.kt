@@ -404,6 +404,10 @@ class MainActivity : AppCompatActivity() {
                 duration = 300
                 start()
             }
+            // Auto-scroll to bottom when opening to show most recent entries
+            logContentScroll.post {
+                logContentScroll.fullScroll(View.FOCUS_DOWN)
+            }
         } else {
             // Collapse log content
             logContentScroll.visibility = View.GONE
