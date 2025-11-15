@@ -170,13 +170,8 @@ class GeminiService(
                         }
                     } ?: emptyMap()
 
-                    // Execute via MCP executor directly
-                    val mcpCall = uk.co.mrsheep.halive.services.mcp.ToolCall(
-                        name = protocolCall.name,
-                        arguments = argsMap
-                    )
-
-                    val result = executor.mcpClient.callTool(protocolCall.name, argsMap)
+                    // Execute via MCP executor directly (using helper method)
+                    val result = executor.executeToolDirect(protocolCall.name, argsMap)
 
                     // Build JSON response from MCP result
                     val resultJson = buildJsonObject {
