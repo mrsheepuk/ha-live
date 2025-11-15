@@ -163,11 +163,15 @@ class GeminiLiveClient(
 
     override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
         Log.d(TAG, "WebSocket opened")
+
+        // Signal that the connection is ready FIRST (before acquiring mutex)
+        // This prevents deadlock with connect() which holds the mutex while waiting
+        connectionDeferred?.complete(true)
+
+        // Then update isConnected under mutex
         scope.launch {
             connectionMutex.withLock {
                 isConnected = true
-                // Signal that the connection is ready
-                connectionDeferred?.complete(true)
             }
         }
     }
@@ -215,11 +219,14 @@ class GeminiLiveClient(
         Log.e(TAG, "Exception details: ${t.javaClass.simpleName}: ${t.message}")
         Log.e(TAG, "Stack trace: ${t.stackTraceToString()}")
 
+        // Signal connection failure FIRST (before acquiring mutex)
+        // This prevents deadlock with connect() which holds the mutex while waiting
+        connectionDeferred?.complete(false)
+
+        // Then update isConnected under mutex
         scope.launch {
             connectionMutex.withLock {
                 isConnected = false
-                // Signal connection failure if we're still waiting for connection
-                connectionDeferred?.complete(false)
             }
         }
     }
