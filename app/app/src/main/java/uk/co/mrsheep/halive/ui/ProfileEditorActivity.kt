@@ -708,11 +708,11 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         }
     }
 
-    override fun addModelTranscription(chunk: String) {
+    override fun addModelTranscription(chunk: String, isThought: Boolean) {
         testLogs.add(LogEntry(
             timestamp = "",
             toolName = "Transcription",
-            parameters = "",
+            parameters = "isThought: ${isThought}",
             success = true,
             result = "MODEL: $chunk"
         ))

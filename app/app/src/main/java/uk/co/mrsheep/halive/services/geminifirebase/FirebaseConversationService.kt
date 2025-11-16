@@ -42,7 +42,7 @@ class FirebaseConversationService(private val context: Context) :
     private var generativeModel: LiveGenerativeModel? = null
     private var liveSession: LiveSession? = null
     private var toolExecutor: ToolExecutor? = null
-    private var transcriptor: ((String?, String?) -> Unit)? = null
+    private var transcriptor: ((String?, String?, Boolean) -> Unit)? = null
 
 
     private val json = Json {
@@ -73,7 +73,7 @@ class FirebaseConversationService(private val context: Context) :
         modelName: String,
         voiceName: String,
         toolExecutor: ToolExecutor,
-        transcriptor: ((String?, String?) -> Unit)?
+        transcriptor: ((String?, String?, Boolean) -> Unit)?
     ) {
         try {
             // Transform MCP tools to Firebase format
@@ -142,7 +142,7 @@ class FirebaseConversationService(private val context: Context) :
             val transcriptionHandlerAdapter: ((Transcription?, Transcription?) -> Unit)? =
                 if (transcriptor != null) {
                     { userTranscript: Transcription?, modelTranscript: Transcription? ->
-                            transcriptor?.invoke(userTranscript?.text, modelTranscript?.text)
+                            transcriptor?.invoke(userTranscript?.text, modelTranscript?.text, false)
                     }
                 } else {
                     null

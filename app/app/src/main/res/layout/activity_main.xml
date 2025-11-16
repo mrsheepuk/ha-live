@@ -63,39 +63,43 @@
         app:layout_constraintTop_toBottomOf="@id/statusContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/mainButton" />
+        app:layout_constraintBottom_toTopOf="@id/buttonContainer" />
 
-    <Button
-        android:id="@+id/mainButton"
-        android:layout_width="280dp"
-        android:layout_height="56dp"
-        android:text="TALK"
-        android:textSize="24sp"
+    <LinearLayout
+        android:id="@+id/buttonContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:visibility="visible"
-        app:backgroundTint="?attr/colorAccent"
-        app:layout_constraintBottom_toTopOf="@+id/wakeWordChip"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/audioVisualizer" />
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/wakeWordChip"
-        android:layout_width="wrap_content"
-        android:layout_height="36dp"
-        android:text="Wake Word"
-        android:textSize="14sp"
-        android:layout_marginTop="8dp"
-        android:visibility="visible"
-        android:enabled="false"
-        android:contentDescription="Toggle wake word listening"
-        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-        app:icon="@drawable/ic_hearing"
-        app:iconSize="18dp"
-        app:layout_constraintBottom_toTopOf="@+id/transcriptionLogCard"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        app:layout_constraintTop_toBottomOf="@id/audioVisualizer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/mainButton" />
+        app:layout_constraintBottom_toTopOf="@id/transcriptionLogCard"
+        app:layout_constraintVertical_chainStyle="packed">
+        <Button
+            android:id="@+id/mainButton"
+            android:layout_width="250dp"
+            android:layout_height="56dp"
+            android:text="TALK"
+            android:textSize="24sp"
+            android:visibility="visible"
+            app:backgroundTint="?attr/colorAccent" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/wakeWordChip"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:text="Wake"
+            android:textSize="14sp"
+            android:layout_marginStart="8dp"
+            android:visibility="visible"
+            android:enabled="false"
+            android:contentDescription="Toggle wake word listening"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            app:icon="@drawable/ic_hearing"
+            app:iconSize="18dp" />
+    </LinearLayout>
 
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/transcriptionLogCard"
@@ -103,10 +107,10 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
         app:cardElevation="2dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/toolLogCard"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/wakeWordChip"
+        app:layout_constraintTop_toBottomOf="@+id/buttonContainer"
         app:layout_constraintVertical_bias="1.0">
 
         <LinearLayout

@@ -422,9 +422,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         _toolLogs.value += log
     }
 
-    override fun addModelTranscription(chunk: String) {
+    override fun addModelTranscription(chunk: String, isThought: Boolean) {
         _transcriptionLogs.value += TranscriptionEntry(
-            spokenBy = TranscriptionSpeaker.MODEL,
+            spokenBy = if (isThought) TranscriptionSpeaker.MODELTHOUGHT else TranscriptionSpeaker.MODEL,
             chunk = chunk,
         )
     }

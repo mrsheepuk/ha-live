@@ -42,7 +42,7 @@ class DirectConversationService(private val context: Context) :
     private var modelName: String? = null
     private var voiceName: String? = null
     private var toolExecutor: ToolExecutor? = null
-    private var transcriptor: ((String?, String?) -> Unit)? = null
+    private var transcriptor: ((String?, String?, Boolean) -> Unit)? = null
 
     private val json = Json {
         encodeDefaults = true
@@ -67,7 +67,7 @@ class DirectConversationService(private val context: Context) :
         modelName: String,
         voiceName: String,
         toolExecutor: ToolExecutor,
-        transcriptor: ((String?, String?) -> Unit)?
+        transcriptor: ((String?, String?, Boolean) -> Unit)?
     ) {
         try {
             Log.d(TAG, "Initializing DirectConversationService with ${tools.size} tools")

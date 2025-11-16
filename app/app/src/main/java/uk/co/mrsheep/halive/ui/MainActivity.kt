@@ -424,10 +424,15 @@ class MainActivity : AppCompatActivity() {
                 if (spokenBy != lastSpokenBy) {
                     lastSpokenBy = spokenBy
                     fullLog += when (spokenBy) {
+                        TranscriptionSpeaker.MODELTHOUGHT -> """
+                    
+                    Model (thinking): """.trimIndent()
                         TranscriptionSpeaker.MODEL -> """
+                    
                     Model: """.trimIndent()
 
                         TranscriptionSpeaker.USER -> """
+                    
                     User: 
                     """.trimIndent()
                     }

@@ -2,6 +2,9 @@ package uk.co.mrsheep.halive.services
 
 import android.util.Log
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import uk.co.mrsheep.halive.core.AppLogger
 import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.core.Profile
@@ -102,14 +105,14 @@ class SessionPreparer(
                 )
             )
 
-            val transcriptor: ((String?, String?) -> Unit)? =
+            val transcriptor: ((String?, String?, Boolean) -> Unit)? =
                 if (profile?.enableTranscription == true) {
-                    { userTranscript: String?, modelTranscript: String? ->
+                    { userTranscript: String?, modelTranscript: String?, isThought: Boolean ->
                         if (userTranscript != null) {
                             logger.addUserTranscription(userTranscript)
                         }
                         if (modelTranscript != null) {
-                            logger.addModelTranscription(modelTranscript)
+                            logger.addModelTranscription(modelTranscript, isThought)
                         }
                     }
                 } else {
@@ -231,12 +234,11 @@ class SessionPreparer(
     private suspend fun fetchLiveContext(timestamp: String): String {
         return try {
             val response = toolExecutor.callTool("GetLiveContext", emptyMap())
-            response.let { result ->
-                result.content
-                    .filter { it.type == "text" }
-                    .mapNotNull { it.text }
-                    .joinToString("\n")
-            }
+            json.parseToJsonElement(response.content
+                .filter { it.type == "text" }
+                .mapNotNull { it.text }
+                .joinToString("\n")
+            ).jsonObject.get("result")?.jsonPrimitive?.content ?: ""
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch live context: ${e.message}")
             // Log the error to the tool log

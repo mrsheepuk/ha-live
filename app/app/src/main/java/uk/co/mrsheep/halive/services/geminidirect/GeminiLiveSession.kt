@@ -133,7 +133,7 @@ class GeminiLiveSession(
         tools: List<ToolDeclaration>,
         voiceName: String,
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
-        onTranscription: ((userTranscription: String?, modelTranscription: String?) -> Unit)? = null
+        onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null
     ) {
         if (sessionScope.isActive || audioScope.isActive) {
             throw IllegalStateException("Audio / session scope already active, cannot start")
@@ -292,7 +292,7 @@ class GeminiLiveSession(
      */
     private suspend fun messageHandlingLoop(
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
-        onTranscription: ((String?, String?) -> Unit)? = null,
+        onTranscription: ((String?, String?, Boolean) -> Unit)? = null,
         setupCompleteDeferred: CompletableDeferred<Boolean>? = null
     ) {
         try {
@@ -344,11 +344,11 @@ class GeminiLiveSession(
      */
     private suspend fun handleContentMessage(
         message: ServerMessage.Content,
-        onTranscription: ((String?, String?) -> Unit)?
+        onTranscription: ((String?, String?, Boolean) -> Unit)?
     ) {
         if (message.serverContent.inputTranscription != null || message.serverContent.outputTranscription != null) {
             Log.d(TAG, "Transcript received")
-            onTranscription?.invoke(message.serverContent.inputTranscription?.text, message.serverContent.outputTranscription?.text)
+            onTranscription?.invoke(message.serverContent.inputTranscription?.text, message.serverContent.outputTranscription?.text, false)
         }
         if (message.serverContent.interrupted == true) {
             Log.d(TAG, "Turn interrupted")
@@ -360,7 +360,7 @@ class GeminiLiveSession(
                     playBackQueue.add(audioBytes)
                 }
                 if (part.text != null) {
-                    onTranscription?.invoke(null, "THOUGHTS:" + part.text)
+                    onTranscription?.invoke(null, part.text, true)
                 }
             }
         }

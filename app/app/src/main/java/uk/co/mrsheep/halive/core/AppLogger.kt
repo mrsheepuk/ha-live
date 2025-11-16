@@ -10,6 +10,7 @@ data class LogEntry(
 )
 
 enum class TranscriptionSpeaker {
+    MODELTHOUGHT,
     MODEL,
     USER,
 }
@@ -21,6 +22,6 @@ data class TranscriptionEntry(
 
 public interface AppLogger {
     fun addLogEntry(log: LogEntry)
-    fun addModelTranscription(chunk: String)
+    fun addModelTranscription(chunk: String, isThought: Boolean)
     fun addUserTranscription(chunk: String)
 }

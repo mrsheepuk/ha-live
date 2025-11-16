@@ -32,7 +32,7 @@ interface ConversationService {
         modelName: String,
         voiceName: String,
         toolExecutor: ToolExecutor,
-        transcriptor: ((String?, String?) -> Unit)? = null
+        transcriptor: ((String?, String?, Boolean) -> Unit)? = null
     )
 
     /**
