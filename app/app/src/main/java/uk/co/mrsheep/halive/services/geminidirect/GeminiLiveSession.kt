@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import uk.co.mrsheep.halive.services.geminidirect.protocol.AudioTranscriptionConfig
 import java.util.concurrent.TimeoutException
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ClientContent
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ClientMessage
@@ -38,6 +39,7 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.FunctionResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.GenerationConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.MediaChunk
 import uk.co.mrsheep.halive.services.geminidirect.protocol.PrebuiltVoiceConfig
+import uk.co.mrsheep.halive.services.geminidirect.protocol.ProactivtyConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.RealtimeInput
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ServerMessage
 import uk.co.mrsheep.halive.services.geminidirect.protocol.SetupMessage
@@ -79,7 +81,6 @@ class GeminiLiveSession(
     }
 
     private val client = GeminiLiveClient(apiKey)
-//    private val audioManager = GeminiAudioManager()
 
     @SuppressLint("ThreadPoolCreation")
     val audioDispatcher =
@@ -95,7 +96,6 @@ class GeminiLiveSession(
     }
 
     private val playBackQueue = ConcurrentLinkedQueue<ByteArray>()
-//    private var playbackChannel: Channel<ByteArray>? = null
     private var isSessionActive = false
     private var audioHelper: AudioHelper? = null
 
@@ -175,13 +175,19 @@ class GeminiLiveSession(
                             ),
                             // TODO: Make language code configurable
                             languageCode = "en-US"
-                        )
+                        ),
+                        // rejected by API in setup, probably not supported yet:
+                        //enableAffectiveDialog = true,
                     ),
                     systemInstruction = Content(
                         role = null,
                         parts = listOf(TextPart(systemPrompt))
                     ),
-                    tools = tools.takeIf { it.isNotEmpty() }
+                    tools = tools.takeIf { it.isNotEmpty() },
+                    // rejected by API in setup, probably not supported yet:
+                    //proactivity = ProactivtyConfig(proactiveAudio = true),
+                    inputAudioTranscription = if (onTranscription != null) AudioTranscriptionConfig() else null,
+                    outputAudioTranscription = if (onTranscription != null) AudioTranscriptionConfig() else null,
                 )
             )
 

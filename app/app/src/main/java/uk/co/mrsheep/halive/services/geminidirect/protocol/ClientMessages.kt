@@ -29,8 +29,23 @@ data class SetupMessage(
     val generationConfig: GenerationConfig,
     @SerialName("system_instruction")
     val systemInstruction: Content? = null,
-    val tools: List<ToolDeclaration>? = null
+    val tools: List<ToolDeclaration>? = null,
+    // Proactivity doesn't seem to work yet, rejected by API in setup:
+    // val proactivity: ProactivtyConfig? = null,
+    @SerialName("input_audio_transcription")
+    val inputAudioTranscription: AudioTranscriptionConfig? = null,
+    @SerialName("output_audio_transcription")
+    val outputAudioTranscription: AudioTranscriptionConfig? = null,
 )
+
+@Serializable
+data class ProactivtyConfig(
+    @SerialName("proactive_audio")
+    val proactiveAudio: Boolean? = null
+)
+
+@Serializable
+class AudioTranscriptionConfig()
 
 // --- GenerationConfig (output settings) ---
 
@@ -39,7 +54,10 @@ data class GenerationConfig(
     @SerialName("response_modalities")
     val responseModalities: List<String>? = null, // e.g., ["AUDIO"]
     @SerialName("speech_config")
-    val speechConfig: SpeechConfig? = null
+    val speechConfig: SpeechConfig? = null,
+    // affective dialog doesn't seem to work yet, rejected by API in setup:
+    // @SerialName("enable_affective_dialog")
+    // val enableAffectiveDialog: Boolean? = null,
 )
 
 // --- SpeechConfig (voice settings) ---

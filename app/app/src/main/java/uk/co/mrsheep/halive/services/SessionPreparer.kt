@@ -106,26 +106,10 @@ class SessionPreparer(
                 if (profile?.enableTranscription == true) {
                     { userTranscript: String?, modelTranscript: String? ->
                         if (userTranscript != null) {
-                            logger.addLogEntry(
-                                LogEntry(
-                                    timestamp = timestamp,
-                                    toolName = "🎤 User",
-                                    parameters = "",
-                                    success = true,
-                                    result = userTranscript
-                                )
-                            )
+                            logger.addUserTranscription(userTranscript)
                         }
                         if (modelTranscript != null) {
-                            logger.addLogEntry(
-                                LogEntry(
-                                    timestamp = timestamp,
-                                    toolName = "🔊 Model",
-                                    parameters = "",
-                                    success = true,
-                                    result = modelTranscript
-                                )
-                            )
+                            logger.addModelTranscription(modelTranscript)
                         }
                     }
                 } else {

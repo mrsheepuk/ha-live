@@ -9,6 +9,18 @@ data class LogEntry(
     val result: String
 )
 
+enum class TranscriptionSpeaker {
+    MODEL,
+    USER,
+}
+
+data class TranscriptionEntry(
+    val spokenBy: TranscriptionSpeaker,
+    val chunk: String
+)
+
 public interface AppLogger {
     fun addLogEntry(log: LogEntry)
+    fun addModelTranscription(chunk: String)
+    fun addUserTranscription(chunk: String)
 }

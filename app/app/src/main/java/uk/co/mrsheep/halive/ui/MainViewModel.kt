@@ -26,6 +26,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
 import uk.co.mrsheep.halive.core.AppLogger
 import uk.co.mrsheep.halive.core.LogEntry
+import uk.co.mrsheep.halive.core.TranscriptionEntry
+import uk.co.mrsheep.halive.core.TranscriptionSpeaker
 import uk.co.mrsheep.halive.services.AppToolExecutor
 import uk.co.mrsheep.halive.services.LocalTool
 import uk.co.mrsheep.halive.services.ToolExecutor
@@ -63,6 +65,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     private val _toolLogs = MutableStateFlow<List<LogEntry>>(emptyList())
     val toolLogs: StateFlow<List<LogEntry>> = _toolLogs
 
+    private val _transcriptionLogs = MutableStateFlow<List<TranscriptionEntry>>(emptyList())
+    val transcriptionLogs: StateFlow<List<TranscriptionEntry>> = _transcriptionLogs
+
     // Auto-start state
     private val _shouldAttemptAutoStart = MutableStateFlow(false)
     val shouldAttemptAutoStart: StateFlow<Boolean> = _shouldAttemptAutoStart
@@ -75,15 +80,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     private val _logExpanded = MutableStateFlow(false)
     val logExpanded: StateFlow<Boolean> = _logExpanded
 
+    // Transcription expanded state
+    private val _transcriptionExpanded = MutableStateFlow(false)
+    val transcriptionExpanded: StateFlow<Boolean> = _transcriptionExpanded
+
     // Track if this is the first initialization (survives activity recreation, not process death)
     private var hasCheckedAutoStart = false
 
     private val app = application as HAGeminiApp
-    // ConversationService created by factory based on Gemini API key presence
-//    private val conversationService: ConversationService by lazy {
-//        Log.d(TAG, "Creating ConversationService via factory")
-//        ConversationServiceFactory.create(getApplication())
-//    }
 
     private var toolExecutor: ToolExecutor? = null
     private var mcpClient: McpClientManager? = null
@@ -402,10 +406,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
      */
     fun toggleLogExpanded() {
         _logExpanded.value = !_logExpanded.value
+        if (_logExpanded.value && _transcriptionExpanded.value) {
+            _transcriptionExpanded.value = false
+        }
+    }
+
+    fun toggleTranscriptionExpanded() {
+        _transcriptionExpanded.value = !_transcriptionExpanded.value
+        if (_logExpanded.value && _transcriptionExpanded.value) {
+            _logExpanded.value = false
+        }
     }
 
     override fun addLogEntry(log: LogEntry) {
-        _toolLogs.value = _toolLogs.value + log
+        _toolLogs.value += log
+    }
+
+    override fun addModelTranscription(chunk: String) {
+        _transcriptionLogs.value += TranscriptionEntry(
+            spokenBy = TranscriptionSpeaker.MODEL,
+            chunk = chunk,
+        )
+    }
+
+    override fun addUserTranscription(chunk: String) {
+        _transcriptionLogs.value += TranscriptionEntry(
+            spokenBy = TranscriptionSpeaker.USER,
+            chunk = chunk,
+        )
     }
 
     /**

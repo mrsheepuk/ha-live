@@ -707,5 +707,33 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
             updateTestLogDisplay()
         }
     }
+
+    override fun addModelTranscription(chunk: String) {
+        testLogs.add(LogEntry(
+            timestamp = "",
+            toolName = "Transcription",
+            parameters = "",
+            success = true,
+            result = "MODEL: $chunk"
+        ))
+
+        lifecycleScope.launch {
+            updateTestLogDisplay()
+        }
+    }
+
+    override fun addUserTranscription(chunk: String) {
+        testLogs.add(LogEntry(
+            timestamp = "",
+            toolName = "Transcription",
+            parameters = "",
+            success = true,
+            result = "USER: $chunk"
+        ))
+
+        lifecycleScope.launch {
+            updateTestLogDisplay()
+        }
+    }
 }
 
