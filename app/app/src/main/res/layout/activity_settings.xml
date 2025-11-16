@@ -205,7 +205,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginBottom="24dp">
+                android:layout_marginBottom="12dp">
 
                 <Button
                     android:id="@+id/geminiEditButton"
@@ -223,6 +223,30 @@
                     android:text="Clear"
                     android:layout_marginStart="4dp" />
             </LinearLayout>
+
+            <!-- Conversation Service Selection -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Active Service:"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/conversationServiceText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Firebase SDK"
+                android:textSize="14sp"
+                android:layout_marginBottom="8dp" />
+
+            <Button
+                android:id="@+id/switchServiceButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Switch to Gemini Direct"
+                android:visibility="gone"
+                android:layout_marginBottom="24dp" />
 
             <!-- Divider -->
             <View

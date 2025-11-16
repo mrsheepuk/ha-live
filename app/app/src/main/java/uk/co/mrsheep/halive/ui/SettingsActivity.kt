@@ -43,6 +43,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var geminiApiKeyText: TextView
     private lateinit var geminiEditButton: Button
     private lateinit var geminiClearButton: Button
+    private lateinit var conversationServiceText: TextView
+    private lateinit var switchServiceButton: Button
 
     // Debug section
     private lateinit var viewCrashLogsButton: Button
@@ -114,6 +116,8 @@ class SettingsActivity : AppCompatActivity() {
         geminiApiKeyText = findViewById(R.id.geminiApiKeyText)
         geminiEditButton = findViewById(R.id.geminiEditButton)
         geminiClearButton = findViewById(R.id.geminiClearButton)
+        conversationServiceText = findViewById(R.id.conversationServiceText)
+        switchServiceButton = findViewById(R.id.switchServiceButton)
 
         geminiEditButton.setOnClickListener {
             showGeminiEditDialog()
@@ -121,6 +125,10 @@ class SettingsActivity : AppCompatActivity() {
 
         geminiClearButton.setOnClickListener {
             showGeminiClearDialog()
+        }
+
+        switchServiceButton.setOnClickListener {
+            viewModel.switchConversationService()
         }
 
         // Debug section
@@ -158,6 +166,22 @@ class SettingsActivity : AppCompatActivity() {
                 geminiApiKeyText.text = if (state.geminiApiKey != "Not configured") "••••••••" else "Not configured"
                 profileSummaryText.text = "${state.profileCount} profile(s) configured"
 
+                // Update conversation service display
+                conversationServiceText.text = state.conversationService
+
+                // Show/hide switch button based on whether both services are available
+                if (state.canChooseService) {
+                    switchServiceButton.visibility = View.VISIBLE
+                    val otherService = if (state.conversationService == "Gemini Direct API") {
+                        "Firebase SDK"
+                    } else {
+                        "Gemini Direct API"
+                    }
+                    switchServiceButton.text = "Switch to $otherService"
+                } else {
+                    switchServiceButton.visibility = View.GONE
+                }
+
                 // Enable/disable buttons based on read-only state
                 manageProfilesButton.isEnabled = !state.isReadOnly
                 haEditButton.isEnabled = !state.isReadOnly
@@ -165,6 +189,7 @@ class SettingsActivity : AppCompatActivity() {
                 firebaseChangeButton.isEnabled = !state.isReadOnly
                 geminiEditButton.isEnabled = !state.isReadOnly
                 geminiClearButton.isEnabled = !state.isReadOnly
+                switchServiceButton.isEnabled = !state.isReadOnly
 
                 // Show/hide read-only overlay
                 if (state.isReadOnly) {
@@ -384,7 +409,9 @@ sealed class SettingsState {
         val firebaseProjectId: String,
         val profileCount: Int,
         val isReadOnly: Boolean,
-        val geminiApiKey: String
+        val geminiApiKey: String,
+        val conversationService: String,
+        val canChooseService: Boolean
     ) : SettingsState()
     object TestingConnection : SettingsState()
     data class ConnectionSuccess(val message: String) : SettingsState()
