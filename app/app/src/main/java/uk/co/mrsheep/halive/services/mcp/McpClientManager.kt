@@ -1,4 +1,4 @@
-package uk.co.mrsheep.halive.services
+package uk.co.mrsheep.halive.services.mcp
 
 import android.util.Log
 import kotlinx.coroutines.*
@@ -14,14 +14,15 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
-import uk.co.mrsheep.halive.services.mcp.*
+import uk.co.mrsheep.halive.services.ToolExecutor
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class McpClientManager(
     private val haBaseUrl: String,
     private val haToken: String
-) {
+): ToolExecutor {
     private val json = Json {
         encodeDefaults = true
         ignoreUnknownKeys = true
@@ -29,7 +30,7 @@ class McpClientManager(
     }
 
     private val client = OkHttpClient.Builder()
-        .readTimeout(0, java.util.concurrent.TimeUnit.SECONDS) // Infinite for SSE
+        .readTimeout(0, TimeUnit.SECONDS) // Infinite for SSE
         .build()
 
     private var eventSource: EventSource? = null
@@ -49,7 +50,7 @@ class McpClientManager(
      * Phase 1: Initialize the MCP connection.
      * Opens SSE connection and performs the handshake.
      */
-    suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun connect(): Boolean = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Connecting to: \"$haBaseUrl/mcp_server/sse\"")
 
@@ -118,11 +119,10 @@ class McpClientManager(
     /**
      * Fetch tools from the MCP server.
      */
-    suspend fun getTools(): McpToolsListResult = withContext(Dispatchers.IO) {
+    override suspend fun getTools(): List<McpTool> = withContext(Dispatchers.IO) {
         require(isInitialized) { "Must call initialize() first" }
 
         val request = JsonRpcRequest(
-//            jsonrpc = "2.0",
             id = nextRequestId.getAndIncrement(),
             method = "tools/list",
             params = null
@@ -137,13 +137,13 @@ class McpClientManager(
         json.decodeFromJsonElement(
             McpToolsListResult.serializer(),
             response.result!!
-        )
+        ).tools
     }
 
     /**
      * Execute a tool on the MCP server.
      */
-    suspend fun callTool(
+    override suspend fun callTool(
         name: String,
         arguments: Map<String, JsonElement>
     ): ToolCallResult = withContext(Dispatchers.IO) {
@@ -224,7 +224,7 @@ class McpClientManager(
                     Log.w(TAG, "SSE connection lost, attempting reconnection...")
                     try {
                         resetConnection()  // Clean up old connection (but keep scope/client alive)
-                        initialize()       // Establish fresh connection
+                        connect()       // Establish fresh connection
                         Log.i(TAG, "Auto-reconnection successful")
                     } catch (e: Exception) {
                         Log.e(TAG, "Auto-reconnection failed", e)

@@ -1,14 +1,16 @@
-package uk.co.mrsheep.halive.services
+package uk.co.mrsheep.halive.services.geminidirect
 
 import android.util.Log
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonArray
-import uk.co.mrsheep.halive.services.mcp.*
-import uk.co.mrsheep.halive.services.protocol.ToolDeclaration
-import uk.co.mrsheep.halive.services.protocol.FunctionDeclaration
-import uk.co.mrsheep.halive.services.protocol.Schema
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import uk.co.mrsheep.halive.services.mcp.McpInputSchema
+import uk.co.mrsheep.halive.services.mcp.McpProperty
+import uk.co.mrsheep.halive.services.mcp.McpTool
+import uk.co.mrsheep.halive.services.geminidirect.protocol.FunctionDeclaration
+import uk.co.mrsheep.halive.services.geminidirect.protocol.Schema
+import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolDeclaration
 
 /**
  * Transforms MCP tool definitions into Gemini Live API protocol format.
@@ -16,7 +18,7 @@ import uk.co.mrsheep.halive.services.protocol.Schema
  * Similar to GeminiMCPToolTransformer, but outputs protocol.Schema instead of Firebase Schema.
  * The protocol format uses JSON-compatible Schema for proper serialization to the Gemini API.
  */
-object GeminiProtocolToolTransformer {
+object GeminiLiveMCPToolTransformer {
 
     private const val TAG = "GeminiProtocolToolTransformer"
 
@@ -26,10 +28,10 @@ object GeminiProtocolToolTransformer {
      * @param mcpToolsResult The MCP tools list result from the Home Assistant MCP server
      * @return A list of ToolDeclaration objects ready for the Gemini Live API
      */
-    fun transform(mcpToolsResult: McpToolsListResult): List<ToolDeclaration> {
-        Log.d(TAG, "Transforming ${mcpToolsResult.tools.size} MCP tools to protocol format")
+    fun transform(tools: List<McpTool>): List<ToolDeclaration> {
+        Log.d(TAG, "Transforming ${tools.size} MCP tools to protocol format")
 
-        return mcpToolsResult.tools.map { mcpTool ->
+        return tools.map { mcpTool ->
             transformMcpToProtocolTool(mcpTool)
         }
     }

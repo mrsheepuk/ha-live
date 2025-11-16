@@ -37,8 +37,11 @@ import uk.co.mrsheep.halive.services.ProfileTestManager
 import uk.co.mrsheep.halive.ui.adapters.SelectableTool
 import uk.co.mrsheep.halive.ui.adapters.ToolSelectionAdapter
 import kotlinx.coroutines.launch
+import uk.co.mrsheep.halive.core.AppLogger
+import uk.co.mrsheep.halive.core.LogEntry
+import uk.co.mrsheep.halive.services.mcp.McpClientManager
 
-class ProfileEditorActivity : AppCompatActivity() {
+class ProfileEditorActivity : AppCompatActivity(), AppLogger {
 
     private val viewModel: ProfileEditorViewModel by viewModels()
 
@@ -193,8 +196,26 @@ class ProfileEditorActivity : AppCompatActivity() {
         modelInput.setAdapter(modelAdapter)
         modelInput.setText(modelOptions[0], false) // Set default
 
-        // Setup voice dropdown - hardcoded two options
-        val voiceOptions = arrayOf("Aoede", "Leda", "Kore", "Puck", "Charon", "Fenrir", "Orus", "Zephyr")
+        // Setup voice dropdown
+//        val voiceOptions = arrayOf("Aoede", "Leda", "Kore", "Puck", "Charon", "Fenrir", "Orus", "Zephyr")
+        val voiceOptions = arrayOf(
+            "Achernar", "Achird", "Algenib", "Algieba", "Alnilam", "Aoede", "Autonoe",
+            "Callirrhoe", "Charon",
+            "Despina",
+            "Enceladus", "Erinome",
+            "Fenrir",
+            "Gacrux",
+            "Iapetus",
+            "Kore",
+            "Laomedeia","Leda",
+            "Orus",
+            "Pulcherrima", "Puck",
+            "Rasalgethi",
+            "Sadachbia", "Sadaltager", "Schedar", "Sulafat",
+            "Umbriel",
+            "Vindemiatrix",
+            "Zephyr", "Zubenelgenubi"
+        )
         val voiceAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, voiceOptions)
         voiceInput.setAdapter(voiceAdapter)
         voiceInput.setText(voiceOptions[0], false) // Set default to Aoede
@@ -303,20 +324,12 @@ class ProfileEditorActivity : AppCompatActivity() {
         // Initialize test manager
         testManager = ProfileTestManager(
             app = application as HAGeminiApp,
-            onLogEntry = { log ->
-                // Collect logs in real-time
-                testLogs.add(log)
-
-                // Update display on main thread
-                lifecycleScope.launch {
-                    updateTestLogDisplay()
-                }
-            },
             onStatusChange = { status ->
                 lifecycleScope.launch {
                     updateTestStatus(status)
                 }
-            }
+            },
+            logger = this
         )
 
         testButton.setOnClickListener {
@@ -463,60 +476,27 @@ class ProfileEditorActivity : AppCompatActivity() {
 
     private fun loadAvailableTools() {
         lifecycleScope.launch {
+            val app = application as HAGeminiApp
+            val mcp = McpClientManager(app.haUrl!!, app.haToken!!)
             try {
-                val app = application as HAGeminiApp
-                val mcpClient = app.mcpClient
-
-                // Try to fetch from MCP client, fallback to cache
-                if (mcpClient != null) {
-                    try {
-                        val toolsResult = mcpClient.getTools()
-                        val tools = toolsResult.tools.map { mcpTool ->
-                            SelectableTool(
-                                name = mcpTool.name,
-                                description = mcpTool.description,
-                                isSelected = selectedToolNames.contains(mcpTool.name),
-                                isAvailable = true
-                            )
-                        }
-                        availableTools = tools.sortedBy { it.name }
-                        toolCacheWarning.visibility = View.GONE
-                        toolAdapter.submitFullList(availableTools)
-                        updateToolCountLabel()
-                    } catch (e: Exception) {
-                        // MCP failed, use cache
-                        loadToolsFromCache(app)
-                    }
-                } else {
-                    // No MCP connection, use cache
-                    loadToolsFromCache(app)
+                mcp.connect()
+                val toolsResult = mcp.getTools()
+                val tools = toolsResult.map { mcpTool ->
+                    SelectableTool(
+                        name = mcpTool.name,
+                        description = mcpTool.description,
+                        isSelected = selectedToolNames.contains(mcpTool.name),
+                        isAvailable = true
+                    )
                 }
-            } catch (e: Exception) {
-                // Silent fail - just show empty list
-                availableTools = emptyList()
-                toolAdapter.submitFullList(emptyList())
+                availableTools = tools.sortedBy { it.name }
+                toolCacheWarning.visibility = View.GONE
+                toolAdapter.submitFullList(availableTools)
+                updateToolCountLabel()
+            } finally {
+                mcp.shutdown()
             }
         }
-    }
-
-    private fun loadToolsFromCache(app: HAGeminiApp) {
-        val cachedTools = app.lastAvailableTools ?: emptyList()
-        availableTools = cachedTools.map { toolName ->
-            SelectableTool(
-                name = toolName,
-                description = "Tool (from cache)",
-                isSelected = selectedToolNames.contains(toolName),
-                isAvailable = true
-            )
-        }.sortedBy { it.name }
-
-        // Show warning if using cache
-        if (cachedTools.isNotEmpty()) {
-            toolCacheWarning.visibility = View.VISIBLE
-        }
-
-        toolAdapter.submitFullList(availableTools)
-        updateToolCountLabel()
     }
 
     private fun updateToolSelections() {
@@ -718,6 +698,14 @@ class ProfileEditorActivity : AppCompatActivity() {
     override fun onSupportNavigateUp(): Boolean {
         finish()
         return true
+    }
+
+    override fun addLogEntry(log: LogEntry) {
+        testLogs.add(log)
+
+        lifecycleScope.launch {
+            updateTestLogDisplay()
+        }
     }
 }
 

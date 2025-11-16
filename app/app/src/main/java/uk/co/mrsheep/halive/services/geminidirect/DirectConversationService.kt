@@ -1,18 +1,20 @@
-package uk.co.mrsheep.halive.services.conversation
+package uk.co.mrsheep.halive.services.geminidirect
 
 import android.content.Context
 import android.util.Log
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import uk.co.mrsheep.halive.core.GeminiConfig
-import uk.co.mrsheep.halive.services.GeminiLiveSession
-import uk.co.mrsheep.halive.services.GeminiProtocolToolTransformer
-import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
-import uk.co.mrsheep.halive.services.protocol.FunctionCall
-import uk.co.mrsheep.halive.services.protocol.FunctionResponse
-import uk.co.mrsheep.halive.services.protocol.ToolDeclaration
+import uk.co.mrsheep.halive.services.ToolExecutor
+import uk.co.mrsheep.halive.services.conversation.ConversationService
+import uk.co.mrsheep.halive.services.mcp.McpTool
+import uk.co.mrsheep.halive.services.mcp.ToolCallResult
+import uk.co.mrsheep.halive.services.geminidirect.protocol.FunctionCall
+import uk.co.mrsheep.halive.services.geminidirect.protocol.FunctionResponse
+import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolDeclaration
 
 /**
  * Implements ConversationService for the direct Gemini Live protocol.
@@ -26,7 +28,8 @@ import uk.co.mrsheep.halive.services.protocol.ToolDeclaration
  * - Bridge between domain-level tool calls/responses and protocol-level types
  * - Handle transcription updates
  */
-class DirectConversationService(private val context: Context) : ConversationService {
+class DirectConversationService(private val context: Context) :
+    ConversationService {
 
     companion object {
         private const val TAG = "DirectConversationService"
@@ -38,6 +41,8 @@ class DirectConversationService(private val context: Context) : ConversationServ
     private var systemPrompt: String? = null
     private var modelName: String? = null
     private var voiceName: String? = null
+    private var toolExecutor: ToolExecutor? = null
+    private var transcriptor: ((String?, String?) -> Unit)? = null
 
     private val json = Json {
         encodeDefaults = true
@@ -53,20 +58,24 @@ class DirectConversationService(private val context: Context) : ConversationServ
      *
      * @param mcpTools Raw tools from Home Assistant MCP server
      * @param systemPrompt System instructions for the AI
-     * @param modelName Model to use (e.g., "models/gemini-2.0-flash-exp")
+     * @param modelName Model to use (e.g., "gemini-2.0-flash-exp")
      * @param voiceName Voice to use (e.g., "Aoede")
      */
     override suspend fun initialize(
-        mcpTools: McpToolsListResult,
+        tools: List<McpTool>,
         systemPrompt: String,
         modelName: String,
-        voiceName: String
+        voiceName: String,
+        toolExecutor: ToolExecutor,
+        transcriptor: ((String?, String?) -> Unit)?
     ) {
         try {
-            Log.d(TAG, "Initializing DirectConversationService with ${mcpTools.tools.size} tools")
+            Log.d(TAG, "Initializing DirectConversationService with ${tools.size} tools")
 
             // Transform MCP tools to protocol format
-            toolDeclarations = GeminiProtocolToolTransformer.transform(mcpTools)
+            this.toolDeclarations = GeminiLiveMCPToolTransformer.transform(tools)
+            this.toolExecutor = toolExecutor
+            this.transcriptor = transcriptor
 
             // Store configuration for later use
             this.systemPrompt = systemPrompt
@@ -92,10 +101,7 @@ class DirectConversationService(private val context: Context) : ConversationServ
      * @param onToolCall Callback when AI wants to call a tool
      * @param onTranscript Optional callback for transcription updates
      */
-    override suspend fun startSession(
-        onToolCall: suspend (ToolCall) -> ToolResponse,
-        onTranscript: ((TranscriptInfo) -> Unit)?
-    ) {
+    override suspend fun startSession() {
         try {
             // Get API key from config
             val apiKey = GeminiConfig.getApiKey(context)
@@ -106,42 +112,15 @@ class DirectConversationService(private val context: Context) : ConversationServ
             // Create session
             session = GeminiLiveSession(apiKey, context)
 
-            // Define protocol tool call handler that converts to domain types
-            val protocolToolCallHandler: suspend (FunctionCall) -> FunctionResponse = { protocolCall ->
+            val protocolToolCallHandler: suspend (FunctionCall) -> FunctionResponse = { call ->
                 try {
-                    Log.d(TAG, "Tool call received: ${protocolCall.name}")
-
-                    // Convert protocol FunctionCall to domain ToolCall
-                    val domainToolCall = protocolCall.toDomainToolCall()
-
-                    // Call the domain-level handler
-                    val domainResponse = onToolCall(domainToolCall)
-
-                    // Convert domain ToolResponse back to protocol FunctionResponse
-                    domainResponse.toProtocolResponse()
+                    Log.d(TAG, "Tool call received: ${call.name}")
+                    toolExecutor?.callTool(call.name, call.toJsonArgs()).toProtocolResponse(call)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error executing tool call ${protocolCall.name}", e)
-                    FunctionResponse(
-                        id = protocolCall.id,
-                        name = protocolCall.name,
-                        response = null
-                    )
+                    Log.e(TAG, "Error executing tool call ${call.name}", e)
+                    FunctionResponse(id = call.id, name = call.name, response = null)
                 }
             }
-
-            // Define transcription callback that converts protocol to domain types
-            val protocolTranscriptionHandler: ((String?, String?) -> Unit)? =
-                if (onTranscript != null) {
-                    { userText: String?, modelText: String? ->
-                        try {
-                            onTranscript(TranscriptInfo(userText, modelText))
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error handling transcription", e)
-                        }
-                    }
-                } else {
-                    null
-                }
 
             // Start the session with stored configuration
             session?.start(
@@ -150,7 +129,7 @@ class DirectConversationService(private val context: Context) : ConversationServ
                 tools = toolDeclarations ?: emptyList(),
                 voiceName = voiceName ?: "Aoede",
                 onToolCall = protocolToolCallHandler,
-                onTranscription = protocolTranscriptionHandler
+                onTranscription = transcriptor
             )
 
             Log.d(TAG, "Direct protocol session started successfully")
@@ -217,21 +196,15 @@ class DirectConversationService(private val context: Context) : ConversationServ
      * @receiver The protocol function call
      * @return A domain ToolCall with the tool name and arguments
      */
-    private fun FunctionCall.toDomainToolCall(): ToolCall {
+    private fun FunctionCall.toJsonArgs(): Map<String, JsonElement> {
         // Convert JsonElement args to Map<String, JsonElement>
-        val argsMap = args?.let { jsonElement ->
+       return args?.let { jsonElement ->
             if (jsonElement is JsonObject) {
                 jsonElement.toMap()
             } else {
                 emptyMap()
             }
         } ?: emptyMap()
-
-        return ToolCall(
-            id = id,
-            name = name,
-            arguments = argsMap
-        )
     }
 
     /**
@@ -240,21 +213,36 @@ class DirectConversationService(private val context: Context) : ConversationServ
      * @receiver The domain tool response
      * @return A protocol FunctionResponse ready to send to the API
      */
-    private fun ToolResponse.toProtocolResponse(): FunctionResponse {
+    private fun ToolCallResult?.toProtocolResponse(call: FunctionCall): FunctionResponse {
         // Build JSON response based on error
-        val responseJson = if (error != null) {
+        val responseJson = if (this == null) {
             buildJsonObject {
-                put("error", error)
+                put("error", "No response")
             }
+        } else if (isError == true) {
+                val errorMessage = content
+                    .filter { it.type == "text" }
+                    .mapNotNull { it.text }
+                    .joinToString("\n")
+
+                buildJsonObject {
+                    put("error", errorMessage.ifEmpty { "Unknown error" })
+                }
         } else {
+            // Extract text content from MCP result
+            val textContent = content
+                .filter { it.type == "text" }
+                .mapNotNull { it.text }
+                .joinToString("\n")
+
             buildJsonObject {
-                put("result", result)
+                put("result", json.parseToJsonElement(textContent))
             }
         }
 
         return FunctionResponse(
-            id = id,
-            name = name,
+            id = call.id,
+            name = call.name,
             response = responseJson
         )
     }

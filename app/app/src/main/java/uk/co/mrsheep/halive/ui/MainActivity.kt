@@ -27,6 +27,7 @@ import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.HAConfig
 import kotlinx.coroutines.launch
+import uk.co.mrsheep.halive.core.LogEntry
 
 class MainActivity : AppCompatActivity() {
 

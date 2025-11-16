@@ -12,21 +12,29 @@ import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.services.BeepHelper
-import uk.co.mrsheep.halive.services.GeminiMCPToolExecutor
 import uk.co.mrsheep.halive.services.SessionPreparer
-import uk.co.mrsheep.halive.services.McpClientManager
+import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.conversation.ConversationServiceFactory
-import uk.co.mrsheep.halive.services.conversation.ToolCall
-import uk.co.mrsheep.halive.services.conversation.ToolResponse
-import uk.co.mrsheep.halive.services.conversation.TranscriptInfo
 import uk.co.mrsheep.halive.services.WakeWordService
 import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
+import uk.co.mrsheep.halive.core.AppLogger
+import uk.co.mrsheep.halive.core.LogEntry
+import uk.co.mrsheep.halive.services.AppToolExecutor
+import uk.co.mrsheep.halive.services.LocalTool
+import uk.co.mrsheep.halive.services.ToolExecutor
+import uk.co.mrsheep.halive.services.mcp.McpInputSchema
+import uk.co.mrsheep.halive.services.mcp.McpProperty
+import uk.co.mrsheep.halive.services.mcp.McpTool
+import uk.co.mrsheep.halive.services.mcp.ToolCallResult
+import uk.co.mrsheep.halive.services.mcp.ToolContent
+import kotlin.String
 
 // Define the different states our UI can be in
 sealed class UiState {
@@ -38,19 +46,6 @@ sealed class UiState {
     object ChatActive : UiState()            // Chat session is active (listening or executing)
     data class ExecutingAction(val tool: String) : UiState()       // Executing a Home Assistant action
     data class Error(val message: String) : UiState()
-}
-
-// Represents a tool call log entry
-data class LogEntry(
-    val timestamp: String,
-    val toolName: String,
-    val parameters: String,
-    val success: Boolean,
-    val result: String
-)
-
-public interface AppLogger {
-    fun addLogEntry(log: LogEntry)
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application), AppLogger {
@@ -67,9 +62,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
 
     private val _toolLogs = MutableStateFlow<List<LogEntry>>(emptyList())
     val toolLogs: StateFlow<List<LogEntry>> = _toolLogs
-
-    private val _systemPrompt = MutableStateFlow("")
-    val systemPrompt: StateFlow<String> = _systemPrompt
 
     // Auto-start state
     private val _shouldAttemptAutoStart = MutableStateFlow(false)
@@ -88,11 +80,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
 
     private val app = application as HAGeminiApp
     // ConversationService created by factory based on Gemini API key presence
-    private val conversationService: ConversationService by lazy {
-        Log.d(TAG, "Creating ConversationService via factory")
-        ConversationServiceFactory.create(getApplication())
-    }
-    private lateinit var sessionPreparer: SessionPreparer
+//    private val conversationService: ConversationService by lazy {
+//        Log.d(TAG, "Creating ConversationService via factory")
+//        ConversationServiceFactory.create(getApplication())
+//    }
+
+    private var toolExecutor: ToolExecutor? = null
+    private var mcpClient: McpClientManager? = null
+    private lateinit var conversationService: ConversationService
 
     // Wake word service for foreground detection
     private val wakeWordService = WakeWordService(application) {
@@ -111,7 +106,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         val activeProfile = ProfileManager.getLastUsedOrDefaultProfile()
         if (activeProfile != null) {
             currentProfileId = activeProfile.id
-            _systemPrompt.value = activeProfile.getCombinedPrompt()
         }
 
         // Load wake word preference
@@ -232,20 +226,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         }
     }
 
-    /**
-     * Initialize the Gemini model with tools from MCP.
-     */
-    private suspend fun initializeGemini() {
-        try {
-            val profile = ProfileManager.getProfileById(currentProfileId)
-            val defaultPrompt = SystemPromptConfig.getSystemPrompt(getApplication())
-            sessionPreparer.prepareAndInitialize(profile, conversationService, defaultPrompt)
-        } catch (e: Exception) {
-            // Error is already logged by preparer
-            throw e
-        }
-    }
-
     fun onChatButtonClicked() {
         if (isSessionActive) {
             // Stop the chat session
@@ -256,7 +236,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         }
     }
 
+    private fun setUIState(uiState: UiState): Unit {
+        _uiState.value = uiState
+    }
+
     private fun startChat() {
+        // Initialize Gemini with fresh tools and system prompt
+        val profile = ProfileManager.getProfileById(currentProfileId)
+        if (profile == null) {
+            _uiState.value = UiState.Error("No profile set, choose a profile before starting")
+            return
+        }
         viewModelScope.launch {
             try {
                 // Stop wake word listening (release microphone)
@@ -265,77 +255,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
                 // Set state to Initializing while preparing the model
                 _uiState.value = UiState.Initializing
 
+                conversationService = ConversationServiceFactory.create(getApplication())
+
                 // Create fresh MCP connection for this session
-                app.mcpClient = McpClientManager(app.haUrl!!, app.haToken!!)
-                app.mcpClient?.initialize()
-                app.toolExecutor = GeminiMCPToolExecutor(app.mcpClient!!)
+                val mcp = McpClientManager(app.haUrl!!, app.haToken!!)
+                mcp.connect()
+                mcpClient = mcp
+                // Wrap the MCP in an app tool executor letting it do local actions and get logged
+                toolExecutor = AppToolExecutor(
+                    toolExecutor = mcp,
+                    logger = this@MainViewModel,
+                    setUIState = { uiState: UiState -> _uiState.value = uiState },
+                    localTools = getLocalTools(),
+                )
 
                 // Now sessionPreparer needs to be recreated with the new mcpClient
-                sessionPreparer = SessionPreparer(
-                    mcpClient = app.mcpClient!!,
+                val sessionPreparer = SessionPreparer(
+                    toolExecutor = toolExecutor!!,
                     haApiClient = app.haApiClient!!,
-                    toolExecutor = app.toolExecutor!!,
-                    onLogEntry = ::addLogEntry
+                    logger = this@MainViewModel
                 )
 
-                // Initialize Gemini with fresh tools and system prompt
-                initializeGemini()
+                sessionPreparer.prepareAndInitialize(profile, conversationService)
 
-                // Only proceed to chat if initialization succeeded
                 isSessionActive = true
                 _uiState.value = UiState.ChatActive
-
-                // Get the active profile for transcription settings and initial message
-                val profile = ProfileManager.getProfileById(currentProfileId)
-
-                // Create transcription handler based on profile setting
-                val domainTranscriptHandler: ((TranscriptInfo) -> Unit)? =
-                    if (profile?.enableTranscription == true) {
-                        { transcriptInfo ->
-                            val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
-
-                            // Log user transcription (only if not null/empty)
-                            transcriptInfo.userText?.takeIf { it.isNotBlank() }?.let { text ->
-                                addLogEntry(
-                                    LogEntry(
-                                        timestamp = timestamp,
-                                        toolName = "🎤 User",
-                                        parameters = "",
-                                        success = true,
-                                        result = text
-                                    )
-                                )
-                            }
-
-                            // Log model transcription (only if not null/empty)
-                            transcriptInfo.modelText?.takeIf { it.isNotBlank() }?.let { text ->
-                                addLogEntry(
-                                    LogEntry(
-                                        timestamp = timestamp,
-                                        toolName = "🔊 Model",
-                                        parameters = "",
-                                        success = true,
-                                        result = text
-                                    )
-                                )
-                            }
-                        }
-                    } else null
-
-                // Tool call handler - uses domain types directly
-                val domainToolCallHandler: suspend (ToolCall) -> ToolResponse = ::executeHomeAssistantTool
-
-                // Start the session with the domain-level handlers
-                conversationService.startSession(
-                    onToolCall = domainToolCallHandler,
-                    onTranscript = domainTranscriptHandler
-                )
-
+                conversationService.startSession()
                 // Play ready beep to indicate session is active
                 BeepHelper.playReadyBeep(getApplication())
 
                 // Send initial message to agent if configured
-                profile?.initialMessageToAgent?.let { initialText ->
+                profile.initialMessageToAgent.let { initialText ->
                     if (initialText.isNotBlank()) {
                         try {
                             conversationService.sendText(initialText)
@@ -388,9 +338,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
                 )
 
                 // Clean up MCP connection if initialization failed
-                app.mcpClient?.shutdown()
-                app.mcpClient = null
-                app.toolExecutor = null
+                toolExecutor = null
+                mcpClient?.shutdown()
+                mcpClient = null
+
 
                 isSessionActive = false
                 _uiState.value = UiState.Error("Failed to start session: ${e.message}")
@@ -410,9 +361,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         }
 
         // Clean up MCP connection
-        app.mcpClient?.shutdown()
-        app.mcpClient = null
-        app.toolExecutor = null
+        toolExecutor = null
+        mcpClient?.shutdown()
+        mcpClient = null
 
         isSessionActive = false
         _uiState.value = UiState.ReadyToTalk
@@ -453,148 +404,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         _logExpanded.value = !_logExpanded.value
     }
 
-    /**
-     * Execute a tool call from the AI using domain types.
-     * This method uses MCP to execute the tool against Home Assistant.
-     */
-    private suspend fun executeHomeAssistantTool(call: ToolCall): ToolResponse {
-        // Intercept EndConversation tool
-        if (call.name == "EndConversation") {
-            return handleEndConversation(call)
-        }
-
-        _uiState.value = UiState.ExecutingAction(call.name)
-
-        // Prepare parameters string for logging
-        val paramsString = call.arguments.toString()
-        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-            .format(java.util.Date())
-
-        // Execute the tool via MCP
-        val result = try {
-            val executor = app.toolExecutor
-            if (executor == null) {
-                ToolResponse(
-                    id = call.id,
-                    name = call.name,
-                    result = "",
-                    error = "Tool executor not initialized"
-                )
-            } else {
-                val mcpResult = executor.executeToolDirect(call.name, call.arguments)
-
-                // Extract result text from MCP response
-                val resultText = mcpResult.content
-                    .filter { it.type == "text" }
-                    .mapNotNull { it.text }
-                    .joinToString("\n")
-
-                // Check if it's an error
-                val isError = resultText.contains("\"error\"") || (mcpResult.isError == true)
-
-                // Log the call
-                addLogEntry(
-                    LogEntry(
-                        timestamp = timestamp,
-                        toolName = call.name,
-                        parameters = paramsString,
-                        success = !isError,
-                        result = resultText
-                    )
-                )
-
-                ToolResponse(
-                    id = call.id,
-                    name = call.name,
-                    result = resultText,
-                    error = if (isError) resultText else null
-                )
-            }
-        } catch (e: Exception) {
-            // Log failed call
-            addLogEntry(
-                LogEntry(
-                    timestamp = timestamp,
-                    toolName = call.name,
-                    parameters = paramsString,
-                    success = false,
-                    result = "Exception: ${e.message}"
-                )
-            )
-
-            ToolResponse(
-                id = call.id,
-                name = call.name,
-                result = "",
-                error = e.message ?: "Unknown error"
-            )
-        }
-
-        _uiState.value = UiState.ChatActive // Return to normal chat-active state
-        return result
-    }
-
-    private suspend fun handleEndConversation(call: ToolCall): ToolResponse {
-        // Extract reason parameter
-        val reason = call.arguments["reason"]?.jsonPrimitive?.content ?: "Natural conclusion"
-
-        // Create timestamp
-        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-            .format(java.util.Date())
-
-        // Log the tool call
-        addLogEntry(
-            LogEntry(
-                timestamp = timestamp,
-                toolName = call.name,
-                parameters = call.arguments.toString(),
-                success = true,
-                result = "Conversation ended: $reason"
-            )
-        )
-
-        // Schedule stop after minimal delay for service to process the response
-        viewModelScope.launch {
-            delay(300) // Allow conversation service to send the function response
-            stopChat()
-        }
-
-        // Return success response immediately
-        return ToolResponse(
-            id = call.id,
-            name = call.name,
-            result = "Conversation ended: $reason"
-        )
-    }
-
     override fun addLogEntry(log: LogEntry) {
         _toolLogs.value = _toolLogs.value + log
-    }
-
-    /**
-     * Update the system prompt (only allowed when chat is not active)
-     */
-    fun updateSystemPrompt(newPrompt: String) {
-        if (!isSessionActive) {
-            _systemPrompt.value = newPrompt
-        }
-    }
-
-    /**
-     * Save the current system prompt to config
-     */
-    fun saveSystemPrompt() {
-        SystemPromptConfig.saveSystemPrompt(getApplication(), _systemPrompt.value)
-    }
-
-    /**
-     * Reset system prompt to default
-     */
-    fun resetSystemPromptToDefault() {
-        if (!isSessionActive) {
-            SystemPromptConfig.resetToDefault(getApplication())
-            _systemPrompt.value = SystemPromptConfig.getSystemPrompt(getApplication())
-        }
     }
 
     /**
@@ -608,10 +419,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
 
         val profile = ProfileManager.getProfileById(profileId) ?: return
         currentProfileId = profileId
-        _systemPrompt.value = profile.getCombinedPrompt()
         ProfileManager.markProfileAsUsed(profileId)
-
-        // Model will be initialized fresh when user clicks Start Chat
     }
 
     /**
@@ -657,6 +465,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         super.onCleared()
         conversationService.cleanup()
         wakeWordService.destroy()
+    }
+
+    private fun getLocalTools(): Map<String, LocalTool> {
+        return mapOf(
+            "EndConversation" to LocalTool(
+                definition = McpTool(
+                    name = "EndConversation",
+                    description = "",
+                    inputSchema = McpInputSchema(
+                        type = "object",
+                        properties = mapOf("reason" to McpProperty(
+                            description = "Brief reason why this conversation has come to an end"
+                        ))
+                    ),
+                ),
+                execute = { name: String, arguments: Map<String, JsonElement> ->
+                    val reason = arguments["reason"]?.jsonPrimitive?.content ?: "Natural conclusion"
+
+                    viewModelScope.launch {
+                        // Allow conversation service to send the function response
+                        delay(300)
+                        stopChat()
+                    }
+
+                    // Return success response immediately
+                    ToolCallResult(
+                        isError = false,
+                        content = listOf(ToolContent(type = "text", text = "Conversation ended: $reason"))
+                    )
+                }
+            )
+        )
     }
 }
 

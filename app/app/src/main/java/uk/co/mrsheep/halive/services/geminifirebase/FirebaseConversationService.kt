@@ -1,4 +1,4 @@
-package uk.co.mrsheep.halive.services.conversation
+package uk.co.mrsheep.halive.services.geminifirebase
 
 import android.content.Context
 import android.util.Log
@@ -17,12 +17,14 @@ import com.google.firebase.ai.type.Voice
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.liveGenerationConfig
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import uk.co.mrsheep.halive.services.GeminiMCPToolTransformer
 import uk.co.mrsheep.halive.services.LocalToolDefinitions
-import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
+import uk.co.mrsheep.halive.services.ToolExecutor
+import uk.co.mrsheep.halive.services.conversation.ConversationService
+import uk.co.mrsheep.halive.services.mcp.McpTool
+import uk.co.mrsheep.halive.services.mcp.ToolCallResult
 
 /**
  * Firebase Gemini Live API implementation of ConversationService.
@@ -34,10 +36,20 @@ import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
  * @param context Android application context for resource access
  */
 @OptIn(PublicPreviewAPI::class)
-class FirebaseConversationService(private val context: Context) : ConversationService {
+class FirebaseConversationService(private val context: Context) :
+    ConversationService {
 
     private var generativeModel: LiveGenerativeModel? = null
     private var liveSession: LiveSession? = null
+    private var toolExecutor: ToolExecutor? = null
+    private var transcriptor: ((String?, String?) -> Unit)? = null
+
+
+    private val json = Json {
+        encodeDefaults = true
+        ignoreUnknownKeys = true
+        prettyPrint = false
+    }
 
     companion object {
         private const val TAG = "FirebaseConversationService"
@@ -49,21 +61,23 @@ class FirebaseConversationService(private val context: Context) : ConversationSe
      * Transforms MCP tools to Firebase format, creates local tools, and initializes
      * the Gemini Live model with combined tools and system prompt.
      *
-     * @param mcpTools Raw tools from Home Assistant MCP server
+     * @param tools Raw tools from Home Assistant MCP server
      * @param systemPrompt System instructions for the AI
      * @param modelName Model to use (e.g., "models/gemini-2.0-flash-exp")
      * @param voiceName Voice to use (e.g., "Aoede", "Leda")
      */
     @OptIn(PublicPreviewAPI::class)
     override suspend fun initialize(
-        mcpTools: McpToolsListResult,
+        tools: List<McpTool>,
         systemPrompt: String,
         modelName: String,
-        voiceName: String
+        voiceName: String,
+        toolExecutor: ToolExecutor,
+        transcriptor: ((String?, String?) -> Unit)?
     ) {
         try {
             // Transform MCP tools to Firebase format
-            val mcpToolsList = GeminiMCPToolTransformer.transform(mcpTools)
+            val mcpToolsList = FirebaseMCPToolTransformer.transform(tools)
 
             // Create local tools (e.g., EndConversation)
             val endConversationTool = LocalToolDefinitions.createEndConversationTool()
@@ -72,13 +86,16 @@ class FirebaseConversationService(private val context: Context) : ConversationSe
             // Combine MCP tools with local tools
             val allTools = mcpToolsList + localTools
 
+            this.toolExecutor = toolExecutor
+            this.transcriptor = transcriptor
+
             // Initialize the generative model
             generativeModel = Firebase.ai.liveModel(
                 modelName = modelName,
                 systemInstruction = content { text(systemPrompt) },
                 tools = allTools,
                 generationConfig = liveGenerationConfig {
-                    responseModality = ResponseModality.AUDIO
+                    responseModality = ResponseModality.Companion.AUDIO
                     speechConfig = SpeechConfig(voice = Voice(voiceName))
                 }
             )
@@ -102,10 +119,7 @@ class FirebaseConversationService(private val context: Context) : ConversationSe
      * @param onTranscript Optional callback for transcription updates
      */
     @OptIn(PublicPreviewAPI::class)
-    override suspend fun startSession(
-        onToolCall: suspend (ToolCall) -> ToolResponse,
-        onTranscript: ((TranscriptInfo) -> Unit)?
-    ) {
+    override suspend fun startSession() {
         val model = generativeModel ?: throw IllegalStateException("Model not initialized. Call initialize() first.")
 
         try {
@@ -116,38 +130,19 @@ class FirebaseConversationService(private val context: Context) : ConversationSe
             val functionCallHandlerAdapter: (FunctionCallPart) -> FunctionResponsePart = { firebaseCall ->
                 try {
                     runBlocking {
-                        // Convert Firebase FunctionCallPart to domain ToolCall
-                        val domainCall = firebaseCall.toDomainToolCall()
-
-                        // Invoke the tool call handler
-                        val response = onToolCall(domainCall)
-
-                        // Convert domain ToolResponse to Firebase FunctionResponsePart
-                        response.toFirebaseResponse()
+                        toolExecutor?.callTool(firebaseCall.name, firebaseCall.args).toFirebaseResponse(firebaseCall)
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling tool call: ${firebaseCall.name}", e)
-                    // Return error response to model
-                    FunctionResponsePart(
-                        name = firebaseCall.name,
-                        response = buildJsonObject {
-                            put("error", "Tool execution failed: ${e.message}")
-                        }
-                    )
+                    FunctionResponsePart(name = firebaseCall.name, id = firebaseCall.id, response = buildJsonObject { put("error", "Tool execution failed: ${e.message}") })
                 }
             }
 
             // Transcription handler - converts Firebase Transcription to domain TranscriptInfo
             val transcriptionHandlerAdapter: ((Transcription?, Transcription?) -> Unit)? =
-                if (onTranscript != null) {
+                if (transcriptor != null) {
                     { userTranscript: Transcription?, modelTranscript: Transcription? ->
-                        try {
-                            val userText = userTranscript?.text
-                            val modelText = modelTranscript?.text
-                            onTranscript(TranscriptInfo(userText, modelText))
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error handling transcription", e)
-                        }
+                            transcriptor?.invoke(userTranscript?.text, modelTranscript?.text)
                     }
                 } else {
                     null
@@ -227,39 +222,40 @@ class FirebaseConversationService(private val context: Context) : ConversationSe
     }
 
     /**
-     * Helper: Convert Firebase FunctionCallPart to domain ToolCall.
-     *
-     * Extracts the tool name and arguments from the Firebase representation
-     * and creates a domain-level tool call object.
-     */
-    private fun FunctionCallPart.toDomainToolCall(): ToolCall {
-        // Parse arguments as Map<String, JsonElement>
-        val argsMap = (args as? Map<String, JsonElement>) ?: emptyMap()
-
-        return ToolCall(
-            id = id ?: "",
-            name = name,
-            arguments = argsMap
-        )
-    }
-
-    /**
      * Helper: Convert domain ToolResponse to Firebase FunctionResponsePart.
      *
      * Wraps the tool response in the Firebase response format, including
      * either the result or error message.
      */
-    private fun ToolResponse.toFirebaseResponse(): FunctionResponsePart {
-        val responseJson = buildJsonObject {
-            if (error != null) {
-                put("error", error)
-            } else {
-                put("result", result)
+    private fun ToolCallResult?.toFirebaseResponse(call: FunctionCallPart): FunctionResponsePart {
+        val responseJson = if (this == null) {
+            buildJsonObject {
+                put("error", "No response")
+            }
+        } else if (isError == true) {
+            val errorMessage = content
+                .filter { it.type == "text" }
+                .mapNotNull { it.text }
+                .joinToString("\n")
+
+            buildJsonObject {
+                put("error", errorMessage.ifEmpty { "Unknown error" })
+            }
+        } else {
+            // Extract text content from MCP result
+            val textContent = content
+                .filter { it.type == "text" }
+                .mapNotNull { it.text }
+                .joinToString("\n")
+
+            buildJsonObject {
+                put("result", json.parseToJsonElement(textContent))
             }
         }
 
         return FunctionResponsePart(
-            name = name,
+            name = call.name,
+            id = call.id,
             response = responseJson
         )
     }

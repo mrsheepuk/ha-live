@@ -1,16 +1,15 @@
 package uk.co.mrsheep.halive.services
 
 import android.util.Log
-import com.google.firebase.ai.type.FunctionCallPart
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.Json
+import uk.co.mrsheep.halive.core.AppLogger
+import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.core.ToolFilterMode
 import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
 import uk.co.mrsheep.halive.services.conversation.ConversationService
-import uk.co.mrsheep.halive.ui.LogEntry
 
 /**
  * Encapsulates the heavy initialization logic for preparing a conversation session.
@@ -25,14 +24,15 @@ import uk.co.mrsheep.halive.ui.LogEntry
  * - Initializes the conversation service with tools and prompt
  */
 class SessionPreparer(
-    private val mcpClient: McpClientManager,
-    private val haApiClient: HomeAssistantApiClient,
     private val toolExecutor: ToolExecutor,
-    private val onLogEntry: (LogEntry) -> Unit
+    private val haApiClient: HomeAssistantApiClient,
+    private val logger: AppLogger
 ) {
     companion object {
         private const val TAG = "SessionPreparer"
     }
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     /**
      * Main entry point: prepares and initializes the conversation session.
@@ -43,9 +43,8 @@ class SessionPreparer(
      * @throws Exception on any failure (caller handles state transitions)
      */
     suspend fun prepareAndInitialize(
-        profile: Profile?,
+        profile: Profile,
         conversationService: ConversationService,
-        defaultSystemPrompt: String
     ) {
         val timestamp = createTimestamp()
 
@@ -71,7 +70,6 @@ class SessionPreparer(
                 profile = profile,
                 renderedBgInfo = renderedBackgroundInfo,
                 liveContext = liveContextText,
-                defaultSystemPrompt = defaultSystemPrompt
             )
 
             // Extract model and voice from profile or use defaults
@@ -87,13 +85,14 @@ class SessionPreparer(
 
             val toolsSection = if (toolNames.isNotEmpty()) {
                 "$filterInfo\nAvailable Tools (${toolNames.size}):\n" +
-                    toolNames.joinToString("\n") { "- $it" }
+                        toolNames.joinToString("\n") { "- $it" }
             } else {
                 "$filterInfo\nNo tools available"
             }
 
+
             // Log the full generated system prompt
-            onLogEntry(
+            logger.addLogEntry(
                 LogEntry(
                     timestamp = timestamp,
                     toolName = "System Startup",
@@ -103,12 +102,49 @@ class SessionPreparer(
                 )
             )
 
+            val transcriptor: ((String?, String?) -> Unit)? =
+                if (profile?.enableTranscription == true) {
+                    { userTranscript: String?, modelTranscript: String? ->
+                        if (userTranscript != null) {
+                            logger.addLogEntry(
+                                LogEntry(
+                                    timestamp = timestamp,
+                                    toolName = "🎤 User",
+                                    parameters = "",
+                                    success = true,
+                                    result = userTranscript
+                                )
+                            )
+                        }
+                        if (modelTranscript != null) {
+                            logger.addLogEntry(
+                                LogEntry(
+                                    timestamp = timestamp,
+                                    toolName = "🔊 Model",
+                                    parameters = "",
+                                    success = true,
+                                    result = modelTranscript
+                                )
+                            )
+                        }
+                    }
+                } else {
+                    null
+                }
+
             // Initialize the conversation service with tools and prompt
-            conversationService.initialize(mcpToolsResult, systemPrompt, model, voice)
+            conversationService.initialize(
+                mcpToolsResult.tools,
+                systemPrompt,
+                model,
+                voice,
+                toolExecutor,
+                transcriptor
+            )
 
         } catch (e: Exception) {
             // Log initialization error to tool log
-            onLogEntry(
+            logger.addLogEntry(
                 LogEntry(
                     timestamp = timestamp,
                     toolName = "System Startup",
@@ -140,34 +176,39 @@ class SessionPreparer(
         val timestamp = createTimestamp()
 
         // Fetch raw MCP tools
-        val mcpToolsResult = mcpClient.getTools()
+        val tools = toolExecutor.getTools()
 
-        val totalToolCount = mcpToolsResult?.tools?.size ?: 0
+        val totalToolCount = tools?.size ?: 0
 
         // Apply profile-based tool filtering
-        val filteredTools = mcpToolsResult?.let { result ->
+        val filteredTools = tools.let { result ->
             when (profile?.toolFilterMode) {
                 ToolFilterMode.SELECTED -> {
                     val selected = profile.selectedToolNames
-                    val available = result.tools.filter { it.name in selected }
+                    val available = result.filter { it.name in selected }
 
                     // Log warning if some selected tools are missing from HA
                     val missing = selected - available.map { it.name }.toSet()
                     if (missing.isNotEmpty()) {
-                        onLogEntry(
+                        logger.addLogEntry(
                             LogEntry(
                                 timestamp = timestamp,
                                 toolName = "System Startup",
                                 parameters = "Tool Filtering",
                                 success = false,
-                                result = "Selected tools not available in Home Assistant: ${missing.joinToString(", ")}"
+                                result = "Selected tools not available in Home Assistant: ${
+                                    missing.joinToString(
+                                        ", "
+                                    )
+                                }"
                             )
                         )
                     }
 
                     available
                 }
-                else -> result.tools // ToolFilterMode.ALL or null
+
+                else -> tools // ToolFilterMode.ALL or null
             }
         }
 
@@ -205,22 +246,17 @@ class SessionPreparer(
      */
     private suspend fun fetchLiveContext(timestamp: String): String {
         return try {
-            // Create a FunctionCallPart for GetLiveContext
-            val getLiveContextCall = FunctionCallPart(
-                name = "GetLiveContext",
-                args = emptyMap()
-            )
-            val response = toolExecutor.executeTool(getLiveContextCall)
-            response.response.let { jsonObj ->
-                // Navigate: outer "result" -> inner "result" -> text content
-                jsonObj.jsonObject["result"]
-                    ?.jsonObject?.get("result")
-                    ?.jsonPrimitive?.content ?: ""
+            val response = toolExecutor.callTool("GetLiveContext", emptyMap())
+            response.let { result ->
+                result.content
+                    .filter { it.type == "text" }
+                    .mapNotNull { it.text }
+                    .joinToString("\n")
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch live context: ${e.message}")
             // Log the error to the tool log
-            onLogEntry(
+            logger.addLogEntry(
                 LogEntry(
                     timestamp = timestamp,
                     toolName = "System Startup",
@@ -243,16 +279,13 @@ class SessionPreparer(
      * @return The complete system prompt
      */
     private fun buildSystemPrompt(
-        profile: Profile?,
+        profile: Profile,
         renderedBgInfo: String,
         liveContext: String,
-        defaultSystemPrompt: String
     ): String {
-        return if (profile != null) {
-            // Check if we should include live context
-            if (profile.includeLiveContext && liveContext.isNotEmpty()) {
-                // Build combined prompt with live context in its own section
-                """<system_prompt>
+        return if (profile.includeLiveContext && liveContext.isNotEmpty()) {
+            // Build combined prompt with live context in its own section
+            """<system_prompt>
 ${profile.systemPrompt}
 </system_prompt>
 
@@ -267,9 +300,9 @@ $renderedBgInfo
 <initial_live_context>
 $liveContext
 </initial_live_context>""".trimIndent()
-            } else {
-                // Build combined prompt without live context section
-                """<system_prompt>
+        } else {
+            // Build combined prompt without live context section
+            """<system_prompt>
 ${profile.systemPrompt}
 </system_prompt>
 
@@ -280,10 +313,6 @@ ${profile.personality}
 <background_info>
 $renderedBgInfo
 </background_info>""".trimIndent()
-            }
-        } else {
-            // Use default system prompt provided by caller
-            defaultSystemPrompt
         }
     }
 }

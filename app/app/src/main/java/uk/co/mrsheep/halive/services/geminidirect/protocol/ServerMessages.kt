@@ -1,4 +1,4 @@
-package uk.co.mrsheep.halive.services.protocol
+package uk.co.mrsheep.halive.services.geminidirect.protocol
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName

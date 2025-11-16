@@ -7,10 +7,9 @@ import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.conversation.ConversationServiceFactory
-import uk.co.mrsheep.halive.services.conversation.ToolCall
-import uk.co.mrsheep.halive.services.conversation.ToolResponse
-import uk.co.mrsheep.halive.ui.LogEntry
-import com.google.firebase.ai.type.FunctionCallPart
+import uk.co.mrsheep.halive.core.AppLogger
+import uk.co.mrsheep.halive.services.geminifirebase.FirebaseMCPToolExecutor
+import uk.co.mrsheep.halive.services.mcp.McpClientManager
 
 /**
  * Manages the lifecycle of testing a profile with MockToolExecutor.
@@ -54,8 +53,8 @@ import com.google.firebase.ai.type.FunctionCallPart
  */
 class ProfileTestManager(
     private val app: HAGeminiApp,
-    private val onLogEntry: (LogEntry) -> Unit,
-    private val onStatusChange: (TestStatus) -> Unit
+    private val onStatusChange: (TestStatus) -> Unit,
+    private val logger: AppLogger
 ) {
 
     companion object {
@@ -77,8 +76,7 @@ class ProfileTestManager(
      * Separate conversation service instance for testing (not shared with main app).
      * Uses factory pattern to select appropriate implementation.
      */
-    private val testConversationService: ConversationService =
-        ConversationServiceFactory.create(app.applicationContext)
+    private lateinit var testConversationService: ConversationService
 
     /**
      * Mock tool executor with pass-through for read-only tools.
@@ -136,58 +134,31 @@ class ProfileTestManager(
             val haApiClient = app.haApiClient
                 ?: throw IllegalStateException("Home Assistant API client not initialized")
 
+            testConversationService = ConversationServiceFactory.create(app.applicationContext)
+
             // Create fresh MCP connection for this test session
             mcpClient = McpClientManager(haUrl, haToken)
-            mcpClient!!.initialize()
+            mcpClient!!.connect()
             Log.d(TAG, "Fresh MCP connection created for test session")
 
-            // Create real executor for pass-through of read-only tools
-            val toolExecutor = GeminiMCPToolExecutor(mcpClient!!)
-
             // Create mock executor with pass-through capability
-            mockToolExecutor = MockToolExecutor(realExecutor = toolExecutor)
+            mockToolExecutor = MockToolExecutor(realExecutor = mcpClient!!, passthroughTools = listOf("GetLiveContext", "GetDateTime"))
 
             // Create a new session preparer for this test using MockToolExecutor
             sessionPreparer = SessionPreparer(
-                mcpClient = mcpClient!!,
-                haApiClient = haApiClient,
                 toolExecutor = mockToolExecutor!!,
-                onLogEntry = onLogEntry
+                haApiClient = haApiClient,
+                logger = logger
             )
-
-            // Get default system prompt from SystemPromptConfig
-            val defaultSystemPrompt = SystemPromptConfig.getSystemPrompt(context)
 
             // Prepare and initialize the conversation session with the profile
             sessionPreparer?.prepareAndInitialize(
                 profile = profile,
                 conversationService = testConversationService,
-                defaultSystemPrompt = defaultSystemPrompt
             )
 
             // Start the audio conversation with mock tool call handler
-            testConversationService.startSession(
-                onToolCall = { domainCall: ToolCall ->
-                    // Convert domain ToolCall to Firebase FunctionCallPart for MockToolExecutor
-                    val firebaseCall = FunctionCallPart(
-                        name = domainCall.name,
-                        id = domainCall.id,
-                        args = domainCall.arguments
-                    )
-
-                    // Execute with mock executor (uses Firebase types)
-                    val firebaseResponse = mockToolExecutor!!.executeTool(firebaseCall)
-
-                    // Convert Firebase FunctionResponsePart to domain ToolResponse
-                    val resultText = firebaseResponse.response?.toString() ?: ""
-                    ToolResponse(
-                        id = domainCall.id,
-                        name = domainCall.name,
-                        result = resultText
-                    )
-                },
-                onTranscript = null
-            )
+            testConversationService.startSession()
 
             isTestActive = true
             onStatusChange(TestStatus.Active("Test session active - speak now!"))

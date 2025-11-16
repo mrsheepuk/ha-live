@@ -9,7 +9,7 @@ import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
-import uk.co.mrsheep.halive.services.McpClientManager
+import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -59,13 +59,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
                 // Create temporary MCP connection for testing
                 testMcpClient = McpClientManager(url, token)
-                testMcpClient.initialize()
+                testMcpClient.connect()
 
                 // Try to fetch tools
                 val tools = testMcpClient.getTools()
 
-                if (tools.tools.isNotEmpty()) {
-                    _settingsState.value = SettingsState.ConnectionSuccess("Found ${tools.tools.size} tools")
+                if (tools.isNotEmpty()) {
+                    _settingsState.value = SettingsState.ConnectionSuccess("Found ${tools.size} tools")
                 } else {
                     _settingsState.value = SettingsState.ConnectionFailed("No tools found")
                 }

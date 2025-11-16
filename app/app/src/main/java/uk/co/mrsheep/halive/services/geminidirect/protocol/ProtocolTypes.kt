@@ -1,10 +1,8 @@
-package uk.co.mrsheep.halive.services.protocol
+package uk.co.mrsheep.halive.services.geminidirect.protocol
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.SerialName
-import kotlinx.serialization.json.JsonClassDiscriminator
 
 // --- Part (text and inlineData variants) ---
 

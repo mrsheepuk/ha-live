@@ -1,7 +1,8 @@
-package uk.co.mrsheep.halive.services
+package uk.co.mrsheep.halive.services.geminidirect
 
 import android.util.Log
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.sync.Mutex
@@ -9,9 +10,11 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import uk.co.mrsheep.halive.services.protocol.ServerMessage
+import okio.ByteString
+import uk.co.mrsheep.halive.services.geminidirect.protocol.ServerMessage
 import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 
@@ -47,7 +50,7 @@ class GeminiLiveClient(
     private val messageFlow = MutableSharedFlow<ServerMessage>(
         replay = 0,
         extraBufferCapacity = MESSAGE_QUEUE_CAPACITY,
-        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
 
     private var isConnected = false
@@ -164,7 +167,7 @@ class GeminiLiveClient(
 
     // --- WebSocketListener Implementation ---
 
-    override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
+    override fun onOpen(webSocket: WebSocket, response: Response) {
         Log.d(TAG, "WebSocket opened")
 
         // Signal that the connection is ready FIRST (before acquiring mutex)
@@ -186,7 +189,7 @@ class GeminiLiveClient(
         }
     }
 
-    override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
+    override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
         Log.d(TAG, "Received binary message of size ${bytes.size}")
         // TODO: Check what type of binary data we've got! 
         // For now, just coerce to string (feels wrong but let's see)
@@ -215,7 +218,7 @@ class GeminiLiveClient(
         }
     }
 
-    override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) {
+    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
         val responseInfo = response?.let {
             "Response code: ${it.code}, message: ${it.message}, body: ${it.body?.string()}"
         } ?: "No response"

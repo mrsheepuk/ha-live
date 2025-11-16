@@ -1,4 +1,4 @@
-package uk.co.mrsheep.halive.services.protocol
+package uk.co.mrsheep.halive.services.geminidirect.protocol
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
@@ -47,13 +47,15 @@ data class GenerationConfig(
 @Serializable
 data class SpeechConfig(
     @SerialName("voice_config")
-    val voiceConfig: VoiceConfig
+    val voiceConfig: VoiceConfig,
+    @SerialName("language_code")
+    val languageCode: String?
 )
 
 @Serializable
 data class VoiceConfig(
     @SerialName("prebuilt_voice_config")
-    val prebuiltVoiceConfig: PrebuiltVoiceConfig
+    val prebuiltVoiceConfig: PrebuiltVoiceConfig,
 )
 
 @Serializable

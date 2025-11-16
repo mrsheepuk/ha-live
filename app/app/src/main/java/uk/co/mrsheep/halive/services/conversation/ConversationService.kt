@@ -1,5 +1,7 @@
 package uk.co.mrsheep.halive.services.conversation
 
+import uk.co.mrsheep.halive.services.ToolExecutor
+import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
 
 /**
@@ -25,22 +27,18 @@ interface ConversationService {
      * @param voiceName Voice to use (e.g., "Aoede")
      */
     suspend fun initialize(
-        mcpTools: McpToolsListResult,
+        tools: List<McpTool>,
         systemPrompt: String,
         modelName: String,
-        voiceName: String
+        voiceName: String,
+        toolExecutor: ToolExecutor,
+        transcriptor: ((String?, String?) -> Unit)? = null
     )
 
     /**
      * Start a conversation session.
-     *
-     * @param onToolCall Callback when AI wants to call a tool
-     * @param onTranscript Optional callback for transcription updates
      */
-    suspend fun startSession(
-        onToolCall: suspend (ToolCall) -> ToolResponse,
-        onTranscript: ((TranscriptInfo) -> Unit)? = null
-    )
+    suspend fun startSession()
 
     /**
      * Send a text message to the AI during an active session.

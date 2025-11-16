@@ -3,6 +3,9 @@ package uk.co.mrsheep.halive.services.conversation
 import android.content.Context
 import android.util.Log
 import uk.co.mrsheep.halive.core.GeminiConfig
+import uk.co.mrsheep.halive.core.AppLogger
+import uk.co.mrsheep.halive.services.geminidirect.DirectConversationService
+import uk.co.mrsheep.halive.services.geminifirebase.FirebaseConversationService
 
 /**
  * Factory for creating the appropriate ConversationService implementation.
