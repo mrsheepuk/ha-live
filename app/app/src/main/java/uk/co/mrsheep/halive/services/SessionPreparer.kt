@@ -267,11 +267,8 @@ class SessionPreparer(
         renderedBgInfo: String,
         liveContext: String,
     ): String {
-        return if (profile.includeLiveContext && liveContext.isNotEmpty()) {
-            // Build combined prompt with live context in its own section
-            """<system_prompt>
+        var basicPrompt = """
 ${profile.systemPrompt}
-</system_prompt>
 
 <personality>
 ${profile.personality}
@@ -280,23 +277,16 @@ ${profile.personality}
 <background_info>
 $renderedBgInfo
 </background_info>
+""".trimIndent()
 
-<initial_live_context>
+        if (profile.includeLiveContext && liveContext.isNotEmpty()) {
+            return basicPrompt + """
+
+<live_context>
 $liveContext
-</initial_live_context>""".trimIndent()
-        } else {
-            // Build combined prompt without live context section
-            """<system_prompt>
-${profile.systemPrompt}
-</system_prompt>
-
-<personality>
-${profile.personality}
-</personality>
-
-<background_info>
-$renderedBgInfo
-</background_info>""".trimIndent()
+</live_context>""".trimIndent()
         }
+
+        return basicPrompt
     }
 }
