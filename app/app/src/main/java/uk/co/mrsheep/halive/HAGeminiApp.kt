@@ -25,16 +25,10 @@ class HAGeminiApp : Application() {
         // Try to initialize Firebase on launch
         FirebaseConfig.initializeFirebase(this)
 
-        // Initialize ProfileManager (NEW)
+        // Initialize ProfileManager
         ProfileManager.initialize(this)
 
-        // Run migration from SystemPromptConfig to profiles (NEW)
-        ProfileManager.runMigrationIfNeeded(this)
-
-        // Run tool filter migration (NEW)
-        ProfileManager.runToolFilterMigrationIfNeeded()
-
-        // Ensure at least one profile exists (NEW)
+        // Ensure at least one profile exists
         ProfileManager.ensureDefaultProfileExists()
 
         // Copy TFLite model files from assets to filesDir for wake word detection
