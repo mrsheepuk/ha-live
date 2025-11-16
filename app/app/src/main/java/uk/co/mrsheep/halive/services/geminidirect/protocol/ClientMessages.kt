@@ -70,7 +70,9 @@ data class PrebuiltVoiceConfig(
 @Serializable
 data class RealtimeInput(
     @SerialName("media_chunks")
-    val mediaChunks: List<MediaChunk>
+    val mediaChunks: List<MediaChunk>? = null,
+    val audio: MediaChunk? = null,
+    val video: MediaChunk? = null,
 )
 
 // --- ToolResponseMessage (reply to function calls) ---
@@ -92,7 +94,9 @@ data class FunctionResponse(
 
 @Serializable
 data class ClientContent(
-    val turns: List<Turn>
+    val turns: List<Turn>,
+    @SerialName("turn_complete")
+    val turnComplete: Boolean = false
 )
 
 @Serializable

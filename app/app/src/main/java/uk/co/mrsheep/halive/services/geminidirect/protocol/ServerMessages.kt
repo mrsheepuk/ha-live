@@ -29,19 +29,16 @@ sealed class ServerMessage {
 
     @Serializable
     data class Content(
-        @SerialName("server_content")
         val serverContent: ServerContent
     ) : ServerMessage()
 
     @Serializable
     data class ToolCall(
-        @SerialName("tool_call")
         val toolCall: ToolCallData
     ) : ServerMessage()
 
     @Serializable
     data class ToolCallCancellation(
-        @SerialName("tool_call_cancellation")
         val toolCallCancellation: CancellationData
     ) : ServerMessage()
 }
@@ -50,13 +47,17 @@ sealed class ServerMessage {
 
 @Serializable
 data class ServerContent(
-    @SerialName("model_turn")
     val modelTurn: ModelTurn? = null,
-    @SerialName("turn_complete")
     val turnComplete: Boolean? = null,
     val interrupted: Boolean? = null,
-    @SerialName("grounding_metadata")
-    val groundingMetadata: JsonElement? = null
+    val generationComplete: Boolean? = null,
+    val inputTranscription: Transcription? = null,
+    val outputTranscription: Transcription? = null,
+)
+
+@Serializable
+data class Transcription(
+    val text: String? = null
 )
 
 @Serializable
@@ -68,24 +69,32 @@ data class ModelTurn(
  * Server-side Part (can contain text, audio, or other inline data)
  */
 @Serializable
-sealed class ServerPart {
-    @Serializable
-    @SerialName("text")
-    data class Text(val text: String) : ServerPart()
 
-    @Serializable
-    @SerialName("inlineData")
-    data class InlineDataPart(
-        @SerialName("inline_data")
-        val inlineData: InlineData
-    ) : ServerPart()
+data class ServerPart (
+    val text: String? = null,
+    val inlineData: ServerInlineData? = null
+){
+//    @Serializable
+//    @SerialName("text")
+//    data class Text(val text: String)
+//
+//    @Serializable
+//    @SerialName("inlineData")
+//    data class InlineDataPart(
+//        val inlineData: InlineData
+//    )
 }
+
+@Serializable
+data class ServerInlineData(
+    val mimeType: String,
+    val data: String // base64-encoded data
+)
 
 // --- Tool Call Types ---
 
 @Serializable
 data class ToolCallData(
-    @SerialName("function_calls")
     val functionCalls: List<FunctionCall>? = null
 )
 
@@ -107,6 +116,7 @@ object ServerMessageSerializer : KSerializer<ServerMessage> {
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = false
+        classDiscriminator = "type"
     }
 
     override val descriptor: SerialDescriptor = buildClassSerialDescriptor("ServerMessage") {

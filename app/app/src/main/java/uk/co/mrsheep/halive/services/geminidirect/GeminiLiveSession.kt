@@ -1,19 +1,35 @@
 package uk.co.mrsheep.halive.services.geminidirect
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.media.AudioFormat
+import android.media.AudioTrack
+import android.os.StrictMode
+import android.os.StrictMode.ThreadPolicy
+import android.os.Process
 import android.util.Base64
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.fold
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import java.util.concurrent.TimeoutException
-import uk.co.mrsheep.halive.services.audio.GeminiAudioManager
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ClientContent
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ClientMessage
 import uk.co.mrsheep.halive.services.geminidirect.protocol.Content
@@ -24,7 +40,6 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.MediaChunk
 import uk.co.mrsheep.halive.services.geminidirect.protocol.PrebuiltVoiceConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.RealtimeInput
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ServerMessage
-import uk.co.mrsheep.halive.services.geminidirect.protocol.ServerPart
 import uk.co.mrsheep.halive.services.geminidirect.protocol.SetupMessage
 import uk.co.mrsheep.halive.services.geminidirect.protocol.SpeechConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.TextPart
@@ -32,6 +47,12 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolDeclaration
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.Turn
 import uk.co.mrsheep.halive.services.geminidirect.protocol.VoiceConfig
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.Executors
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.coroutines.EmptyCoroutineContext
 
 /**
  * GeminiLiveSession orchestrates the Gemini Live API WebSocket connection,
@@ -58,10 +79,14 @@ class GeminiLiveSession(
     }
 
     private val client = GeminiLiveClient(apiKey)
-    private val audioManager = GeminiAudioManager()
+//    private val audioManager = GeminiAudioManager()
 
-    // Session-scoped coroutines with Dispatchers.Default for CPU-bound work
-    private val sessionScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    @SuppressLint("ThreadPoolCreation")
+    val audioDispatcher =
+        Executors.newCachedThreadPool(AudioThreadFactory()).asCoroutineDispatcher()
+
+    private var sessionScope: CoroutineScope = CoroutineScope(EmptyCoroutineContext).apply { cancel() }
+    private var audioScope: CoroutineScope = CoroutineScope(EmptyCoroutineContext).apply { cancel() }
 
     private val json = Json {
         encodeDefaults = true
@@ -69,8 +94,17 @@ class GeminiLiveSession(
         prettyPrint = false
     }
 
-    private var playbackChannel: Channel<ByteArray>? = null
+    private val playBackQueue = ConcurrentLinkedQueue<ByteArray>()
+//    private var playbackChannel: Channel<ByteArray>? = null
     private var isSessionActive = false
+    private var audioHelper: AudioHelper? = null
+
+    val MIN_BUFFER_SIZE =
+        AudioTrack.getMinBufferSize(
+            24000,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        )
 
     /**
      * Start the Gemini Live session.
@@ -101,6 +135,16 @@ class GeminiLiveSession(
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
         onTranscription: ((userTranscription: String?, modelTranscription: String?) -> Unit)? = null
     ) {
+        if (sessionScope.isActive || audioScope.isActive) {
+            throw IllegalStateException("Audio / session scope already active, cannot start")
+        }
+
+
+        sessionScope =
+            CoroutineScope(Dispatchers.Default + SupervisorJob() + CoroutineName("LiveSession Network"))
+        audioScope = CoroutineScope(audioDispatcher + CoroutineName("LiveSession Audio"))
+        audioHelper = AudioHelper.build()
+
         try {
             Log.d(TAG, "Starting Gemini Live session with model: $model")
             isSessionActive = true
@@ -152,28 +196,22 @@ class GeminiLiveSession(
             sessionScope.launch {
                 messageHandlingLoop(onToolCall, onTranscription, setupCompleteDeferred)
             }
-            Log.d(TAG, "Message handling loop coroutine launched")
+            Log.d(TAG, "Message handling loop started")
 
             // Step 4: Wait for SetupComplete message (timeout after 10 seconds)
             val setupCompleted = withTimeoutOrNull(SETUP_TIMEOUT_MS) {
                 setupCompleteDeferred.await()
                 true
             }
-
             if (setupCompleted == null) {
                 throw TimeoutException("Setup did not complete within ${SETUP_TIMEOUT_MS}ms")
             }
             Log.d(TAG, "Setup completed successfully")
 
-            // Step 5: Start audio playback
-            playbackChannel = audioManager.startPlayback()
+            recordUserAudio()
+            Log.d(TAG, "Recording loop started")
+            listenForModelPlayback()
             Log.d(TAG, "Audio playback started")
-
-            // Step 6: Launch recording loop
-            sessionScope.launch {
-                recordingLoop()
-            }
-            Log.d(TAG, "Recording loop coroutine launched")
 
             Log.i(TAG, "Gemini Live session started successfully")
 
@@ -184,52 +222,54 @@ class GeminiLiveSession(
         }
     }
 
-    /**
-     * Recording loop coroutine (Coroutine 1).
-     *
-     * Continuously captures audio from the microphone via GeminiAudioManager,
-     * encodes to base64 (NO_WRAP), and sends to the API via RealtimeInputMessage.
-     *
-     * Runs until the session is closed or an error occurs.
-     */
-    private suspend fun recordingLoop() {
-        try {
-            Log.d(TAG, "Recording loop started")
+    /** Listen to the user's microphone and send the data to the model. */
+    private fun recordUserAudio() {
+        // Buffer the recording so we can keep recording while data is sent to the server
+        audioHelper
+            ?.listenToRecording()
+            ?.buffer(UNLIMITED)
+            ?.flowOn(audioDispatcher)
+            ?.accumulateUntil(MIN_BUFFER_SIZE)
+            ?.onEach {
+                sendAudioRealtime(it)
+                // delay uses a different scheduler in the backend, so it's "stickier" in its enforcement
+                // when compared to yield.
+                delay(0)
+            }
+            ?.launchIn(sessionScope)
+    }
 
-            audioManager.startRecording().collect { audioBytes ->
-                if (!isSessionActive) {
-                    Log.d(TAG, "Session inactive, stopping recording loop")
-                    return@collect
-                }
-
-                // Encode to base64 using NO_WRAP (no line breaks)
-                val base64Audio = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
-
-                // Build RealtimeInputMessage
-                val message = ClientMessage(
-                    realtimeInput = RealtimeInput(
-                        mediaChunks = listOf(
-                            MediaChunk(
-                                mimeType = "audio/pcm",
-                                data = base64Audio
-                            )
-                        )
-                    )
+    private suspend fun sendAudioRealtime(audio: ByteArray) {
+        val base64Audio = Base64.encodeToString(audio, Base64.NO_WRAP)
+        val message = ClientMessage(
+            realtimeInput = RealtimeInput(
+                audio = MediaChunk(
+                    mimeType = "audio/pcm",
+                    data = base64Audio
                 )
+            )
+        )
 
-                // Send to server
-                val messageJson = json.encodeToString(ClientMessage.serializer(), message)
-                client.send(messageJson)
+        // Send to server
+        val messageJson = json.encodeToString(ClientMessage.serializer(), message)
+        client.send(messageJson)
 
-                Log.v(TAG, "Sent audio chunk: ${audioBytes.size} bytes")
+        Log.v(TAG, "Sent audio chunk: ${audio.size} bytes")
+    }
+
+    private fun listenForModelPlayback() {
+        audioScope.launch {
+            Log.d(TAG, "starting audio playback")
+            while (isActive) {
+                val playbackData = playBackQueue.poll()
+                if (playbackData == null) {
+                    // delay uses a different scheduler in the backend, so it's "stickier" in its enforcement
+                    // when compared to yield.
+                    delay(0)
+                } else {
+                    audioHelper?.playAudio(playbackData)
+                }
             }
-
-        } catch (e: Exception) {
-            if (isSessionActive) {
-                Log.e(TAG, "Recording loop error", e)
-            }
-        } finally {
-            Log.d(TAG, "Recording loop ended")
         }
     }
 
@@ -300,41 +340,27 @@ class GeminiLiveSession(
         message: ServerMessage.Content,
         onTranscription: ((String?, String?) -> Unit)?
     ) {
-        message.serverContent.modelTurn?.parts?.forEach { part ->
-            when (part) {
-                is ServerPart.InlineDataPart -> {
-                    // Audio response from model
-                    if (part.inlineData.mimeType == "audio/pcm") {
-                        try {
-                            // Decode base64 audio
-                            val audioBytes = Base64.decode(part.inlineData.data, Base64.NO_WRAP)
-                            Log.v(TAG, "Decoded audio chunk: ${audioBytes.size} bytes")
-
-                            // Queue for playback
-                            playbackChannel?.send(audioBytes)
-                            Log.v(TAG, "Queued audio for playback")
-
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error decoding audio chunk", e)
-                        }
-                    }
+        if (message.serverContent.inputTranscription != null || message.serverContent.outputTranscription != null) {
+            Log.d(TAG, "Transcript received")
+            onTranscription?.invoke(message.serverContent.inputTranscription?.text, message.serverContent.outputTranscription?.text)
+        }
+        if (message.serverContent.interrupted == true) {
+            Log.d(TAG, "Turn interrupted")
+            playBackQueue.clear()
+        } else {
+            for (part in message.serverContent.modelTurn?.parts.orEmpty()) {
+                if (part.inlineData != null && part.inlineData.mimeType.startsWith("audio/pcm")) {
+                    val audioBytes = Base64.decode(part.inlineData.data, Base64.NO_WRAP)
+                    playBackQueue.add(audioBytes)
                 }
-
-                is ServerPart.Text -> {
-                    // Text transcription from model
-                    Log.d(TAG, "Received text from model: ${part.text.take(100)}")
-                    onTranscription?.invoke(null, part.text)
+                if (part.text != null) {
+                    onTranscription?.invoke(null, "THOUGHTS:" + part.text)
                 }
             }
         }
-
         // Log turn completion
         if (message.serverContent.turnComplete == true) {
             Log.d(TAG, "Turn completed")
-        }
-
-        if (message.serverContent.interrupted == true) {
-            Log.d(TAG, "Turn interrupted")
         }
     }
 
@@ -420,9 +446,10 @@ class GeminiLiveSession(
                     turns = listOf(
                         Turn(
                             role = "user",
-                            parts = listOf(TextPart(text))
+                            parts = listOf(TextPart(text)),
                         )
-                    )
+                    ),
+                    turnComplete = true,
                 )
             )
 
@@ -451,25 +478,20 @@ class GeminiLiveSession(
 
         isSessionActive = false
 
-        // Close playback channel first
-        playbackChannel?.close()
-        Log.d(TAG, "Playback channel closed")
 
-        // Clean up audio manager
-        try {
-            audioManager.cleanup()
-            Log.d(TAG, "Audio manager cleaned up")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error cleaning up audio manager", e)
-        }
+        audioScope.cancel()
+        playBackQueue.clear()
+
+        audioHelper?.release()
+        audioHelper = null
 
         // Close WebSocket (non-blocking)
         sessionScope.launch {
             try {
                 client.close()
-                Log.d(TAG, "WebSocket closed")
+                Log.d(TAG, "GeminiLiveClient closed")
             } catch (e: Exception) {
-                Log.e(TAG, "Error closing WebSocket", e)
+                Log.e(TAG, "Error closing GeminiLiveClient", e)
             }
         }
 
@@ -478,5 +500,50 @@ class GeminiLiveSession(
         Log.d(TAG, "Session scope cancelled")
 
         Log.i(TAG, "Session closed")
+    }
+}
+
+internal class AudioThreadFactory : ThreadFactory {
+    private val threadCount = AtomicLong()
+    private val policy: ThreadPolicy = audioPolicy()
+
+    override fun newThread(task: Runnable?): Thread? {
+        val thread =
+            DEFAULT.newThread {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+                StrictMode.setThreadPolicy(policy)
+                task?.run()
+            }
+        thread.name = "Audio Thread #${threadCount.andIncrement}"
+        return thread
+    }
+
+    companion object {
+        val DEFAULT: ThreadFactory = Executors.defaultThreadFactory()
+
+        private fun audioPolicy(): ThreadPolicy {
+            val builder = ThreadPolicy.Builder().detectNetwork()
+            return builder.penaltyLog().build()
+        }
+    }
+}
+
+internal fun Flow<ByteArray>.accumulateUntil(
+    minSize: Int,
+    emitLeftOvers: Boolean = false
+): Flow<ByteArray> = flow {
+    val remaining =
+        fold(ByteArrayOutputStream()) { buffer, it ->
+            buffer.apply {
+                write(it, 0, it.size)
+                if (size() >= minSize) {
+                    emit(toByteArray())
+                    reset()
+                }
+            }
+        }
+
+    if (emitLeftOvers && remaining.size() > 0) {
+        emit(remaining.toByteArray())
     }
 }

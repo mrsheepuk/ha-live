@@ -173,6 +173,7 @@ class GeminiLiveClient(
         // Signal that the connection is ready FIRST (before acquiring mutex)
         // This prevents deadlock with connect() which holds the mutex while waiting
         connectionDeferred?.complete(true)
+        super.onOpen(webSocket, response)
     }
 
     override fun onMessage(webSocket: WebSocket, text: String) {
@@ -187,14 +188,17 @@ class GeminiLiveClient(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to deserialize message", e)
         }
+        super.onMessage(webSocket, text)
     }
 
     override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
         Log.d(TAG, "Received binary message of size ${bytes.size}")
-        // TODO: Check what type of binary data we've got! 
+        // TODO: Check what type of binary data we've got!
         // For now, just coerce to string (feels wrong but let's see)
         try {
-            val message = json.decodeFromString(ServerMessage.serializer(), bytes.string(Charset.defaultCharset()))
+            val str = bytes.string(Charset.defaultCharset())
+            Log.d(TAG, "Received bytes: $str")
+            val message = json.decodeFromString(ServerMessage.serializer(), str)
             Log.d(TAG, "Received JSON $message")
             scope.launch {
                 messageFlow.emit(message)
@@ -202,11 +206,15 @@ class GeminiLiveClient(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to deserialize message", e)
         }
+        super.onMessage(webSocket, bytes)
     }
 
     override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
         Log.w(TAG, "WebSocket closing:\ncode=$code\nreason=$reason")
-        webSocket.close(1000, null)
+        // If we're still waiting for connection, mark it as failed
+        connectionDeferred?.complete(false)
+//        webSocket.close(1000, null)
+        super.onClosing(webSocket, code, reason)
     }
 
     override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -216,6 +224,7 @@ class GeminiLiveClient(
                 isConnected = false
             }
         }
+        super.onClosed(webSocket, code, reason)
     }
 
     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
