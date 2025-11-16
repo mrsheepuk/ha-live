@@ -59,6 +59,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      * @param initialMessageToAgent The initial message to send to the agent
      * @param model The AI model to use
      * @param voice The voice to use for audio responses
+     * @param language The language to use for responses
      * @param includeLiveContext Whether to include live context with system prompt
      * @param enableTranscription Whether to enable transcription display
      * @param autoStartChat Whether to auto-start chat when app opens
@@ -74,6 +75,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
         initialMessageToAgent: String,
         model: String,
         voice: String,
+        language: String,
         includeLiveContext: Boolean,
         enableTranscription: Boolean,
         autoStartChat: Boolean,
@@ -106,6 +108,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         backgroundInfo = backgroundInfo,
                         model = model,
                         voice = voice,
+                        language = language,
                         includeLiveContext = includeLiveContext,
                         enableTranscription = enableTranscription,
                         autoStartChat = autoStartChat,
@@ -124,6 +127,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         backgroundInfo = backgroundInfo,
                         model = model,
                         voice = voice,
+                        language = language,
                         includeLiveContext = includeLiveContext,
                         enableTranscription = enableTranscription,
                         autoStartChat = autoStartChat,

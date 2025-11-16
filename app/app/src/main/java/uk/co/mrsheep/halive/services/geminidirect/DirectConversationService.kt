@@ -41,6 +41,7 @@ class DirectConversationService(private val context: Context) :
     private var systemPrompt: String? = null
     private var modelName: String? = null
     private var voiceName: String? = null
+    private var languageCode: String? = null
     private var toolExecutor: ToolExecutor? = null
     private var transcriptor: ((String?, String?, Boolean) -> Unit)? = null
 
@@ -60,12 +61,14 @@ class DirectConversationService(private val context: Context) :
      * @param systemPrompt System instructions for the AI
      * @param modelName Model to use (e.g., "gemini-2.0-flash-exp")
      * @param voiceName Voice to use (e.g., "Aoede")
+     * @param languageCode Language code (e.g., "en-US")
      */
     override suspend fun initialize(
         tools: List<McpTool>,
         systemPrompt: String,
         modelName: String,
         voiceName: String,
+        languageCode: String,
         toolExecutor: ToolExecutor,
         transcriptor: ((String?, String?, Boolean) -> Unit)?
     ) {
@@ -81,6 +84,7 @@ class DirectConversationService(private val context: Context) :
             this.systemPrompt = systemPrompt
             this.modelName = modelName
             this.voiceName = voiceName
+            this.languageCode = languageCode
 
             Log.d(
                 TAG,
@@ -128,6 +132,7 @@ class DirectConversationService(private val context: Context) :
                 systemPrompt = systemPrompt ?: "",
                 tools = toolDeclarations ?: emptyList(),
                 voiceName = voiceName ?: "Aoede",
+                languageCode = languageCode ?: "en-US",
                 onToolCall = protocolToolCallHandler,
                 onTranscription = transcriptor
             )
@@ -184,6 +189,7 @@ class DirectConversationService(private val context: Context) :
             systemPrompt = null
             modelName = null
             voiceName = null
+            languageCode = null
             Log.d(TAG, "Cleanup completed")
         } catch (e: Exception) {
             Log.e(TAG, "Error during cleanup", e)

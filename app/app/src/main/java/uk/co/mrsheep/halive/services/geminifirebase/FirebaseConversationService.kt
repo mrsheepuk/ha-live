@@ -64,6 +64,7 @@ class FirebaseConversationService(private val context: Context) :
      * @param systemPrompt System instructions for the AI
      * @param modelName Model to use (e.g., "models/gemini-2.0-flash-exp")
      * @param voiceName Voice to use (e.g., "Aoede", "Leda")
+     * @param languageCode Language code for the conversation (e.g., "en-US")
      */
     @OptIn(PublicPreviewAPI::class)
     override suspend fun initialize(
@@ -71,6 +72,7 @@ class FirebaseConversationService(private val context: Context) :
         systemPrompt: String,
         modelName: String,
         voiceName: String,
+        languageCode: String,
         toolExecutor: ToolExecutor,
         transcriptor: ((String?, String?, Boolean) -> Unit)?
     ) {

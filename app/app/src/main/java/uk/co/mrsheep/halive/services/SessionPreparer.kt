@@ -76,9 +76,10 @@ class SessionPreparer(
                 liveContext = liveContextText,
             )
 
-            // Extract model and voice from profile or use defaults
+            // Extract model, voice, and language from profile or use defaults
             val model = profile?.model ?: SystemPromptConfig.DEFAULT_MODEL
             val voice = profile?.voice ?: SystemPromptConfig.DEFAULT_VOICE
+            val language = profile?.language ?: SystemPromptConfig.DEFAULT_LANGUAGE
 
             // Build tools section for logging
             val filterInfo = if (profile?.toolFilterMode == ToolFilterMode.SELECTED) {
@@ -126,6 +127,7 @@ class SessionPreparer(
                 systemPrompt,
                 model,
                 voice,
+                language,
                 toolExecutor,
                 transcriptor
             )

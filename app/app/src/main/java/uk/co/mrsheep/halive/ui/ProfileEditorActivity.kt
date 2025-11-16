@@ -61,6 +61,8 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
     private lateinit var modelInput: AutoCompleteTextView
     private lateinit var voiceLayout: TextInputLayout
     private lateinit var voiceInput: AutoCompleteTextView
+    private lateinit var languageLayout: TextInputLayout
+    private lateinit var languageInput: AutoCompleteTextView
 
     // System Prompt expansion panel
     private lateinit var systemPromptHeader: View
@@ -220,6 +222,20 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         voiceInput.setAdapter(voiceAdapter)
         voiceInput.setText(voiceOptions[0], false) // Set default to Aoede
 
+        // Setup language dropdown
+        languageLayout = findViewById(R.id.languageLayout)
+        languageInput = findViewById(R.id.languageInput)
+        val languageOptions = arrayOf(
+            "ar-XA", "bn-IN", "bg-BG", "hr-HR", "cs-CZ", "da-DK", "nl-BE", "nl-NL", "en-AU", "en-IN", "en-GB", "en-US",
+            "et-EE", "fi-FI", "fr-CA", "fr-FR", "de-DE", "el-GR", "gu-IN", "he-IL", "hi-IN", "hu-HU", "id-ID", "it-IT",
+            "ja-JP", "kn-IN", "ko-KR", "lv-LV", "lt-LT", "ml-IN", "cmn-CN", "mr-IN", "nb-NO", "pl-PL", "pt-BR", "ro-RO",
+            "ru-RU", "sr-RS", "sk-SK", "sl-SI", "es-ES", "es-US", "sw-KE", "sv-SE", "ta-IN", "te-IN", "th-TH", "tr-TR",
+            "uk-UA", "ur-IN", "vi-VN"
+        )
+        val languageAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, languageOptions)
+        languageInput.setAdapter(languageAdapter)
+        languageInput.setText("en-US", false) // Set default
+
         systemPromptHeader = findViewById(R.id.systemPromptHeader)
         systemPromptContent = findViewById(R.id.systemPromptContent)
         systemPromptExpandIcon = findViewById(R.id.systemPromptExpandIcon)
@@ -300,12 +316,13 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
             val initialMessageToAgent = initialMessageInput.text?.toString() ?: ""
             val model = modelInput.text?.toString() ?: ""
             val voice = voiceInput.text?.toString() ?: ""
+            val language = languageInput.text?.toString() ?: ""
             val includeLiveContext = includeLiveContextCheckbox.isChecked
             val enableTranscription = enableTranscriptionCheckbox.isChecked
             val autoStartChat = autoStartChatCheckbox.isChecked
             viewModel.saveProfile(
                 name, prompt, personality, backgroundInfo, initialMessageToAgent,
-                model, voice, includeLiveContext, enableTranscription, autoStartChat, currentToolFilterMode,
+                model, voice, language, includeLiveContext, enableTranscription, autoStartChat, currentToolFilterMode,
                 selectedToolNames.toSet(), editingProfileId
             )
         }
@@ -403,6 +420,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
                 initialMessageInput.setText(state.profile.initialMessageToAgent)
                 modelInput.setText(state.profile.model, false)
                 voiceInput.setText(state.profile.voice, false)
+                languageInput.setText(state.profile.language, false)
                 includeLiveContextCheckbox.isChecked = state.profile.includeLiveContext
                 enableTranscriptionCheckbox.isChecked = state.profile.enableTranscription
                 autoStartChatCheckbox.isChecked = state.profile.autoStartChat
@@ -551,6 +569,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
             initialMessageToAgent = initialMessageInput.text.toString(),
             model = modelInput.text.toString(),
             voice = voiceInput.text.toString(),
+            language = languageInput.text.toString(),
             includeLiveContext = includeLiveContextCheckbox.isChecked,
             enableTranscription = enableTranscriptionCheckbox.isChecked,
             autoStartChat = false, // Irrelevant for testing
@@ -676,6 +695,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         profileNameInput.isEnabled = enabled
         modelInput.isEnabled = enabled
         voiceInput.isEnabled = enabled
+        languageInput.isEnabled = enabled
         systemPromptInput.isEnabled = enabled
         personalityInput.isEnabled = enabled
         backgroundInfoInput.isEnabled = enabled

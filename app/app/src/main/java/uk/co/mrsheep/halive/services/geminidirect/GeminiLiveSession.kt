@@ -121,6 +121,7 @@ class GeminiLiveSession(
      * @param systemPrompt System instruction for the model
      * @param tools List of tool declarations available to the model
      * @param voiceName Prebuilt voice name (e.g., "Aoede")
+     * @param languageCode Language code (e.g., "en-US")
      * @param onToolCall Callback to execute tool calls. Called for each function call
      *                   with the call details, expected to return the execution result.
      * @param onTranscription Optional callback for transcription events (user input, model output)
@@ -132,6 +133,7 @@ class GeminiLiveSession(
         systemPrompt: String,
         tools: List<ToolDeclaration>,
         voiceName: String,
+        languageCode: String,
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
         onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null
     ) {
@@ -173,8 +175,7 @@ class GeminiLiveSession(
                             voiceConfig = VoiceConfig(
                                 prebuiltVoiceConfig = PrebuiltVoiceConfig(voiceName),
                             ),
-                            // TODO: Make language code configurable
-                            languageCode = "en-US"
+                            languageCode = languageCode
                         ),
                         // rejected by API in setup, probably not supported yet:
                         //enableAffectiveDialog = true,

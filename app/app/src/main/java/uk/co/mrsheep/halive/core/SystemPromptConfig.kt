@@ -43,6 +43,7 @@ You are currently speaking with User.
 
     const val DEFAULT_MODEL = "gemini-live-2.5-flash-preview"
     const val DEFAULT_VOICE = "Aoede"
+    const val DEFAULT_LANGUAGE = "en-US"
     const val DEFAULT_INCLUDE_LIVE_CONTEXT = true
     const val DEFAULT_ENABLE_TRANSCRIPTION = false
 

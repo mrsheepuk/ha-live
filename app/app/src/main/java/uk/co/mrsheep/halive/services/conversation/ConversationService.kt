@@ -25,12 +25,14 @@ interface ConversationService {
      * @param systemPrompt System instructions for the AI
      * @param modelName Model to use (e.g., "gemini-2.0-flash-exp")
      * @param voiceName Voice to use (e.g., "Aoede")
+     * @param languageCode Language code for the conversation (e.g., "en-US")
      */
     suspend fun initialize(
         tools: List<McpTool>,
         systemPrompt: String,
         modelName: String,
         voiceName: String,
+        languageCode: String,
         toolExecutor: ToolExecutor,
         transcriptor: ((String?, String?, Boolean) -> Unit)? = null
     )
