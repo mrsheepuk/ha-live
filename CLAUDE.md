@@ -40,7 +40,7 @@ Two implementations of the `ConversationService` interface:
 **Tool Execution Layer:**
 - `ToolExecutor` interface - Abstract tool execution contract
 - `AppToolExecutor` - Wraps MCP client, adds logging + local tools
-- `LocalToolDefinitions.kt` - App-side tools (e.g., EndConversation)
+- Local tools defined in `MainViewModel.getLocalTools()` (e.g., EndConversation)
 - Local tools executed in-app, MCP tools forwarded to Home Assistant
 
 **Session Preparation:**
@@ -309,7 +309,6 @@ app/app/src/main/java/uk/co/mrsheep/halive/
 │   ├── AppToolExecutor.kt              # Logging + local tool wrapper
 │   ├── SessionPreparer.kt              # Session initialization logic
 │   ├── HomeAssistantApiClient.kt       # HA REST API (templates)
-│   ├── LocalToolDefinitions.kt         # App-side tools
 │   ├── WakeWordService.kt              # Foreground wake detection
 │   └── BeepHelper.kt                   # Audio feedback
 ├── ui/
