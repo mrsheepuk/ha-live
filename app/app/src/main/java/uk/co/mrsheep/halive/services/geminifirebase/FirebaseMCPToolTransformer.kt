@@ -1,28 +1,29 @@
-package uk.co.mrsheep.halive.services
+package uk.co.mrsheep.halive.services.geminifirebase
 
 import android.util.Log
-import com.google.firebase.ai.type.Tool
 import com.google.firebase.ai.type.FunctionDeclaration
 import com.google.firebase.ai.type.Schema
-import uk.co.mrsheep.halive.services.mcp.*
+import com.google.firebase.ai.type.Tool
+import uk.co.mrsheep.halive.services.mcp.McpProperty
+import uk.co.mrsheep.halive.services.mcp.McpTool
 
-object GeminiMCPToolTransformer {
+object FirebaseMCPToolTransformer {
 
     private const val TAG = "GeminiMCPToolTransformer"
 
     /**
      * Transforms MCP tools result into Gemini Tool format.
      */
-    fun transform(mcpToolsResult: McpToolsListResult): List<Tool> {
-        Log.d(TAG, "Transforming ${mcpToolsResult.tools.size} MCP tools to Gemini format")
+    fun transform(tools: List<McpTool>): List<Tool> {
+        Log.d(TAG, "Transforming ${tools.size} MCP tools to Gemini format")
 
         // Transform each McpTool into a Gemini FunctionDeclaration
-        val functionDeclarations = mcpToolsResult.tools.map { mcpTool ->
+        val functionDeclarations = tools.map { mcpTool ->
             transformMcpToGeminiFunctionDeclaration(mcpTool)
         }
 
         // Return a single Tool containing all function declarations
-        return listOf(Tool.functionDeclarations(functionDeclarations = functionDeclarations))
+        return listOf(Tool.Companion.functionDeclarations(functionDeclarations = functionDeclarations))
     }
 
     private fun transformMcpToGeminiFunctionDeclaration(mcpTool: McpTool): FunctionDeclaration {
@@ -53,13 +54,13 @@ object GeminiMCPToolTransformer {
             val firstOption = mcpProp.anyOf.first()
             return when (firstOption.type.lowercase()) {
                 "string" -> if (firstOption.enum != null) {
-                    Schema.enumeration(firstOption.enum, mcpProp.description, true)
+                    Schema.Companion.enumeration(firstOption.enum, mcpProp.description, true)
                 } else {
-                    Schema.string(mcpProp.description, true)
+                    Schema.Companion.string(mcpProp.description, true)
                 }
-                "integer", "number" -> Schema.integer(mcpProp.description, true)
-                "boolean" -> Schema.boolean(mcpProp.description, true)
-                else -> Schema.string(mcpProp.description, true)
+                "integer", "number" -> Schema.Companion.integer(mcpProp.description, true)
+                "boolean" -> Schema.Companion.boolean(mcpProp.description, true)
+                else -> Schema.Companion.string(mcpProp.description, true)
             }
         }
 
@@ -67,29 +68,29 @@ object GeminiMCPToolTransformer {
         if (mcpProp.type == "array" && mcpProp.items != null) {
             val itemSchema = when (mcpProp.items.type.lowercase()) {
                 "string" -> if (mcpProp.items.enum != null) {
-                    Schema.enumeration(mcpProp.items.enum, null, true)
+                    Schema.Companion.enumeration(mcpProp.items.enum, null, true)
                 } else {
-                    Schema.string(null, true)
+                    Schema.Companion.string(null, true)
                 }
-                "integer", "number" -> Schema.integer(null, true)
-                "boolean" -> Schema.boolean(null, true)
-                else -> Schema.string(null, true)
+                "integer", "number" -> Schema.Companion.integer(null, true)
+                "boolean" -> Schema.Companion.boolean(null, true)
+                else -> Schema.Companion.string(null, true)
             }
-            return Schema.array(itemSchema, mcpProp.description, true)
+            return Schema.Companion.array(itemSchema, mcpProp.description, true)
         }
 
         // Handle simple types
         return when (mcpProp.type?.lowercase()) {
             "string" -> if (mcpProp.enum != null) {
-                Schema.enumeration(mcpProp.enum, mcpProp.description, true)
+                Schema.Companion.enumeration(mcpProp.enum, mcpProp.description, true)
             } else {
-                Schema.string(mcpProp.description)
+                Schema.Companion.string(mcpProp.description)
             }
-            "integer" -> Schema.integer(mcpProp.description, true)
-            "number" -> Schema.double(mcpProp.description, true)
-            "boolean" -> Schema.boolean(mcpProp.description, true)
-            "object" -> Schema.obj(emptyMap(), emptyList(), mcpProp.description, true)
-            else -> Schema.string(mcpProp.description, true) // Default fallback
+            "integer" -> Schema.Companion.integer(mcpProp.description, true)
+            "number" -> Schema.Companion.double(mcpProp.description, true)
+            "boolean" -> Schema.Companion.boolean(mcpProp.description, true)
+            "object" -> Schema.Companion.obj(emptyMap(), emptyList(), mcpProp.description, true)
+            else -> Schema.Companion.string(mcpProp.description, true) // Default fallback
         }
     }
 }

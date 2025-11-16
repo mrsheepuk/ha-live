@@ -1,4 +1,4 @@
-package uk.co.mrsheep.halive.services
+package uk.co.mrsheep.halive.services.geminifirebase
 
 import android.util.Log
 import com.google.firebase.ai.type.FunctionCallPart
@@ -9,17 +9,17 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import uk.co.mrsheep.halive.services.ToolExecutor
-import uk.co.mrsheep.halive.services.mcp.*
+import uk.co.mrsheep.halive.services.mcp.McpClientManager
+import uk.co.mrsheep.halive.services.mcp.ToolCallResult
 
-class GeminiMCPToolExecutor(
-    private val mcpClient: McpClientManager
-) : ToolExecutor {
+class FirebaseMCPToolExecutor(
+    val toolExecutor: ToolExecutor
+) {
     private val json = Json { ignoreUnknownKeys = true }
-
     /**
      * Executes a tool via MCP and returns the result to Gemini.
      */
-    override suspend fun executeTool(functionCall: FunctionCallPart): FunctionResponsePart {
+    suspend fun executeTool(functionCall: FunctionCallPart): FunctionResponsePart {
         return try {
             Log.d(TAG, "Executing tool: ${functionCall.name} with args: ${functionCall.args}")
 
@@ -29,7 +29,7 @@ class GeminiMCPToolExecutor(
             }
 
             // Call the tool via MCP
-            val result = mcpClient.callTool(
+            val result = toolExecutor.callTool(
                 name = functionCall.name,
                 arguments = arguments
             )
@@ -80,7 +80,7 @@ class GeminiMCPToolExecutor(
             name = functionCall.name,
             id = functionCall.id,
             response = buildJsonObject {
-                put( key="result", json.parseToJsonElement(textContent))
+                put(key = "result", json.parseToJsonElement(textContent))
             }
         )
     }
@@ -106,6 +106,6 @@ class GeminiMCPToolExecutor(
     }
 
     companion object {
-        private const val TAG = "GeminiMCPToolExecutor"
+        private const val TAG = "FirebaseMCPToolExecutor"
     }
 }

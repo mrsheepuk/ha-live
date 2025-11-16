@@ -97,4 +97,14 @@ object FirebaseConfig {
     fun getProjectId(context: Context): String? {
         return getPrefs(context).getString(KEY_PROJECT_ID, null)
     }
+
+    /**
+     * Checks if Firebase is configured (has all required credentials).
+     *
+     * @param context Android context
+     * @return true if Firebase config is complete, false otherwise
+     */
+    fun isConfigured(context: Context): Boolean {
+        return loadOptions(context) != null
+    }
 }

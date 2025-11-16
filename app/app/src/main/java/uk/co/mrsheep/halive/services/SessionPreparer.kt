@@ -1,21 +1,21 @@
 package uk.co.mrsheep.halive.services
 
 import android.util.Log
-import com.google.firebase.ai.type.FunctionCallPart
-import com.google.firebase.ai.type.Tool
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import uk.co.mrsheep.halive.core.AppLogger
+import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.core.ToolFilterMode
 import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
-import uk.co.mrsheep.halive.services.ToolExecutor
-import uk.co.mrsheep.halive.services.LocalToolDefinitions
-import uk.co.mrsheep.halive.ui.ToolCallLog
+import uk.co.mrsheep.halive.services.conversation.ConversationService
 
 /**
- * Encapsulates the heavy initialization logic for preparing a Gemini session.
+ * Encapsulates the heavy initialization logic for preparing a conversation session.
  * Extracts all logic from MainViewModel.initializeGemini() for better separation of concerns.
  *
  * This class:
@@ -24,30 +24,30 @@ import uk.co.mrsheep.halive.ui.ToolCallLog
  * - Renders Jinja2 templates from the HA API
  * - Fetches live context if enabled
  * - Builds the final system prompt with all sections
- * - Initializes the Gemini model with tools and prompt
+ * - Initializes the conversation service with tools and prompt
  */
-class GeminiSessionPreparer(
-    private val mcpClient: McpClientManager,
-    private val haApiClient: HomeAssistantApiClient,
+class SessionPreparer(
     private val toolExecutor: ToolExecutor,
-    private val onLogEntry: (ToolCallLog) -> Unit
+    private val haApiClient: HomeAssistantApiClient,
+    private val logger: AppLogger
 ) {
     companion object {
-        private const val TAG = "GeminiSessionPreparer"
+        private const val TAG = "SessionPreparer"
     }
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     /**
-     * Main entry point: prepares and initializes the Gemini session.
+     * Main entry point: prepares and initializes the conversation session.
      *
      * @param profile The active profile (may be null to use defaults)
-     * @param geminiService The Gemini service to initialize with tools and prompt
+     * @param conversationService The conversation service to initialize with tools and prompt
      * @param defaultSystemPrompt Fallback system prompt if profile is null
      * @throws Exception on any failure (caller handles state transitions)
      */
     suspend fun prepareAndInitialize(
-        profile: Profile?,
-        geminiService: GeminiService,
-        defaultSystemPrompt: String
+        profile: Profile,
+        conversationService: ConversationService,
     ) {
         val timestamp = createTimestamp()
 
@@ -55,22 +55,8 @@ class GeminiSessionPreparer(
             // Fetch raw MCP tools and apply filtering
             val (filteredTools, toolNames, totalToolCount) = fetchAndFilterTools(profile)
 
-            // Transform filtered tools to Gemini format
-            val mcpTools = filteredTools?.let {
-                GeminiMCPToolTransformer.transform(
-                    McpToolsListResult(it)
-                )
-            } ?: emptyList()
-
-            // Create local tool declarations and wrap in Tool
-            val localFunctionDeclarations = listOf(LocalToolDefinitions.createEndConversationTool())
-            val localTools = Tool.functionDeclarations(localFunctionDeclarations)
-
-            // Combine MCP tools with local tools
-            val tools = mcpTools + localTools
-
-            // Update toolNames to include synthetic tools
-            val updatedToolNames = (toolNames + "EndConversation").sorted()
+            // Create McpToolsListResult with filtered tools
+            val mcpToolsResult = McpToolsListResult(filteredTools ?: emptyList())
 
             // Render background info template if present
             val renderedBackgroundInfo = renderBackgroundInfo(profile)
@@ -87,7 +73,6 @@ class GeminiSessionPreparer(
                 profile = profile,
                 renderedBgInfo = renderedBackgroundInfo,
                 liveContext = liveContextText,
-                defaultSystemPrompt = defaultSystemPrompt
             )
 
             // Extract model and voice from profile or use defaults
@@ -101,16 +86,17 @@ class GeminiSessionPreparer(
                 "Filter Mode: ALL"
             }
 
-            val toolsSection = if (updatedToolNames.isNotEmpty()) {
-                "$filterInfo\nAvailable Tools (${updatedToolNames.size}):\n" +
-                    updatedToolNames.joinToString("\n") { "- $it" }
+            val toolsSection = if (toolNames.isNotEmpty()) {
+                "$filterInfo\nAvailable Tools (${toolNames.size}):\n" +
+                        toolNames.joinToString("\n") { "- $it" }
             } else {
                 "$filterInfo\nNo tools available"
             }
 
+
             // Log the full generated system prompt
-            onLogEntry(
-                ToolCallLog(
+            logger.addLogEntry(
+                LogEntry(
                     timestamp = timestamp,
                     toolName = "System Startup",
                     parameters = "Model: $model, Voice: $voice",
@@ -119,13 +105,34 @@ class GeminiSessionPreparer(
                 )
             )
 
-            // Initialize the Gemini model
-            geminiService.initializeModel(tools, systemPrompt, model, voice)
+            val transcriptor: ((String?, String?, Boolean) -> Unit)? =
+                if (profile?.enableTranscription == true) {
+                    { userTranscript: String?, modelTranscript: String?, isThought: Boolean ->
+                        if (userTranscript != null) {
+                            logger.addUserTranscription(userTranscript)
+                        }
+                        if (modelTranscript != null) {
+                            logger.addModelTranscription(modelTranscript, isThought)
+                        }
+                    }
+                } else {
+                    null
+                }
+
+            // Initialize the conversation service with tools and prompt
+            conversationService.initialize(
+                mcpToolsResult.tools,
+                systemPrompt,
+                model,
+                voice,
+                toolExecutor,
+                transcriptor
+            )
 
         } catch (e: Exception) {
             // Log initialization error to tool log
-            onLogEntry(
-                ToolCallLog(
+            logger.addLogEntry(
+                LogEntry(
                     timestamp = timestamp,
                     toolName = "System Startup",
                     parameters = "Gemini Initialization",
@@ -156,34 +163,39 @@ class GeminiSessionPreparer(
         val timestamp = createTimestamp()
 
         // Fetch raw MCP tools
-        val mcpToolsResult = mcpClient.getTools()
+        val tools = toolExecutor.getTools()
 
-        val totalToolCount = mcpToolsResult?.tools?.size ?: 0
+        val totalToolCount = tools?.size ?: 0
 
         // Apply profile-based tool filtering
-        val filteredTools = mcpToolsResult?.let { result ->
+        val filteredTools = tools.let { result ->
             when (profile?.toolFilterMode) {
                 ToolFilterMode.SELECTED -> {
                     val selected = profile.selectedToolNames
-                    val available = result.tools.filter { it.name in selected }
+                    val available = result.filter { it.name in selected }
 
                     // Log warning if some selected tools are missing from HA
                     val missing = selected - available.map { it.name }.toSet()
                     if (missing.isNotEmpty()) {
-                        onLogEntry(
-                            ToolCallLog(
+                        logger.addLogEntry(
+                            LogEntry(
                                 timestamp = timestamp,
                                 toolName = "System Startup",
                                 parameters = "Tool Filtering",
                                 success = false,
-                                result = "Selected tools not available in Home Assistant: ${missing.joinToString(", ")}"
+                                result = "Selected tools not available in Home Assistant: ${
+                                    missing.joinToString(
+                                        ", "
+                                    )
+                                }"
                             )
                         )
                     }
 
                     available
                 }
-                else -> result.tools // ToolFilterMode.ALL or null
+
+                else -> tools // ToolFilterMode.ALL or null
             }
         }
 
@@ -221,23 +233,17 @@ class GeminiSessionPreparer(
      */
     private suspend fun fetchLiveContext(timestamp: String): String {
         return try {
-            // Create a FunctionCallPart for GetLiveContext
-            val getLiveContextCall = FunctionCallPart(
-                name = "GetLiveContext",
-                args = emptyMap()
-            )
-            val response = toolExecutor.executeTool(getLiveContextCall)
-            response.response.let { jsonObj ->
-                // Navigate: outer "result" -> inner "result" -> text content
-                jsonObj.jsonObject["result"]
-                    ?.jsonObject?.get("result")
-                    ?.jsonPrimitive?.content ?: ""
-            }
+            val response = toolExecutor.callTool("GetLiveContext", emptyMap())
+            json.parseToJsonElement(response.content
+                .filter { it.type == "text" }
+                .mapNotNull { it.text }
+                .joinToString("\n")
+            ).jsonObject.get("result")?.jsonPrimitive?.content ?: ""
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch live context: ${e.message}")
             // Log the error to the tool log
-            onLogEntry(
-                ToolCallLog(
+            logger.addLogEntry(
+                LogEntry(
                     timestamp = timestamp,
                     toolName = "System Startup",
                     parameters = "GetLiveContext",
@@ -259,18 +265,12 @@ class GeminiSessionPreparer(
      * @return The complete system prompt
      */
     private fun buildSystemPrompt(
-        profile: Profile?,
+        profile: Profile,
         renderedBgInfo: String,
         liveContext: String,
-        defaultSystemPrompt: String
     ): String {
-        return if (profile != null) {
-            // Check if we should include live context
-            if (profile.includeLiveContext && liveContext.isNotEmpty()) {
-                // Build combined prompt with live context in its own section
-                """<system_prompt>
+        var basicPrompt = """
 ${profile.systemPrompt}
-</system_prompt>
 
 <personality>
 ${profile.personality}
@@ -279,27 +279,16 @@ ${profile.personality}
 <background_info>
 $renderedBgInfo
 </background_info>
+""".trimIndent()
 
-<initial_live_context>
+        if (profile.includeLiveContext && liveContext.isNotEmpty()) {
+            return basicPrompt + """
+
+<live_context>
 $liveContext
-</initial_live_context>""".trimIndent()
-            } else {
-                // Build combined prompt without live context section
-                """<system_prompt>
-${profile.systemPrompt}
-</system_prompt>
-
-<personality>
-${profile.personality}
-</personality>
-
-<background_info>
-$renderedBgInfo
-</background_info>""".trimIndent()
-            }
-        } else {
-            // Use default system prompt provided by caller
-            defaultSystemPrompt
+</live_context>""".trimIndent()
         }
+
+        return basicPrompt
     }
 }

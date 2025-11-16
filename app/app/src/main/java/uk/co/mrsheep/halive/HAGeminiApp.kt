@@ -5,16 +5,12 @@ import uk.co.mrsheep.halive.core.AssetCopyUtil
 import uk.co.mrsheep.halive.core.CrashLogger
 import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.ProfileManager
-import uk.co.mrsheep.halive.services.McpClientManager
-import uk.co.mrsheep.halive.services.GeminiMCPToolExecutor
-import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.HomeAssistantApiClient
+import uk.co.mrsheep.halive.services.ToolExecutor
+import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import uk.co.mrsheep.halive.services.mcp.McpTool
 
 class HAGeminiApp : Application() {
-    // Global MCP client - will be initialized after HA config
-    var mcpClient: McpClientManager? = null
-    var toolExecutor: ToolExecutor? = null
     var haApiClient: HomeAssistantApiClient? = null
     var lastAvailableTools: List<String>? = null
     var haUrl: String? = null
@@ -29,16 +25,10 @@ class HAGeminiApp : Application() {
         // Try to initialize Firebase on launch
         FirebaseConfig.initializeFirebase(this)
 
-        // Initialize ProfileManager (NEW)
+        // Initialize ProfileManager
         ProfileManager.initialize(this)
 
-        // Run migration from SystemPromptConfig to profiles (NEW)
-        ProfileManager.runMigrationIfNeeded(this)
-
-        // Run tool filter migration (NEW)
-        ProfileManager.runToolFilterMigrationIfNeeded()
-
-        // Ensure at least one profile exists (NEW)
+        // Ensure at least one profile exists
         ProfileManager.ensureDefaultProfileExists()
 
         // Copy TFLite model files from assets to filesDir for wake word detection
@@ -56,16 +46,6 @@ class HAGeminiApp : Application() {
         this.haUrl = haUrl
         this.haToken = haToken
         haApiClient = HomeAssistantApiClient(haUrl, haToken)
-    }
-
-    /**
-     * Called when app is closing to gracefully shut down MCP connection.
-     */
-    fun shutdownHomeAssistant() {
-        mcpClient?.shutdown()
-        mcpClient = null
-        toolExecutor = null
-        haApiClient = null
     }
 
     /**

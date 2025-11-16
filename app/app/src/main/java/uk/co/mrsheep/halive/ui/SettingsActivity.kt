@@ -16,6 +16,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.CrashLogger
+import uk.co.mrsheep.halive.core.GeminiConfig
 import kotlinx.coroutines.launch
 
 class SettingsActivity : AppCompatActivity() {
@@ -37,6 +38,13 @@ class SettingsActivity : AppCompatActivity() {
     // Firebase section
     private lateinit var firebaseProjectIdText: TextView
     private lateinit var firebaseChangeButton: Button
+
+    // Gemini section
+    private lateinit var geminiApiKeyText: TextView
+    private lateinit var geminiEditButton: Button
+    private lateinit var geminiClearButton: Button
+    private lateinit var conversationServiceText: TextView
+    private lateinit var switchServiceButton: Button
 
     // Debug section
     private lateinit var viewCrashLogsButton: Button
@@ -104,6 +112,25 @@ class SettingsActivity : AppCompatActivity() {
             showFirebaseChangeDialog()
         }
 
+        // Gemini section
+        geminiApiKeyText = findViewById(R.id.geminiApiKeyText)
+        geminiEditButton = findViewById(R.id.geminiEditButton)
+        geminiClearButton = findViewById(R.id.geminiClearButton)
+        conversationServiceText = findViewById(R.id.conversationServiceText)
+        switchServiceButton = findViewById(R.id.switchServiceButton)
+
+        geminiEditButton.setOnClickListener {
+            showGeminiEditDialog()
+        }
+
+        geminiClearButton.setOnClickListener {
+            showGeminiClearDialog()
+        }
+
+        switchServiceButton.setOnClickListener {
+            viewModel.switchConversationService()
+        }
+
         // Debug section
         viewCrashLogsButton = findViewById(R.id.viewCrashLogsButton)
         shareCrashLogsButton = findViewById(R.id.shareCrashLogsButton)
@@ -136,13 +163,33 @@ class SettingsActivity : AppCompatActivity() {
                 haUrlText.text = state.haUrl
                 haTokenText.text = "••••••••" // Masked token
                 firebaseProjectIdText.text = state.firebaseProjectId
+                geminiApiKeyText.text = if (state.geminiApiKey != "Not configured") "••••••••" else "Not configured"
                 profileSummaryText.text = "${state.profileCount} profile(s) configured"
+
+                // Update conversation service display
+                conversationServiceText.text = state.conversationService
+
+                // Show/hide switch button based on whether both services are available
+                if (state.canChooseService) {
+                    switchServiceButton.visibility = View.VISIBLE
+                    val otherService = if (state.conversationService == "Gemini Direct API") {
+                        "Firebase SDK"
+                    } else {
+                        "Gemini Direct API"
+                    }
+                    switchServiceButton.text = "Switch to $otherService"
+                } else {
+                    switchServiceButton.visibility = View.GONE
+                }
 
                 // Enable/disable buttons based on read-only state
                 manageProfilesButton.isEnabled = !state.isReadOnly
                 haEditButton.isEnabled = !state.isReadOnly
                 haTestButton.isEnabled = !state.isReadOnly
                 firebaseChangeButton.isEnabled = !state.isReadOnly
+                geminiEditButton.isEnabled = !state.isReadOnly
+                geminiClearButton.isEnabled = !state.isReadOnly
+                switchServiceButton.isEnabled = !state.isReadOnly
 
                 // Show/hide read-only overlay
                 if (state.isReadOnly) {
@@ -232,6 +279,54 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showGeminiEditDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_gemini_config, null)
+        val apiKeyInput = dialogView.findViewById<android.widget.EditText>(R.id.geminiApiKeyInput)
+
+        // Load current API key from GeminiConfig
+        val currentApiKey = GeminiConfig.getApiKey(this) ?: ""
+        apiKeyInput.setText(currentApiKey)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Edit Gemini API Key")
+            .setView(dialogView)
+            .setPositiveButton("Save", null) // Set to null, we'll override below
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            saveButton.setOnClickListener {
+                val newApiKey = apiKeyInput.text.toString().trim()
+
+                // Validate input
+                if (newApiKey.isBlank()) {
+                    apiKeyInput.error = "API key is required"
+                    return@setOnClickListener
+                }
+
+                // Save API key
+                viewModel.saveGeminiApiKey(newApiKey)
+
+                // Close dialog
+                dialog.dismiss()
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun showGeminiClearDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Remove Gemini API Key?")
+            .setMessage("Remove Gemini API key? App will use Firebase SDK instead.")
+            .setPositiveButton("Remove") { _, _ ->
+                viewModel.clearGeminiApiKey()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun showSuccessDialog(message: String) {
         AlertDialog.Builder(this)
             .setTitle("Success")
@@ -313,7 +408,10 @@ sealed class SettingsState {
         val haToken: String,
         val firebaseProjectId: String,
         val profileCount: Int,
-        val isReadOnly: Boolean
+        val isReadOnly: Boolean,
+        val geminiApiKey: String,
+        val conversationService: String,
+        val canChooseService: Boolean
     ) : SettingsState()
     object TestingConnection : SettingsState()
     data class ConnectionSuccess(val message: String) : SettingsState()

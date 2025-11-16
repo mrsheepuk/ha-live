@@ -10,7 +10,6 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.Button
-import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -27,10 +26,10 @@ import com.google.android.material.button.MaterialButton
 import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.HAConfig
-import uk.co.mrsheep.halive.core.Profile
-import uk.co.mrsheep.halive.ui.AudioVisualizerView
-import uk.co.mrsheep.halive.ui.VisualizerState
 import kotlinx.coroutines.launch
+import uk.co.mrsheep.halive.core.LogEntry
+import uk.co.mrsheep.halive.core.TranscriptionEntry
+import uk.co.mrsheep.halive.core.TranscriptionSpeaker
 
 class MainActivity : AppCompatActivity() {
 
@@ -46,7 +45,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var logHeaderContainer: LinearLayout
     private lateinit var logChevronIcon: ImageView
     private lateinit var logContentScroll: ScrollView
-    private lateinit var logHeaderText: TextView
+
+    private lateinit var transcriptionHeaderContainer: LinearLayout
+    private lateinit var transcriptionLogText: TextView
+    private lateinit var transcriptionChevronIcon: ImageView
+    private lateinit var transcriptionContentScroll: ScrollView
 
     private fun checkConfigurationAndLaunch() {
         // Check if app is configured
@@ -118,7 +121,12 @@ class MainActivity : AppCompatActivity() {
         logHeaderContainer = findViewById(R.id.logHeaderContainer)
         logChevronIcon = findViewById(R.id.logChevronIcon)
         logContentScroll = findViewById(R.id.logContentScroll)
-        logHeaderText = findViewById(R.id.logHeaderText)
+
+
+        transcriptionLogText = findViewById(R.id.transcriptionLogText)
+        transcriptionHeaderContainer = findViewById(R.id.transcriptionHeaderContainer)
+        transcriptionChevronIcon = findViewById(R.id.transcriptionChevronIcon)
+        transcriptionContentScroll = findViewById(R.id.transcriptionContentScroll)
 
         retryButton.setOnClickListener {
             viewModel.retryInitialization()
@@ -141,6 +149,11 @@ class MainActivity : AppCompatActivity() {
             viewModel.toggleLogExpanded()
         }
 
+        // Add click listener for log header collapse/expand
+        transcriptionHeaderContainer.setOnClickListener {
+            viewModel.toggleTranscriptionExpanded()
+        }
+
         // Observe log expanded state from ViewModel
         lifecycleScope.launch {
             viewModel.logExpanded.collect { isExpanded ->
@@ -159,6 +172,18 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             viewModel.toolLogs.collect { logs ->
                 updateToolLogs(logs)
+            }
+        }
+
+        // Observe tool logs from the ViewModel
+        lifecycleScope.launch {
+            viewModel.transcriptionExpanded.collect { isExpanded ->
+                updateTranscriptionExpandedState(isExpanded)
+            }
+        }
+        lifecycleScope.launch {
+            viewModel.transcriptionLogs.collect { logs ->
+                updateTranscriptionLogs(logs)
             }
         }
 
@@ -357,7 +382,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateToolLogs(logs: List<ToolCallLog>) {
+    private fun updateToolLogs(logs: List<LogEntry>) {
         if (logs.isEmpty()) {
             toolLogText.text = "Log will appear here..."
             return
@@ -381,6 +406,46 @@ class MainActivity : AppCompatActivity() {
         // Auto-scroll to bottom to show most recent log entry
         logContentScroll.post {
             logContentScroll.fullScroll(View.FOCUS_DOWN)
+        }
+    }
+
+    private fun updateTranscriptionLogs(logs: List<TranscriptionEntry>) {
+        if (logs.isEmpty()) {
+            transcriptionLogText.text = "Transcription will appear here..."
+            return
+        }
+
+        // Iterate through the transcription logs, putting '\nModel: ' or '\nUser: ' each time
+        // the spokenBy value changes in the log.
+        var lastSpokenBy: TranscriptionSpeaker? = null
+        var fullLog = ""
+        logs.forEach { (spokenBy, chunk) ->
+            run {
+                if (spokenBy != lastSpokenBy) {
+                    lastSpokenBy = spokenBy
+                    fullLog += when (spokenBy) {
+                        TranscriptionSpeaker.MODELTHOUGHT -> """
+                    
+                    Model (thinking): """.trimIndent()
+                        TranscriptionSpeaker.MODEL -> """
+                    
+                    Model: """.trimIndent()
+
+                        TranscriptionSpeaker.USER -> """
+                    
+                    User: 
+                    """.trimIndent()
+                    }
+                }
+                fullLog += chunk
+            }
+        }
+
+        transcriptionLogText.text = fullLog
+
+        // Auto-scroll to bottom to show most recent log entry
+        transcriptionContentScroll.post {
+            transcriptionContentScroll.fullScroll(View.FOCUS_DOWN)
         }
     }
 
@@ -412,6 +477,29 @@ class MainActivity : AppCompatActivity() {
             // Collapse log content
             logContentScroll.visibility = View.GONE
             ObjectAnimator.ofFloat(logChevronIcon, "rotation", 180f, 0f).apply {
+                duration = 300
+                start()
+            }
+        }
+    }
+
+
+    private fun updateTranscriptionExpandedState(isExpanded: Boolean) {
+        if (isExpanded) {
+            // Expand log content
+            transcriptionContentScroll.visibility = View.VISIBLE
+            ObjectAnimator.ofFloat(transcriptionChevronIcon, "rotation", 0f, 180f).apply {
+                duration = 300
+                start()
+            }
+            // Auto-scroll to bottom when opening to show most recent entries
+            transcriptionContentScroll.post {
+                transcriptionContentScroll.fullScroll(View.FOCUS_DOWN)
+            }
+        } else {
+            // Collapse log content
+            transcriptionContentScroll.visibility = View.GONE
+            ObjectAnimator.ofFloat(transcriptionChevronIcon, "rotation", 180f, 0f).apply {
                 duration = 300
                 start()
             }

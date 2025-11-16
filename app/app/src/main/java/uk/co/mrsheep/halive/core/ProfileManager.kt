@@ -19,8 +19,6 @@ object ProfileManager {
     private const val PREFS_NAME = "profiles"
     private const val KEY_PROFILES = "profiles_list"
     private const val KEY_LAST_USED_ID = "last_used_profile_id"
-    private const val KEY_MIGRATION_DONE = "migration_v1_done"
-    private const val KEY_MIGRATION_V2_DONE = "migration_v2_tool_filter"
 
     private val json = Json {
         prettyPrint = true
@@ -39,50 +37,6 @@ object ProfileManager {
     fun initialize(context: Context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         _profiles.value = loadProfilesFromStorage()
-    }
-
-    /**
-     * Migrates existing SystemPromptConfig to a default profile.
-     * Only runs once. Safe to call multiple times.
-     */
-    fun runMigrationIfNeeded(context: Context) {
-        if (prefs.getBoolean(KEY_MIGRATION_DONE, false)) {
-            return // Already migrated
-        }
-
-        val profiles = getAllProfiles()
-        if (profiles.isNotEmpty()) {
-            // Profiles already exist, mark as migrated
-            prefs.edit().putBoolean(KEY_MIGRATION_DONE, true).apply()
-            return
-        }
-
-        // Get the existing system prompt from SystemPromptConfig
-        val existingPrompt = SystemPromptConfig.getSystemPrompt(context)
-
-        // Create a default profile with the existing prompt
-        val defaultProfile = Profile(
-            name = "Default",
-            systemPrompt = existingPrompt,
-            isDefault = true
-        )
-
-        createProfile(defaultProfile)
-        prefs.edit().putBoolean(KEY_MIGRATION_DONE, true).apply()
-    }
-
-    /**
-     * Migrates profiles to include tool filtering fields.
-     * Only runs once. Safe to call multiple times.
-     * Uses ignoreUnknownKeys to handle new fields in existing profiles.
-     */
-    fun runToolFilterMigrationIfNeeded() {
-        if (prefs.getBoolean(KEY_MIGRATION_V2_DONE, false)) return
-
-        // kotlinx.serialization with ignoreUnknownKeys handles this automatically
-        // Existing profiles will get default values: toolFilterMode = ALL, selectedToolNames = emptySet()
-
-        prefs.edit().putBoolean(KEY_MIGRATION_V2_DONE, true).apply()
     }
 
     /**
@@ -319,6 +273,5 @@ object ProfileManager {
         prefs.edit().clear().apply()
         val defaultProfile = Profile.createDefault()
         saveProfilesToStorage(listOf(defaultProfile))
-        prefs.edit().putBoolean(KEY_MIGRATION_DONE, true).apply()
     }
 }
