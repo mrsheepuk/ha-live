@@ -20,7 +20,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import uk.co.mrsheep.halive.services.LocalToolDefinitions
 import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.mcp.McpTool
@@ -79,13 +78,6 @@ class FirebaseConversationService(private val context: Context) :
             // Transform MCP tools to Firebase format
             val mcpToolsList = FirebaseMCPToolTransformer.transform(tools)
 
-            // Create local tools (e.g., EndConversation)
-            val endConversationTool = LocalToolDefinitions.createEndConversationTool()
-            val localTools = listOf(Tool.functionDeclarations(listOf(endConversationTool)))
-
-            // Combine MCP tools with local tools
-            val allTools = mcpToolsList + localTools
-
             this.toolExecutor = toolExecutor
             this.transcriptor = transcriptor
 
@@ -93,7 +85,7 @@ class FirebaseConversationService(private val context: Context) :
             generativeModel = Firebase.ai.liveModel(
                 modelName = modelName,
                 systemInstruction = content { text(systemPrompt) },
-                tools = allTools,
+                tools = mcpToolsList,
                 generationConfig = liveGenerationConfig {
                     responseModality = ResponseModality.Companion.AUDIO
                     speechConfig = SpeechConfig(voice = Voice(voiceName))
@@ -101,7 +93,7 @@ class FirebaseConversationService(private val context: Context) :
             )
 
             Log.d(TAG, "FirebaseConversationService initialized with $modelName, " +
-                    "${mcpToolsList.size + localTools.size} total tools")
+                    "${mcpToolsList.size} total tools")
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize FirebaseConversationService", e)

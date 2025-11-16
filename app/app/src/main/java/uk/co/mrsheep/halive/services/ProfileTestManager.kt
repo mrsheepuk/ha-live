@@ -148,7 +148,8 @@ class ProfileTestManager(
             sessionPreparer = SessionPreparer(
                 toolExecutor = mockToolExecutor!!,
                 haApiClient = haApiClient,
-                logger = logger
+                logger = logger,
+                localTools = emptySet()
             )
 
             // Prepare and initialize the conversation session with the profile

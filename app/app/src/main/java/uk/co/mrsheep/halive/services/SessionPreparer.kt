@@ -29,7 +29,8 @@ import uk.co.mrsheep.halive.services.conversation.ConversationService
 class SessionPreparer(
     private val toolExecutor: ToolExecutor,
     private val haApiClient: HomeAssistantApiClient,
-    private val logger: AppLogger
+    private val logger: AppLogger,
+    private val localTools: Set<String>,
 ) {
     companion object {
         private const val TAG = "SessionPreparer"
@@ -172,7 +173,7 @@ class SessionPreparer(
             when (profile?.toolFilterMode) {
                 ToolFilterMode.SELECTED -> {
                     val selected = profile.selectedToolNames
-                    val available = result.filter { it.name in selected }
+                    val available = result.filter { it.name in selected || it.name in localTools }
 
                     // Log warning if some selected tools are missing from HA
                     val missing = selected - available.map { it.name }.toSet()
