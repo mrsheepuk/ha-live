@@ -76,10 +76,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     private val _wakeWordEnabled = MutableStateFlow(false)
     val wakeWordEnabled: StateFlow<Boolean> = _wakeWordEnabled
 
-    // Log expanded state (for collapsible log UI)
-    private val _logExpanded = MutableStateFlow(false)
-    val logExpanded: StateFlow<Boolean> = _logExpanded
-
     // Transcription expanded state
     private val _transcriptionExpanded = MutableStateFlow(false)
     val transcriptionExpanded: StateFlow<Boolean> = _transcriptionExpanded
@@ -402,22 +398,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         }
     }
 
-    /**
-     * Toggle log expanded state.
-     * Called by UI when user clicks to expand/collapse the tool call logs.
-     */
-    fun toggleLogExpanded() {
-        _logExpanded.value = !_logExpanded.value
-        if (_logExpanded.value && _transcriptionExpanded.value) {
-            _transcriptionExpanded.value = false
-        }
-    }
-
     fun toggleTranscriptionExpanded() {
         _transcriptionExpanded.value = !_transcriptionExpanded.value
-        if (_logExpanded.value && _transcriptionExpanded.value) {
-            _logExpanded.value = false
-        }
     }
 
     override fun addLogEntry(log: LogEntry) {

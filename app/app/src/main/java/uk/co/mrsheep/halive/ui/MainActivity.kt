@@ -27,24 +27,20 @@ import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.HAConfig
 import kotlinx.coroutines.launch
-import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
 
 class MainActivity : AppCompatActivity() {
+
 
     private val viewModel: MainViewModel by viewModels()
 
     private lateinit var toolbar: Toolbar
     private lateinit var statusText: TextView
     private lateinit var mainButton: Button
-    private lateinit var toolLogText: TextView
     private lateinit var retryButton: Button
     private lateinit var audioVisualizer: AudioVisualizerView
     private lateinit var wakeWordChip: MaterialButton
-    private lateinit var logHeaderContainer: LinearLayout
-    private lateinit var logChevronIcon: ImageView
-    private lateinit var logContentScroll: ScrollView
 
     private lateinit var transcriptionHeaderContainer: LinearLayout
     private lateinit var transcriptionLogText: TextView
@@ -114,14 +110,9 @@ class MainActivity : AppCompatActivity() {
 
         statusText = findViewById(R.id.statusText)
         mainButton = findViewById(R.id.mainButton)
-        toolLogText = findViewById(R.id.toolLogText)
         retryButton = findViewById(R.id.retryButton)
         audioVisualizer = findViewById(R.id.audioVisualizer)
         wakeWordChip = findViewById(R.id.wakeWordChip)
-        logHeaderContainer = findViewById(R.id.logHeaderContainer)
-        logChevronIcon = findViewById(R.id.logChevronIcon)
-        logContentScroll = findViewById(R.id.logContentScroll)
-
 
         transcriptionLogText = findViewById(R.id.transcriptionLogText)
         transcriptionHeaderContainer = findViewById(R.id.transcriptionHeaderContainer)
@@ -145,20 +136,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Add click listener for log header collapse/expand
-        logHeaderContainer.setOnClickListener {
-            viewModel.toggleLogExpanded()
-        }
-
-        // Add click listener for log header collapse/expand
         transcriptionHeaderContainer.setOnClickListener {
             viewModel.toggleTranscriptionExpanded()
-        }
-
-        // Observe log expanded state from ViewModel
-        lifecycleScope.launch {
-            viewModel.logExpanded.collect { isExpanded ->
-                updateLogExpandedState(isExpanded)
-            }
         }
 
         // Observe the UI state from the ViewModel
@@ -168,14 +147,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Observe tool logs from the ViewModel
-        lifecycleScope.launch {
-            viewModel.toolLogs.collect { logs ->
-                updateToolLogs(logs)
-            }
-        }
-
-        // Observe tool logs from the ViewModel
+        // Observe transcription expanded state
         lifecycleScope.launch {
             viewModel.transcriptionExpanded.collect { isExpanded ->
                 updateTranscriptionExpandedState(isExpanded)
@@ -214,6 +186,10 @@ class MainActivity : AppCompatActivity() {
                 // Pass chat active state
                 intent.putExtra("isChatActive", viewModel.isSessionActive())
                 startActivity(intent)
+                true
+            }
+            R.id.action_debug_logs -> {
+                DebugLogsBottomSheet.newInstance().show(supportFragmentManager, "DebugLogsBottomSheet")
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -382,33 +358,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateToolLogs(logs: List<LogEntry>) {
-        if (logs.isEmpty()) {
-            toolLogText.text = "Log will appear here..."
-            return
-        }
-
-        // Format logs in chronological order (oldest first)
-        val formattedLogs = logs.joinToString("\n\n") { log ->
-            val statusIcon = if (log.success) "✓" else "✗"
-            val statusColor = if (log.success) "SUCCESS" else "FAILED"
-
-            """
-            |[$statusIcon] ${log.timestamp} - $statusColor
-            |Tool: ${log.toolName}
-            |Params: ${log.parameters}
-            |Result: ${log.result}
-            """.trimMargin()
-        }
-
-        toolLogText.text = formattedLogs
-
-        // Auto-scroll to bottom to show most recent log entry
-        logContentScroll.post {
-            logContentScroll.fullScroll(View.FOCUS_DOWN)
-        }
-    }
-
     private fun updateTranscriptionLogs(logs: List<TranscriptionEntry>) {
         if (logs.isEmpty()) {
             transcriptionLogText.text = "Transcription will appear here..."
@@ -461,29 +410,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateLogExpandedState(isExpanded: Boolean) {
-        if (isExpanded) {
-            // Expand log content
-            logContentScroll.visibility = View.VISIBLE
-            ObjectAnimator.ofFloat(logChevronIcon, "rotation", 0f, 180f).apply {
-                duration = 300
-                start()
-            }
-            // Auto-scroll to bottom when opening to show most recent entries
-            logContentScroll.post {
-                logContentScroll.fullScroll(View.FOCUS_DOWN)
-            }
-        } else {
-            // Collapse log content
-            logContentScroll.visibility = View.GONE
-            ObjectAnimator.ofFloat(logChevronIcon, "rotation", 180f, 0f).apply {
-                duration = 300
-                start()
-            }
-        }
-    }
-
-
     private fun updateTranscriptionExpandedState(isExpanded: Boolean) {
         if (isExpanded) {
             // Expand log content
@@ -505,4 +431,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+    fun provideViewModel(): MainViewModel = viewModel
 }
