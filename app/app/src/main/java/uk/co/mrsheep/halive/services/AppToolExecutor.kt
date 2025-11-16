@@ -71,7 +71,7 @@ class AppToolExecutor(
 
     override suspend fun getTools(): List<McpTool> {
         val tools = toolExecutor.getTools().toMutableList()
-        localTools.forEach { (key, value) -> tools.add(value.definition) }
+        localTools.forEach { (_, value) -> tools.add(value.definition) }
         return tools
     }
 

@@ -266,6 +266,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
                 mcp.connect()
                 mcpClient = mcp
                 // Wrap the MCP in an app tool executor letting it do local actions and get logged
+                val localTools = getLocalTools()
                 toolExecutor = AppToolExecutor(
                     toolExecutor = mcp,
                     logger = this@MainViewModel,
@@ -277,7 +278,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
                 val sessionPreparer = SessionPreparer(
                     toolExecutor = toolExecutor!!,
                     haApiClient = app.haApiClient!!,
-                    logger = this@MainViewModel
+                    logger = this@MainViewModel,
+                    localTools = localTools.keys,
                 )
 
                 sessionPreparer.prepareAndInitialize(profile, conversationService)
@@ -500,7 +502,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
             "EndConversation" to LocalTool(
                 definition = McpTool(
                     name = "EndConversation",
-                    description = "",
+                    description = """
+                    Immediately ends the conversation. 
+                    
+                    Use when the conversation has come to its natural end, for example, if the user says 'thanks' with no obvious follow up. 
+                    
+                    Wish the user goodbye before calling this tool so they know the conversation is finished.
+                    """.trimIndent(),
                     inputSchema = McpInputSchema(
                         type = "object",
                         properties = mapOf("reason" to McpProperty(
