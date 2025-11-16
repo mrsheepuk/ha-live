@@ -432,5 +432,5 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun getViewModel(): MainViewModel = viewModel
+    fun provideViewModel(): MainViewModel = viewModel
 }

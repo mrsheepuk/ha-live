@@ -39,7 +39,7 @@ class DebugLogsBottomSheet : BottomSheetDialogFragment() {
         debugLogScrollView = view.findViewById(R.id.debugLogScrollView)
 
         // Get the MainActivity's viewModel
-        val viewModel = (requireActivity() as MainActivity).getViewModel()
+        val viewModel = (requireActivity() as MainActivity).provideViewModel()
 
         // Observe tool logs and update display
         viewLifecycleOwner.lifecycleScope.launch {
