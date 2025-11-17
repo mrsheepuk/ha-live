@@ -25,6 +25,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
+import uk.co.mrsheep.halive.core.DummyToolsConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.core.TranscriptionEntry
@@ -172,6 +173,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
+        // Set checked state for dummy tools menu item
+        menu.findItem(R.id.action_dummy_tools)?.isChecked = DummyToolsConfig.isEnabled(this)
         return true
     }
 
@@ -190,6 +193,20 @@ class MainActivity : AppCompatActivity() {
             }
             R.id.action_debug_logs -> {
                 DebugLogsBottomSheet.newInstance().show(supportFragmentManager, "DebugLogsBottomSheet")
+                true
+            }
+            R.id.action_dummy_tools -> {
+                val currentState = DummyToolsConfig.isEnabled(this)
+                val newState = !currentState
+                DummyToolsConfig.setEnabled(this, newState)
+                item.isChecked = newState
+
+                val message = if (newState) {
+                    "Dummy tools enabled - restart chat to apply"
+                } else {
+                    "Dummy tools disabled - restart chat to apply"
+                }
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
                 true
             }
             else -> super.onOptionsItemSelected(item)

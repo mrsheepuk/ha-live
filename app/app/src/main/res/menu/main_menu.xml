@@ -12,4 +12,8 @@
     <item
         android:id="@+id/action_debug_logs"
         android:title="Debug Logs" />
+    <item
+        android:id="@+id/action_dummy_tools"
+        android:title="Use Dummy Tools"
+        android:checkable="true" />
 </menu>
