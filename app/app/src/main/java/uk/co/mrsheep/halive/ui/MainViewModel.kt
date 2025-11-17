@@ -37,6 +37,8 @@ import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.ToolCallResult
 import uk.co.mrsheep.halive.services.mcp.ToolContent
 import kotlin.String
+import uk.co.mrsheep.halive.core.DummyToolsConfig
+import uk.co.mrsheep.halive.services.MockToolExecutor
 
 // Define the different states our UI can be in
 sealed class UiState {
@@ -261,13 +263,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
                 val mcp = McpClientManager(app.haUrl!!, app.haToken!!)
                 mcp.connect()
                 mcpClient = mcp
-                // Wrap the MCP in an app tool executor letting it do local actions and get logged
+
                 val localTools = getLocalTools()
+
+                // Determine base executor (wrap MCP with MockToolExecutor if dummy tools enabled)
+                val baseExecutor: ToolExecutor = if (DummyToolsConfig.isEnabled(getApplication())) {
+                    // Build passthrough tools list: GetDateTime, GetLiveContext, and all local tools
+                    val passthroughTools = buildList {
+                        add("GetDateTime")
+                        add("GetLiveContext")
+                        addAll(localTools.keys)  // All local tool names (e.g., EndConversation)
+                    }
+                    MockToolExecutor(
+                        realExecutor = mcp,
+                        passthroughTools = passthroughTools
+                    )
+                } else {
+                    mcp
+                }
+
+                // Wrap the base executor (which may be mocked) with AppToolExecutor
                 toolExecutor = AppToolExecutor(
-                    toolExecutor = mcp,
+                    toolExecutor = baseExecutor,
                     logger = this@MainViewModel,
                     setUIState = { uiState: UiState -> _uiState.value = uiState },
-                    localTools = getLocalTools(),
+                    localTools = localTools,
                 )
 
                 // Now sessionPreparer needs to be recreated with the new mcpClient
