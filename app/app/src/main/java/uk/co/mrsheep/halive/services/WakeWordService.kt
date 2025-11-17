@@ -164,6 +164,10 @@ class WakeWordService(
                                     )
                                     isListening = false
 
+                                    // Clean up AudioRecord before triggering callback
+                                    // This releases the microphone for the chat session
+                                    cleanup()
+
                                     // Trigger callback on main dispatcher
                                     withContext(Dispatchers.Main) {
                                         onWakeWordDetected()
@@ -178,16 +182,19 @@ class WakeWordService(
                         } else if (samplesRead < 0) {
                             Log.e(TAG, "AudioRecord read error: $samplesRead")
                             isListening = false
+                            cleanup()
                             return@launch
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error in audio processing loop: ${e.message}", e)
                         isListening = false
+                        cleanup()
                         return@launch
                     }
                 }
 
                 Log.d(TAG, "Audio processing loop completed")
+                cleanup()
             }
         } catch (s: SecurityException) {
             Log.e(TAG, "No permission to listen (should be handled above): ${s.message}")
