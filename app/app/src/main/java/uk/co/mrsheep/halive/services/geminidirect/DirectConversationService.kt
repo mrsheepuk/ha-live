@@ -69,7 +69,7 @@ class DirectConversationService(private val context: Context) :
         voiceName: String,
         toolExecutor: ToolExecutor,
         transcriptor: ((String?, String?, Boolean) -> Unit)?,
-        interruptable: Boolean = true
+        interruptable: Boolean
     ) {
         try {
             Log.d(TAG, "Initializing DirectConversationService with ${tools.size} tools")
