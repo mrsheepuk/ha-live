@@ -62,6 +62,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      * @param includeLiveContext Whether to include live context with system prompt
      * @param enableTranscription Whether to enable transcription display
      * @param autoStartChat Whether to auto-start chat when app opens
+     * @param interruptable Whether the conversation is interruptable
      * @param toolFilterMode Whether to use all tools or only selected tools
      * @param selectedToolNames Set of tool names to use if in SELECTED mode
      * @param existingId The ID of existing profile (null for create)
@@ -77,6 +78,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
         includeLiveContext: Boolean,
         enableTranscription: Boolean,
         autoStartChat: Boolean,
+        interruptable: Boolean,
         toolFilterMode: ToolFilterMode,
         selectedToolNames: Set<String>,
         existingId: String?
@@ -109,6 +111,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         includeLiveContext = includeLiveContext,
                         enableTranscription = enableTranscription,
                         autoStartChat = autoStartChat,
+                        interruptable = interruptable,
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,
                         selectedToolNames = selectedToolNames
@@ -127,6 +130,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         includeLiveContext = includeLiveContext,
                         enableTranscription = enableTranscription,
                         autoStartChat = autoStartChat,
+                        interruptable = interruptable,
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,
                         selectedToolNames = selectedToolNames,

@@ -25,6 +25,7 @@ interface ConversationService {
      * @param systemPrompt System instructions for the AI
      * @param modelName Model to use (e.g., "gemini-2.0-flash-exp")
      * @param voiceName Voice to use (e.g., "Aoede")
+     * @param interruptable Whether the conversation can be interrupted by the user
      */
     suspend fun initialize(
         tools: List<McpTool>,
@@ -32,7 +33,8 @@ interface ConversationService {
         modelName: String,
         voiceName: String,
         toolExecutor: ToolExecutor,
-        transcriptor: ((String?, String?, Boolean) -> Unit)? = null
+        transcriptor: ((String?, String?, Boolean) -> Unit)? = null,
+        interruptable: Boolean = true
     )
 
     /**

@@ -43,6 +43,7 @@ class DirectConversationService(private val context: Context) :
     private var voiceName: String? = null
     private var toolExecutor: ToolExecutor? = null
     private var transcriptor: ((String?, String?, Boolean) -> Unit)? = null
+    private var interruptable: Boolean = true
 
     private val json = Json {
         encodeDefaults = true
@@ -67,7 +68,8 @@ class DirectConversationService(private val context: Context) :
         modelName: String,
         voiceName: String,
         toolExecutor: ToolExecutor,
-        transcriptor: ((String?, String?, Boolean) -> Unit)?
+        transcriptor: ((String?, String?, Boolean) -> Unit)?,
+        interruptable: Boolean = true
     ) {
         try {
             Log.d(TAG, "Initializing DirectConversationService with ${tools.size} tools")
@@ -81,6 +83,7 @@ class DirectConversationService(private val context: Context) :
             this.systemPrompt = systemPrompt
             this.modelName = modelName
             this.voiceName = voiceName
+            this.interruptable = interruptable
 
             Log.d(
                 TAG,
@@ -128,6 +131,7 @@ class DirectConversationService(private val context: Context) :
                 systemPrompt = systemPrompt ?: "",
                 tools = toolDeclarations ?: emptyList(),
                 voiceName = voiceName ?: "Aoede",
+                interruptable = interruptable,
                 onToolCall = protocolToolCallHandler,
                 onTranscription = transcriptor
             )

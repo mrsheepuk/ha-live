@@ -27,6 +27,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.checkbox.MaterialCheckBox
+import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import uk.co.mrsheep.halive.R
@@ -89,6 +90,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
     private lateinit var includeLiveContextCheckbox: MaterialCheckBox
     private lateinit var enableTranscriptionCheckbox: MaterialCheckBox
     private lateinit var autoStartChatCheckbox: MaterialCheckBox
+    private lateinit var interruptableSwitch: SwitchMaterial
 
     // Tool Filtering UI components
     private lateinit var toolFilterModeGroup: RadioGroup
@@ -243,6 +245,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         includeLiveContextCheckbox = findViewById(R.id.includeLiveContextCheckbox)
         enableTranscriptionCheckbox = findViewById(R.id.enableTranscriptionCheckbox)
         autoStartChatCheckbox = findViewById(R.id.autoStartChatCheckbox)
+        interruptableSwitch = findViewById(R.id.interruptableSwitch)
 
         // Tool Filtering UI
         toolFilterModeGroup = findViewById(R.id.toolFilterModeGroup)
@@ -303,9 +306,10 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
             val includeLiveContext = includeLiveContextCheckbox.isChecked
             val enableTranscription = enableTranscriptionCheckbox.isChecked
             val autoStartChat = autoStartChatCheckbox.isChecked
+            val interruptable = interruptableSwitch.isChecked
             viewModel.saveProfile(
                 name, prompt, personality, backgroundInfo, initialMessageToAgent,
-                model, voice, includeLiveContext, enableTranscription, autoStartChat, currentToolFilterMode,
+                model, voice, includeLiveContext, enableTranscription, autoStartChat, interruptable, currentToolFilterMode,
                 selectedToolNames.toSet(), editingProfileId
             )
         }
@@ -406,6 +410,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
                 includeLiveContextCheckbox.isChecked = state.profile.includeLiveContext
                 enableTranscriptionCheckbox.isChecked = state.profile.enableTranscription
                 autoStartChatCheckbox.isChecked = state.profile.autoStartChat
+                interruptableSwitch.isChecked = state.profile.interruptable
 
                 // Restore tool filter settings
                 currentToolFilterMode = state.profile.toolFilterMode
@@ -554,6 +559,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
             includeLiveContext = includeLiveContextCheckbox.isChecked,
             enableTranscription = enableTranscriptionCheckbox.isChecked,
             autoStartChat = false, // Irrelevant for testing
+            interruptable = interruptableSwitch.isChecked,
             toolFilterMode = currentToolFilterMode,
             selectedToolNames = selectedToolNames.toSet()
         )
@@ -683,6 +689,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         includeLiveContextCheckbox.isEnabled = enabled
         enableTranscriptionCheckbox.isEnabled = enabled
         autoStartChatCheckbox.isEnabled = enabled
+        interruptableSwitch.isEnabled = enabled
         radioAllTools.isEnabled = enabled
         radioSelectedTools.isEnabled = enabled
         toolSearchBox.isEnabled = enabled
