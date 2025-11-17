@@ -53,13 +53,13 @@ class WakeWordService(
         return try {
             val melModel = loadModelFile("melspectrogram.onnx")
             val embModel = loadModelFile("embedding_model.onnx")
-            val wakeModel = loadModelFile("alexa.onnx")
+            val wakeModel = loadModelFile("ok_computer.onnx")
 
             if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
                 Log.e(TAG, "One or more model files not found in ${context.filesDir}")
                 Log.e(TAG, "  melspectrogram.onnx: ${melModel.exists()}")
                 Log.e(TAG, "  embedding_model.onnx: ${embModel.exists()}")
-                Log.e(TAG, "  alexa.onnx: ${wakeModel.exists()}")
+                Log.e(TAG, "  ok_computer.onnx: ${wakeModel.exists()}")
                 return false
             }
 
