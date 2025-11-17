@@ -67,8 +67,8 @@ dependencies {
     // JSON parsing
     implementation("org.json:json:20231013")
 
-    // TensorFlow Lite
-    implementation(libs.tensorflow.lite)
+    // ONNX Runtime for Android
+    implementation(libs.onnx.runtime)
 
     // ConstraintLayout
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")

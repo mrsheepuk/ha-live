@@ -15,14 +15,12 @@ import uk.co.mrsheep.halive.services.wake.OwwModel
 import java.io.File
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
-import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
 
 /**
- * Manages wake word detection using AudioRecord and TensorFlow Lite inference.
+ * Manages wake word detection using AudioRecord and ONNX Runtime inference.
  *
  * Captures 16kHz mono PCM audio, processes it in 1152-sample chunks, and runs
- * TFLite inference via OwwModel. Triggers callback when detection confidence
+ * ONNX Runtime inference via OwwModel. Triggers callback when detection confidence
  * exceeds the configured threshold.
  *
  * @param context Application context for accessing files and audio resources
@@ -47,23 +45,23 @@ class WakeWordService(
 
     /**
      * Initializes the wake word model from the application's files directory.
-     * The three model files should be copied by AssetCopyUtil.
+     * The three ONNX model files should be copied by AssetCopyUtil.
      *
      * @return true if model initialized successfully, false otherwise
      */
     private fun initializeModel(): Boolean {
         return try {
-            val melModel = loadModelFile("oww_mel.tflite")
-            val embModel = loadModelFile("oww_emb.tflite")
-            val wakeModel = loadModelFile( "oww_wake.tflite")
+            val melModel = loadModelFile("melspectrogram.onnx")
+            val embModel = loadModelFile("embedding_model.onnx")
+            val wakeModel = loadModelFile("alexa.onnx")
 
-//            if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
-//                Log.e(TAG, "One or more model files not found in ${context.filesDir}")
-//                Log.e(TAG, "  oww_mel.tflite: ${melModel.exists()}")
-//                Log.e(TAG, "  oww_emb.tflite: ${embModel.exists()}")
-//                Log.e(TAG, "  oww_wake.tflite: ${wakeModel.exists()}")
-//                return false
-//            }
+            if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
+                Log.e(TAG, "One or more model files not found in ${context.filesDir}")
+                Log.e(TAG, "  melspectrogram.onnx: ${melModel.exists()}")
+                Log.e(TAG, "  embedding_model.onnx: ${embModel.exists()}")
+                Log.e(TAG, "  alexa.onnx: ${wakeModel.exists()}")
+                return false
+            }
 
             owwModel = OwwModel(melModel, embModel, wakeModel)
             Log.d(TAG, "Wake word model initialized successfully")
@@ -154,7 +152,7 @@ class WakeWordService(
                                 floatBuffer[i] = audioBuffer[i] / 32768.0f
                             }
 
-                            // Run TFLite inference on audio chunk
+                            // Run ONNX Runtime inference on audio chunk
                             val model = owwModel
                             if (model != null) {
                                 try {
@@ -178,7 +176,7 @@ class WakeWordService(
                                         return@launch
                                     }
                                 } catch (e: Exception) {
-                                    Log.e(TAG, "Error running TFLite inference: ${e.message}", e)
+                                    Log.e(TAG, "Error running ONNX Runtime inference: ${e.message}", e)
                                 }
                             }
                         } else if (samplesRead < 0) {
@@ -270,14 +268,13 @@ class WakeWordService(
     }
 
     /**
-     * Loads a model file from the assets folder into a memory-mapped ByteBuffer.
+     * Returns a File object pointing to a model file in the application's files directory.
+     * The file should be copied there by AssetCopyUtil during app startup.
+     *
+     * @param filename Name of the model file (e.g., "melspectrogram.onnx")
+     * @return File object pointing to the model in filesDir
      */
-    private fun loadModelFile(filename: String): ByteBuffer {
-        val fileDescriptor = context.assets.openFd(filename)
-        val inputStream = fileDescriptor.createInputStream()
-        val fileChannel = inputStream.channel
-        val startOffset = fileDescriptor.startOffset
-        val declaredLength = fileDescriptor.declaredLength
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+    private fun loadModelFile(filename: String): File {
+        return File(context.filesDir, filename)
     }
 }

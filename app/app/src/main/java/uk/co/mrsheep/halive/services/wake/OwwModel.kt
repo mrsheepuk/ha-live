@@ -1,36 +1,43 @@
 package uk.co.mrsheep.halive.services.wake
 
-import org.tensorflow.lite.Interpreter
-import java.nio.ByteBuffer
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
+import java.io.File
 
 class OwwModel(
-    melSpectrogramPath: ByteBuffer,
-    embeddingPath: ByteBuffer,
-    wakeWordPath: ByteBuffer
+    melSpectrogramFile: File,
+    embeddingFile: File,
+    wakeWordFile: File
 ) : AutoCloseable {
-    @Suppress("JoinDeclarationAndAssignment")
-    private val melInterpreter: Interpreter
-    private val embInterpreter: Interpreter
-    private val wakeInterpreter: Interpreter
+    private val ortEnvironment: OrtEnvironment = OrtEnvironment.getEnvironment()
+
+    private val melSession: OrtSession
+    private val embSession: OrtSession
+    private val wakeSession: OrtSession
 
     private var accumulatedMelOutputs: Array<Array<FloatArray>> = Array(EMB_INPUT_COUNT) { arrayOf() }
     private var accumulatedEmbOutputs: Array<FloatArray> = Array(WAKE_INPUT_COUNT) { floatArrayOf() }
 
     init {
-        melInterpreter = loadModel(melSpectrogramPath, intArrayOf(1, MEL_INPUT_COUNT))
-
-        try {
-            embInterpreter = loadModel(embeddingPath)
+        melSession = try {
+            loadModel(melSpectrogramFile)
         } catch (t: Throwable) {
-            melInterpreter.close()
             throw t
         }
 
-        try {
-            wakeInterpreter = loadModel(wakeWordPath)
+        embSession = try {
+            loadModel(embeddingFile)
         } catch (t: Throwable) {
-            melInterpreter.close()
-            embInterpreter.close()
+            melSession.close()
+            throw t
+        }
+
+        wakeSession = try {
+            loadModel(wakeWordFile)
+        } catch (t: Throwable) {
+            melSession.close()
+            embSession.close()
             throw t
         }
     }
@@ -42,8 +49,24 @@ class OwwModel(
             )
         }
 
-        val melOutput = Array(MEL_OUTPUT_COUNT) { FloatArray(MEL_FEATURE_SIZE) }
-        melInterpreter.run(arrayOf(audio), arrayOf(arrayOf(melOutput)))
+        // Run mel spectrogram model: input [1, 1152] -> output [1, 1, 5, 32]
+        val melInputName = melSession.inputNames.first()
+        val melInput = OnnxTensor.createTensor(
+            ortEnvironment,
+            arrayOf(audio),
+            longArrayOf(1, MEL_INPUT_COUNT.toLong())
+        )
+        val melResults = melSession.run(mapOf(melInputName to melInput))
+
+        // Extract mel output and reshape from [1, 1, 5, 32] to [5, 32]
+        @Suppress("UNCHECKED_CAST")
+        val melOutputRaw = melResults[0].value as Array<Array<Array<FloatArray>>>
+        val melOutput = melOutputRaw[0][0] // [5, 32]
+
+        melInput.close()
+        melResults.close()
+
+        // Accumulate mel outputs with sliding window buffer
         for (i in 0..<EMB_INPUT_COUNT) {
             accumulatedMelOutputs[i] = if (i < EMB_INPUT_COUNT - MEL_OUTPUT_COUNT) {
                 accumulatedMelOutputs[i + MEL_OUTPUT_COUNT]
@@ -57,29 +80,61 @@ class OwwModel(
             return 0.0f // not fully initialized yet
         }
 
-        val embOutput = Array(EMB_OUTPUT_COUNT) { FloatArray(EMB_FEATURE_SIZE) }
-        embInterpreter.run(arrayOf(accumulatedMelOutputs), arrayOf(arrayOf(embOutput)))
+        // Run embedding model: input [1, 76, 32, 1] -> output [1, 1, 1, 96]
+        val embInputName = embSession.inputNames.first()
+        val embInput = OnnxTensor.createTensor(
+            ortEnvironment,
+            arrayOf(accumulatedMelOutputs),
+            longArrayOf(1, EMB_INPUT_COUNT.toLong(), MEL_FEATURE_SIZE.toLong(), 1)
+        )
+        val embResults = embSession.run(mapOf(embInputName to embInput))
+
+        // Extract embedding output and reshape from [1, 1, 1, 96] to [96]
+        @Suppress("UNCHECKED_CAST")
+        val embOutputRaw = embResults[0].value as Array<Array<Array<FloatArray>>>
+        val embOutput = embOutputRaw[0][0][0] // FloatArray[96]
+
+        embInput.close()
+        embResults.close()
+
+        // Accumulate embedding outputs with sliding window buffer
+        // Since EMB_OUTPUT_COUNT = 1, we add one new embedding per frame
         for (i in 0..<WAKE_INPUT_COUNT) {
             accumulatedEmbOutputs[i] = if (i < WAKE_INPUT_COUNT - EMB_OUTPUT_COUNT) {
                 accumulatedEmbOutputs[i + EMB_OUTPUT_COUNT]
             } else {
-                @Suppress("KotlinConstantConditions")
-                embOutput[i - WAKE_INPUT_COUNT + EMB_OUTPUT_COUNT]
+                // embOutput is already FloatArray[96], use it directly
+                embOutput
             }
         }
         if (accumulatedEmbOutputs[0].isEmpty()) {
             return 0.0f // not fully initialized yet
         }
 
-        val wakeOutput = FloatArray(1)
-        wakeInterpreter.run(arrayOf(accumulatedEmbOutputs), arrayOf(wakeOutput))
-        return wakeOutput[0]
+        // Run wake word detection model: input [1, 16, 96] -> output [1, 1]
+        val wakeInputName = wakeSession.inputNames.first()
+        val wakeInput = OnnxTensor.createTensor(
+            ortEnvironment,
+            arrayOf(accumulatedEmbOutputs),
+            longArrayOf(1, WAKE_INPUT_COUNT.toLong(), EMB_FEATURE_SIZE.toLong())
+        )
+        val wakeResults = wakeSession.run(mapOf(wakeInputName to wakeInput))
+
+        // Extract wake word output score
+        @Suppress("UNCHECKED_CAST")
+        val wakeOutputRaw = wakeResults[0].value as Array<FloatArray>
+        val wakeOutput = wakeOutputRaw[0][0]
+
+        wakeInput.close()
+        wakeResults.close()
+
+        return wakeOutput
     }
 
     override fun close() {
-        melInterpreter.close()
-        embInterpreter.close()
-        wakeInterpreter.close()
+        melSession.close()
+        embSession.close()
+        wakeSession.close()
     }
 
     companion object {
@@ -96,19 +151,13 @@ class OwwModel(
         // wake model shape is [1,16,96] -> [1,1]
         const val WAKE_INPUT_COUNT = 16 // hardcoded in the model
 
-        private fun loadModel(modelPath: ByteBuffer, inputDims: IntArray? = null): Interpreter {
+        private fun loadModel(modelFile: File): OrtSession {
             try {
-
-                val interpreter = Interpreter(modelPath)
-
-                if (inputDims != null) {
-                    interpreter.resizeInput(0, inputDims)
-                }
-
-                interpreter.allocateTensors()
-                return interpreter
+                // Create ONNX Runtime session from model file path
+                val sessionOptions = OrtSession.SessionOptions()
+                return OrtEnvironment.getEnvironment().createSession(modelFile.absolutePath, sessionOptions)
             } catch (t: Throwable) {
-                throw Exception("Failed to load model $modelPath", t)
+                throw Exception("Failed to load ONNX model from ${modelFile.absolutePath}", t)
             }
         }
     }
