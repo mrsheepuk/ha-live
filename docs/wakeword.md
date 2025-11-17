@@ -1,7 +1,7 @@
 # Wake Word Detection
 
 ## Overview
-Foreground-only, on-device wake word detection using openwakeword TFLite models. Enables hands-free activation by saying the wake word while the app is in the foreground.
+Foreground-only, on-device wake word detection using openwakeword ONNX models. Enables hands-free activation by saying the wake word while the app is in the foreground.
 
 ## Architecture
 
@@ -24,20 +24,21 @@ WakeWordService owns mic (back to ReadyToTalk)
 
 ## Key Components
 
-### Models (3 TFLite files in `app/src/main/assets/`)
-- `oww_mel.tflite` - Melspectrogram preprocessor (INPUT: audio samples)
-- `oww_emb.tflite` - Embedding model (INPUT: mel outputs)
-- `oww_wake.tflite` - Wake word classifier (INPUT: embeddings, OUTPUT: probability)
+### Models (3 ONNX files in `app/src/main/assets/`)
+- `melspectrogram.onnx` - Melspectrogram preprocessor (INPUT: audio samples)
+- `embedding_model.onnx` - Embedding model (INPUT: mel outputs)
+- `alexa.onnx` - Wake word classifier (INPUT: embeddings, OUTPUT: probability)
 
-**Critical Issue Found:** The `oww_mel.tflite` from openwakeword v0.5.1 release has invalid input shape `[1, 1]` instead of `[1, 1152]`, causing "BytesRequired overflow" error. The ONNX version (`melspectrogram.onnx`) works correctly and needs conversion to TFLite with fixed input shape.
+**Migration Note:** Previously used TensorFlow Lite, but migrated to ONNX Runtime due to shape compatibility issues in the TFLite melspectrogram model from openwakeword v0.5.1 release.
 
 ### Core Classes
 
 **`services/wake/OwwModel.kt`**
-- Three-stage TFLite inference pipeline
+- Three-stage ONNX Runtime inference pipeline
 - Processes 1152 audio samples (72ms @ 16kHz)
 - Accumulates outputs for streaming detection
-- Constructor: `OwwModel(melBuffer: ByteBuffer, embBuffer: ByteBuffer, wakeBuffer: ByteBuffer)`
+- Constructor: `OwwModel(melFile: File, embFile: File, wakeFile: File)`
+- Uses `ai.onnxruntime.OrtSession` for inference
 
 **`services/WakeWordService.kt`**
 - Manages AudioRecord (16kHz mono PCM)
@@ -51,8 +52,9 @@ WakeWordService owns mic (back to ReadyToTalk)
 - Persists across app restarts
 
 **`core/AssetCopyUtil.kt`**
-- Copies .tflite files from assets to filesDir on app launch
+- Copies .onnx files from assets to filesDir on app launch
 - Only copies if files don't already exist
+- Models: melspectrogram.onnx, embedding_model.onnx, alexa.onnx
 
 ### ViewModel Integration
 
@@ -104,16 +106,17 @@ if (probability > 0.5f) {
 ## Model Replacement
 
 To replace with trained models:
-1. Place trained .tflite files in `app/src/main/assets/`
-2. Delete existing files from device: `adb shell rm -rf /data/data/uk.co.mrsheep.halive/files/oww_*.tflite`
-3. Or uninstall/reinstall app to trigger AssetCopyUtil
+1. Place trained .onnx files in `app/src/main/assets/`
+   - `melspectrogram.onnx` - From openwakeword release
+   - `embedding_model.onnx` - From openwakeword release
+   - `<wake_word>.onnx` - Your trained wake word model
+2. Update `AssetCopyUtil.kt` if using different wake word model name
+3. Delete existing files from device: `adb shell rm -rf /data/data/uk.co.mrsheep.halive/files/*.onnx`
+4. Or uninstall/reinstall app to trigger AssetCopyUtil
 
-**Known Issue:** Current `oww_mel.tflite` has invalid shape. Convert from ONNX:
-```bash
-# Download melspectrogram.onnx from openwakeword v0.5.1
-# Use conversion script to fix input shape to [1, 1152]
-# Replace oww_mel.tflite in assets/
-```
+**Model Sources:**
+- Download from openwakeword v0.5.1 release: https://github.com/dscripka/openWakeWord/releases/tag/v0.5.1
+- Or convert from ONNX models in the Python package
 
 ## Lifecycle Flow
 
@@ -130,22 +133,25 @@ To replace with trained models:
 
 ```kotlin
 // build.gradle.kts
-implementation(libs.tensorflow.lite)  // Version 2.16.1
+implementation(libs.onnx.runtime)  // Version 1.17.0
 
 // libs.versions.toml
-tensorflowLite = "2.16.1"
+onnxRuntime = "1.17.0"
+onnx-runtime = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxRuntime" }
 ```
 
 ## Troubleshooting
 
-**"BytesRequired overflow" error:**
-- Caused by invalid `oww_mel.tflite` input shape
-- Solution: Convert from ONNX with fixed shape or download corrected model
+**Model loading errors:**
+- Check logcat for "Failed to load ONNX model" errors
+- Verify all three .onnx files exist in assets directory
+- Check AssetCopyUtil logs: "Copied melspectrogram.onnx to..."
 
 **Not detecting wake word:**
 - Check logs: "Wake word disabled, skipping" → Toggle is OFF
 - Check threshold: Lower value in `WakeWordService.kt:39`
-- Verify models copied: Check logcat for "Copied oww_*.tflite"
+- Verify models copied: Check logcat for "Copied *.onnx"
+- Ensure ONNX Runtime is properly initialized
 
 **False positives:**
 - Increase threshold in `WakeWordService.kt:39`
