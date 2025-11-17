@@ -194,18 +194,12 @@ class McpClientManager(
     }
 
     /**
-     * Send a fire-and-forget notification.
+     * Send a notification and wait for it to complete.
+     * Notifications have no response, but we wait to ensure proper ordering.
      */
-    private fun sendNotification(notification: JsonRpcNotification) {
-        scope.launch {
-            val message = json.encodeToString(notification)
-            try {
-                sendMessage(message)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to send notification", e)
-                // Don't rethrow - notifications are fire-and-forget
-            }
-        }
+    private suspend fun sendNotification(notification: JsonRpcNotification) {
+        val message = json.encodeToString(notification)
+        sendMessage(message)
     }
 
     /**
