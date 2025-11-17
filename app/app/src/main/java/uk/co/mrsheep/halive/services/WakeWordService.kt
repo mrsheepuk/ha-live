@@ -41,6 +41,7 @@ class WakeWordService(
     private var recordingJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isListening = false
+    private var isModelInitialized = false
 
     /**
      * Lazy initialization of wake word models.
@@ -61,6 +62,7 @@ class WakeWordService(
         }
 
         Log.d(TAG, "Initializing wake word models (once per service lifetime)")
+        isModelInitialized = true
         OwwModel(melModel, embModel, wakeModel).also {
             Log.d(TAG, "Wake word models initialized successfully")
         }
@@ -260,13 +262,13 @@ class WakeWordService(
         stopListening()
 
         // Close ONNX models only on destroy (not after each listening session)
-        try {
-            if (::owwModel.isInitialized) {
+        if (isModelInitialized) {
+            try {
                 owwModel.close()
                 Log.d(TAG, "OwwModel closed")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error closing OwwModel: ${e.message}", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error closing OwwModel: ${e.message}", e)
         }
 
         scope.cancel()
