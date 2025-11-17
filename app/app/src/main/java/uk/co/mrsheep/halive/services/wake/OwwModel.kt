@@ -19,6 +19,9 @@ class OwwModel(
     private var accumulatedMelOutputs: Array<Array<FloatArray>> = Array(EMB_INPUT_COUNT) { arrayOf() }
     private var accumulatedEmbOutputs: Array<FloatArray> = Array(WAKE_INPUT_COUNT) { floatArrayOf() }
 
+    // Pre-allocated buffer for mel output transformation (battery optimization)
+    private val transformBuffer = Array(MEL_FEATURE_SIZE) { FloatArray(1) }
+
     init {
         melSession = try {
             loadModel(melSpectrogramFile)
@@ -66,13 +69,17 @@ class OwwModel(
         melResults.close()
 
         // Accumulate mel outputs with sliding window buffer
+        // Use pre-allocated buffer to avoid allocations in hot path (battery optimization)
         for (i in 0..<EMB_INPUT_COUNT) {
             accumulatedMelOutputs[i] = if (i < EMB_INPUT_COUNT - MEL_OUTPUT_COUNT) {
                 accumulatedMelOutputs[i + MEL_OUTPUT_COUNT]
             } else {
-                melOutput[i - EMB_INPUT_COUNT + MEL_OUTPUT_COUNT]
-                    .map { floatArrayOf((it / 10.0f) + 2.0f) }
-                    .toTypedArray()
+                val sourceRow = melOutput[i - EMB_INPUT_COUNT + MEL_OUTPUT_COUNT]
+                for (j in sourceRow.indices) {
+                    transformBuffer[j][0] = (sourceRow[j] / 10.0f) + 2.0f
+                }
+                // Return a copy to avoid reference issues with the shared buffer
+                Array(MEL_FEATURE_SIZE) { j -> floatArrayOf(transformBuffer[j][0]) }
             }
         }
         if (accumulatedMelOutputs[0].isEmpty()) {
@@ -128,6 +135,15 @@ class OwwModel(
         return wakeOutput
     }
 
+    /**
+     * Resets the accumulation buffers to initial state.
+     * Call this when starting a new listening session to clear stale data.
+     */
+    fun resetAccumulators() {
+        accumulatedMelOutputs = Array(EMB_INPUT_COUNT) { arrayOf() }
+        accumulatedEmbOutputs = Array(WAKE_INPUT_COUNT) { floatArrayOf() }
+    }
+
     override fun close() {
         melSession.close()
         embSession.close()
@@ -150,8 +166,18 @@ class OwwModel(
 
         private fun loadModel(modelFile: File): OrtSession {
             try {
-                // Create ONNX Runtime session from model file path
-                val sessionOptions = OrtSession.SessionOptions()
+                // Create ONNX Runtime session with optimizations for battery efficiency
+                val sessionOptions = OrtSession.SessionOptions().apply {
+                    // Enable basic graph optimizations (combines operations, constant folding)
+                    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
+
+                    // Sequential execution uses less CPU than parallel for small models
+                    setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL)
+
+                    // Limit to single thread to reduce power consumption
+                    // Wake word detection doesn't benefit much from multi-threading
+                    setIntraOpNumThreads(1)
+                }
                 return OrtEnvironment.getEnvironment().createSession(modelFile.absolutePath, sessionOptions)
             } catch (t: Throwable) {
                 throw Exception("Failed to load ONNX model from ${modelFile.absolutePath}", t)

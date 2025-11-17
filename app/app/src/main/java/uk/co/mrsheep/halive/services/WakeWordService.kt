@@ -37,38 +37,32 @@ class WakeWordService(
         private const val WAKE_WORD_THRESHOLD = 0.5f
     }
 
-    private var owwModel: OwwModel? = null
     private var audioRecord: AudioRecord? = null
     private var recordingJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isListening = false
 
     /**
-     * Initializes the wake word model from the application's files directory.
-     * The three ONNX model files should be copied by AssetCopyUtil.
-     *
-     * @return true if model initialized successfully, false otherwise
+     * Lazy initialization of wake word models.
+     * Models are loaded once and reused across multiple listening sessions for battery efficiency.
+     * Only closed when the service is destroyed.
      */
-    private fun initializeModel(): Boolean {
-        return try {
-            val melModel = loadModelFile("melspectrogram.onnx")
-            val embModel = loadModelFile("embedding_model.onnx")
-            val wakeModel = loadModelFile("ok_computer.onnx")
+    private val owwModel: OwwModel by lazy {
+        val melModel = loadModelFile("melspectrogram.onnx")
+        val embModel = loadModelFile("embedding_model.onnx")
+        val wakeModel = loadModelFile("ok_computer.onnx")
 
-            if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
-                Log.e(TAG, "One or more model files not found in ${context.filesDir}")
-                Log.e(TAG, "  melspectrogram.onnx: ${melModel.exists()}")
-                Log.e(TAG, "  embedding_model.onnx: ${embModel.exists()}")
-                Log.e(TAG, "  ok_computer.onnx: ${wakeModel.exists()}")
-                return false
-            }
+        if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
+            Log.e(TAG, "One or more model files not found in ${context.filesDir}")
+            Log.e(TAG, "  melspectrogram.onnx: ${melModel.exists()}")
+            Log.e(TAG, "  embedding_model.onnx: ${embModel.exists()}")
+            Log.e(TAG, "  ok_computer.onnx: ${wakeModel.exists()}")
+            throw IllegalStateException("Wake word model files not found")
+        }
 
-            owwModel = OwwModel(melModel, embModel, wakeModel)
-            Log.d(TAG, "Wake word model initialized successfully")
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Error initializing wake word model: ${e.message}", e)
-            false
+        Log.d(TAG, "Initializing wake word models (once per service lifetime)")
+        OwwModel(melModel, embModel, wakeModel).also {
+            Log.d(TAG, "Wake word models initialized successfully")
         }
     }
 
@@ -90,8 +84,13 @@ class WakeWordService(
             return
         }
 
-        if (!initializeModel()) {
-            Log.e(TAG, "Failed to initialize wake word model, cannot start listening")
+        // Verify models can be loaded (lazy init happens here on first access)
+        try {
+            // Touch the lazy property to trigger initialization if needed
+            owwModel.resetAccumulators()
+            Log.d(TAG, "Wake word models ready")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize wake word models: ${e.message}", e)
             return
         }
 
@@ -153,31 +152,28 @@ class WakeWordService(
                             }
 
                             // Run ONNX Runtime inference on audio chunk
-                            val model = owwModel
-                            if (model != null) {
-                                try {
-                                    val detectionScore = model.processFrame(floatBuffer)
+                            try {
+                                val detectionScore = owwModel.processFrame(floatBuffer)
 
-                                    if (detectionScore > WAKE_WORD_THRESHOLD) {
-                                        Log.i(
-                                            TAG,
-                                            "Wake word detected! Score: %.4f (threshold: $WAKE_WORD_THRESHOLD)".format(
-                                                detectionScore
-                                            )
+                                if (detectionScore > WAKE_WORD_THRESHOLD) {
+                                    Log.i(
+                                        TAG,
+                                        "Wake word detected! Score: %.4f (threshold: $WAKE_WORD_THRESHOLD)".format(
+                                            detectionScore
                                         )
-                                        isListening = false
+                                    )
+                                    isListening = false
 
-                                        // Trigger callback on main dispatcher
-                                        withContext(Dispatchers.Main) {
-                                            onWakeWordDetected()
-                                        }
-
-                                        // Exit audio processing loop
-                                        return@launch
+                                    // Trigger callback on main dispatcher
+                                    withContext(Dispatchers.Main) {
+                                        onWakeWordDetected()
                                     }
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Error running ONNX Runtime inference: ${e.message}", e)
+
+                                    // Exit audio processing loop
+                                    return@launch
                                 }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error running ONNX Runtime inference: ${e.message}", e)
                             }
                         } else if (samplesRead < 0) {
                             Log.e(TAG, "AudioRecord read error: $samplesRead")
@@ -226,10 +222,10 @@ class WakeWordService(
     }
 
     /**
-     * Cleans up audio and model resources.
+     * Cleans up audio resources.
      *
-     * Safely stops and releases AudioRecord, and closes the OwwModel.
-     * Exceptions during cleanup are logged but do not throw.
+     * Safely stops and releases AudioRecord. Note: Model is NOT closed here
+     * for battery efficiency - it's reused across listening sessions.
      */
     private fun cleanup() {
         try {
@@ -245,14 +241,6 @@ class WakeWordService(
         } catch (e: Exception) {
             Log.e(TAG, "Error releasing AudioRecord: ${e.message}", e)
         }
-
-        try {
-            owwModel?.close()
-            Log.d(TAG, "OwwModel closed")
-            owwModel = null
-        } catch (e: Exception) {
-            Log.e(TAG, "Error closing OwwModel: ${e.message}", e)
-        }
     }
 
     /**
@@ -263,6 +251,17 @@ class WakeWordService(
      */
     fun destroy() {
         stopListening()
+
+        // Close ONNX models only on destroy (not after each listening session)
+        try {
+            if (::owwModel.isInitialized) {
+                owwModel.close()
+                Log.d(TAG, "OwwModel closed")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing OwwModel: ${e.message}", e)
+        }
+
         scope.cancel()
         Log.d(TAG, "WakeWordService destroyed")
     }

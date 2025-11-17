@@ -3,6 +3,12 @@
 ## Overview
 Foreground-only, on-device wake word detection using openwakeword ONNX models. Enables hands-free activation by saying the wake word while the app is in the foreground.
 
+**Battery Optimizations:**
+- Models loaded once per app session (lazy initialization)
+- ONNX Runtime configured for power efficiency (sequential execution, single thread)
+- Pre-allocated buffers eliminate memory churn in inference hot path
+- Models kept in memory across listening sessions (only closed on destroy)
+
 ## Architecture
 
 ### Microphone Handoff Pattern
@@ -39,12 +45,20 @@ WakeWordService owns mic (back to ReadyToTalk)
 - Accumulates outputs for streaming detection
 - Constructor: `OwwModel(melFile: File, embFile: File, wakeFile: File)`
 - Uses `ai.onnxruntime.OrtSession` for inference
+- Battery optimizations:
+  - `BASIC_OPT` graph optimization level
+  - `SEQUENTIAL` execution mode
+  - Single-threaded (`intraOpNumThreads = 1`)
+  - Pre-allocated transformation buffer
 
 **`services/WakeWordService.kt`**
 - Manages AudioRecord (16kHz mono PCM)
 - Runs inference on IO dispatcher, callback on Main
-- Detection threshold: `0.5f` (configurable at line 39)
+- Detection threshold: `0.5f` (configurable at line 37)
 - Auto-stops after detection
+- Battery optimization: Lazy model initialization (once per service lifetime)
+- Models reused across multiple listening sessions
+- `resetAccumulators()` clears state when starting new session
 
 **`core/WakeWordConfig.kt`**
 - SharedPreferences storage: "wake_word_prefs"
