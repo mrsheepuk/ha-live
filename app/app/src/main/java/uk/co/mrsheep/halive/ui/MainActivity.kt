@@ -26,6 +26,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.DummyToolsConfig
+import uk.co.mrsheep.halive.core.FirebaseConfig
+import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.core.TranscriptionEntry
@@ -49,9 +51,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var transcriptionContentScroll: ScrollView
 
     private fun checkConfigurationAndLaunch() {
-        // Check if app is configured
-        if (FirebaseApp.getApps(this).isEmpty() || !HAConfig.isConfigured(this)) {
-            // Launch onboarding
+        // Check if app is configured - need at least one provider AND Home Assistant
+        val hasFirebase = FirebaseConfig.isConfigured(this)
+        val hasGemini = GeminiConfig.isConfigured(this)
+        val hasHA = HAConfig.isConfigured(this)
+
+        if ((!hasFirebase && !hasGemini) || !hasHA) {
+            // Launch onboarding - need at least one conversation provider and HA
             val intent = Intent(this, OnboardingActivity::class.java)
             startActivity(intent)
             finish()
@@ -262,7 +268,7 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
             }
-            UiState.FirebaseConfigNeeded -> {
+            UiState.ProviderConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
                 // Should not reach here - handled by OnboardingActivity
                 mainButton.isEnabled = false

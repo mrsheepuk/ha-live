@@ -30,7 +30,9 @@ object CrashLogger {
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
-        Log.d(TAG, "Crash logger initialized. Logs will be saved to: ${getLogFile(context).absolutePath}")
+        Log.d(TAG, "Crash logger initialized. Logs will be saved to:")
+        Log.d(TAG, "  Internal: ${getLogFile(context).absolutePath}")
+        Log.d(TAG, "  External: ${getExternalLogFile(context).absolutePath}")
     }
 
     /**
@@ -60,11 +62,21 @@ object CrashLogger {
                 append("\n\n")
             }
 
-            // Append to file
+            // Append to internal storage file
             logFile.appendText(logEntry)
 
             // Trim file if too large
             trimLogFileIfNeeded(logFile)
+
+            // ALSO write to external storage (accessible via file manager)
+            try {
+                val externalLogFile = getExternalLogFile(context)
+                externalLogFile.appendText(logEntry)
+                trimLogFileIfNeeded(externalLogFile)
+                Log.e(TAG, "Crash logged to: ${logFile.absolutePath} AND ${externalLogFile.absolutePath}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write external crash log", e)
+            }
 
             Log.e(TAG, "Crash logged to: ${logFile.absolutePath}")
         } catch (e: Exception) {
@@ -102,6 +114,15 @@ object CrashLogger {
             logFile.appendText(logEntry)
             trimLogFileIfNeeded(logFile)
 
+            // ALSO write to external storage
+            try {
+                val externalLogFile = getExternalLogFile(context)
+                externalLogFile.appendText(logEntry)
+                trimLogFileIfNeeded(externalLogFile)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write external error log", e)
+            }
+
             Log.e(TAG, message, throwable)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log exception", e)
@@ -109,10 +130,22 @@ object CrashLogger {
     }
 
     /**
-     * Gets the crash log file.
+     * Gets the crash log file (internal storage).
      */
     fun getLogFile(context: Context): File {
         return File(context.filesDir, LOG_FILE_NAME)
+    }
+
+    /**
+     * Gets the external crash log file (accessible via file manager).
+     * Location: Android/data/uk.co.mrsheep.halive/files/crash_log.txt
+     */
+    fun getExternalLogFile(context: Context): File {
+        // Use getExternalFilesDir which doesn't require permissions
+        // and is accessible via file manager on most devices
+        val externalDir = context.getExternalFilesDir(null)
+            ?: context.filesDir // Fallback to internal if external not available
+        return File(externalDir, LOG_FILE_NAME)
     }
 
     /**
