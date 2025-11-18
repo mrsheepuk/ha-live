@@ -114,7 +114,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 }
 
                 GeminiConfig.saveApiKey(getApplication(), apiKey)
-                _settingsState.value = SettingsState.ConnectionSuccess("Gemini API key saved successfully")
                 loadSettings()
             } catch (e: Exception) {
                 _settingsState.value = SettingsState.ConnectionFailed("Failed to save Gemini API key: ${e.message}")
@@ -127,7 +126,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 GeminiConfig.clearConfig(getApplication())
-                _settingsState.value = SettingsState.ConnectionSuccess("Gemini API key cleared successfully")
                 loadSettings()
             } catch (e: Exception) {
                 _settingsState.value = SettingsState.ConnectionFailed("Failed to clear Gemini API key: ${e.message}")
@@ -148,13 +146,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 }
 
                 ConversationServicePreference.setPreferred(getApplication(), newPreference)
-
-                val newName = when (newPreference) {
-                    ConversationServicePreference.PreferredService.GEMINI_DIRECT -> "Gemini Direct API"
-                    ConversationServicePreference.PreferredService.FIREBASE -> "Firebase SDK"
-                }
-
-                _settingsState.value = SettingsState.ConnectionSuccess("Switched to $newName")
                 loadSettings()
             } catch (e: Exception) {
                 _settingsState.value = SettingsState.ConnectionFailed("Failed to switch service: ${e.message}")
