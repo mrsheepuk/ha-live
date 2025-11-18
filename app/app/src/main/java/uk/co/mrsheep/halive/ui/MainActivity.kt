@@ -268,7 +268,7 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
             }
-            UiState.FirebaseConfigNeeded -> {
+            UiState.ProviderConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
                 // Should not reach here - handled by OnboardingActivity
                 mainButton.isEnabled = false

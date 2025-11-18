@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
+import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SystemPromptConfig
@@ -43,7 +44,7 @@ import uk.co.mrsheep.halive.services.MockToolExecutor
 // Define the different states our UI can be in
 sealed class UiState {
     object Loading : UiState()
-    object FirebaseConfigNeeded : UiState()  // Need google-services.json
+    object ProviderConfigNeeded : UiState()  // Need either Firebase or Gemini Direct configured
     object HAConfigNeeded : UiState()        // Need HA URL + token
     object ReadyToTalk : UiState()           // Everything initialized, ready to start chat
     object Initializing : UiState()          // Initializing Gemini model when starting chat
@@ -123,9 +124,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         viewModelScope.launch {
             _uiState.value = UiState.Loading
 
-            // Step 1: Check Firebase
-            if (FirebaseApp.getApps(getApplication()).isEmpty()) {
-                _uiState.value = UiState.FirebaseConfigNeeded
+            // Step 1: Check if at least one conversation provider is configured
+            val hasFirebase = FirebaseConfig.isConfigured(getApplication())
+            val hasGemini = GeminiConfig.isConfigured(getApplication())
+
+            if (!hasFirebase && !hasGemini) {
+                _uiState.value = UiState.ProviderConfigNeeded
                 return@launch
             }
 
