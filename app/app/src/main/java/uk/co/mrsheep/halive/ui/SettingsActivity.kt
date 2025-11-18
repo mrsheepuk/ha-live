@@ -25,10 +25,6 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var toolbar: Toolbar
 
-    // Profile section
-    private lateinit var manageProfilesButton: Button
-    private lateinit var profileSummaryText: TextView
-
     // HA section
     private lateinit var haUrlText: TextView
     private lateinit var haTokenText: TextView
@@ -81,15 +77,6 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
-        // Profile section
-        manageProfilesButton = findViewById(R.id.manageProfilesButton)
-        profileSummaryText = findViewById(R.id.profileSummaryText)
-
-        manageProfilesButton.setOnClickListener {
-            val intent = Intent(this, ProfileManagementActivity::class.java)
-            startActivity(intent)
-        }
-
         // HA section
         haUrlText = findViewById(R.id.haUrlText)
         haTokenText = findViewById(R.id.haTokenText)
@@ -164,7 +151,6 @@ class SettingsActivity : AppCompatActivity() {
                 haTokenText.text = "••••••••" // Masked token
                 firebaseProjectIdText.text = state.firebaseProjectId
                 geminiApiKeyText.text = if (state.geminiApiKey != "Not configured") "••••••••" else "Not configured"
-                profileSummaryText.text = "${state.profileCount} profile(s) configured"
 
                 // Update conversation service display
                 conversationServiceText.text = state.conversationService
@@ -183,7 +169,6 @@ class SettingsActivity : AppCompatActivity() {
                 }
 
                 // Enable/disable buttons based on read-only state
-                manageProfilesButton.isEnabled = !state.isReadOnly
                 haEditButton.isEnabled = !state.isReadOnly
                 haTestButton.isEnabled = !state.isReadOnly
                 firebaseChangeButton.isEnabled = !state.isReadOnly

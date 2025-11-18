@@ -105,7 +105,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
 
     init {
         // Load the active profile
-        val activeProfile = ProfileManager.getLastUsedOrDefaultProfile()
+        val activeProfile = ProfileManager.getActiveOrFirstProfile()
         if (activeProfile != null) {
             currentProfileId = activeProfile.id
         }
@@ -451,7 +451,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
 
         val profile = ProfileManager.getProfileById(profileId) ?: return
         currentProfileId = profileId
-        ProfileManager.markProfileAsUsed(profileId)
+        ProfileManager.setActiveProfile(profileId)
     }
 
     /**
@@ -478,8 +478,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     /**
      * Called when MainActivity enters the foreground (onResume).
      * Starts wake word listening if in ready state and permission is granted.
+     * Also reloads the active profile in case it was changed in ProfileManagementActivity.
      */
     fun onActivityResume() {
+        // Reload active profile (in case it was changed in ProfileManagementActivity)
+        val activeProfile = ProfileManager.getActiveOrFirstProfile()
+        if (activeProfile != null && activeProfile.id != currentProfileId) {
+            currentProfileId = activeProfile.id
+        }
+
         if (_uiState.value == UiState.ReadyToTalk) {
             startWakeWordListening()
         }

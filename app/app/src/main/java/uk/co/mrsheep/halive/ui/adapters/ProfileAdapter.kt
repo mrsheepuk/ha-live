@@ -4,16 +4,21 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.TextView
+import androidx.appcompat.widget.PopupMenu
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.card.MaterialCardView
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.Profile
 
 /**
  * RecyclerView adapter for displaying a list of profiles.
  *
- * Displays profile name, system prompt preview, and default badge.
- * Provides callbacks for various profile actions.
+ * Displays profile name and active profile indicators (badge and card stroke).
+ * Primary action (Edit) is visible; secondary actions (Duplicate/Export/Delete)
+ * are in an overflow menu. Provides callbacks for various profile actions.
  */
 class ProfileAdapter(
     private val onItemClick: (Profile) -> Unit,
@@ -24,12 +29,14 @@ class ProfileAdapter(
 ) : RecyclerView.Adapter<ProfileAdapter.ProfileViewHolder>() {
 
     private var profiles: List<Profile> = emptyList()
+    private var activeProfileId: String? = null
 
     /**
-     * Updates the list of profiles and refreshes the RecyclerView.
+     * Updates the list of profiles and active profile ID, then refreshes the RecyclerView.
      */
-    fun submitList(newProfiles: List<Profile>) {
+    fun submitList(newProfiles: List<Profile>, newActiveProfileId: String? = null) {
         profiles = newProfiles
+        activeProfileId = newActiveProfileId
         notifyDataSetChanged()
     }
 
@@ -51,41 +58,69 @@ class ProfileAdapter(
      */
     inner class ProfileViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val profileNameText: TextView = itemView.findViewById(R.id.profileNameText)
-        private val promptPreviewText: TextView = itemView.findViewById(R.id.promptPreviewText)
         private val defaultBadge: TextView = itemView.findViewById(R.id.defaultBadge)
         private val editButton: Button = itemView.findViewById(R.id.editButton)
-        private val duplicateButton: Button = itemView.findViewById(R.id.duplicateButton)
-        private val exportButton: Button = itemView.findViewById(R.id.exportButton)
-        private val deleteButton: Button = itemView.findViewById(R.id.deleteButton)
+        private val overflowButton: ImageButton = itemView.findViewById(R.id.overflowButton)
+        private val cardView: MaterialCardView = itemView as MaterialCardView
 
         fun bind(profile: Profile) {
             profileNameText.text = profile.name
-            promptPreviewText.text = profile.getCombinedPrompt()
 
-            // Show/hide default badge
-            defaultBadge.visibility = if (profile.isDefault) View.VISIBLE else View.GONE
+            // Check if this profile is active
+            val isActive = profile.id == activeProfileId
 
-            // Item click to set as default
+            // Show/hide active badge (use INVISIBLE to prevent layout shift)
+            defaultBadge.visibility = if (isActive) View.VISIBLE else View.INVISIBLE
+
+            // Apply card stroke (always 2dp to prevent layout shift, just change color)
+            val strokeWidth = (2 * itemView.context.resources.displayMetrics.density).toInt()
+            cardView.strokeWidth = strokeWidth
+
+            if (isActive) {
+                cardView.strokeColor = ContextCompat.getColor(itemView.context, R.color.teal_primary)
+            } else {
+                cardView.strokeColor = ContextCompat.getColor(itemView.context, R.color.divider_light)
+            }
+
+            // Item click to set as active
             itemView.setOnClickListener {
                 onItemClick(profile)
             }
 
-            // Action button callbacks
+            // Edit button (primary action)
             editButton.setOnClickListener {
                 onEdit(profile)
             }
 
-            duplicateButton.setOnClickListener {
-                onDuplicate(profile)
+            // Overflow menu (secondary actions)
+            overflowButton.setOnClickListener { view ->
+                showOverflowMenu(view, profile)
+            }
+        }
+
+        private fun showOverflowMenu(view: View, profile: Profile) {
+            val popup = PopupMenu(view.context, view)
+            popup.menuInflater.inflate(R.menu.profile_overflow_menu, popup.menu)
+
+            popup.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_duplicate -> {
+                        onDuplicate(profile)
+                        true
+                    }
+                    R.id.action_export -> {
+                        onExport(profile)
+                        true
+                    }
+                    R.id.action_delete -> {
+                        onDelete(profile)
+                        true
+                    }
+                    else -> false
+                }
             }
 
-            exportButton.setOnClickListener {
-                onExport(profile)
-            }
-
-            deleteButton.setOnClickListener {
-                onDelete(profile)
-            }
+            popup.show()
         }
     }
 }

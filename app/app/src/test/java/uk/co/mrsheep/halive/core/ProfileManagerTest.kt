@@ -70,9 +70,11 @@ class ProfileManagerTest {
     }
 
     @Test
-    fun testCreateProfile_firstProfileIsDefault() {
+    fun testCreateProfile_firstProfileIsActive() {
         val profile = ProfileManager.createProfile(Profile(name = "First", systemPrompt = "Prompt"))
-        assertTrue(profile.isDefault)
+        val active = ProfileManager.getActiveProfile()
+        assertNotNull(active)
+        assertEquals(profile.id, active?.id)
     }
 
     @Test
@@ -101,16 +103,15 @@ class ProfileManagerTest {
     }
 
     @Test
-    fun testGetDefaultProfile_returnsDefaultProfile() {
-        ProfileManager.createProfile(Profile(name = "Profile 1", systemPrompt = "Prompt 1"))
-        val default = ProfileManager.createProfile(
-            Profile(name = "Default", systemPrompt = "Prompt 2", isDefault = true)
-        )
+    fun testGetActiveProfile_returnsActiveProfile() {
+        val profile1 = ProfileManager.createProfile(Profile(name = "Profile 1", systemPrompt = "Prompt 1"))
+        val profile2 = ProfileManager.createProfile(Profile(name = "Profile 2", systemPrompt = "Prompt 2"))
 
-        val retrieved = ProfileManager.getDefaultProfile()
+        ProfileManager.setActiveProfile(profile2.id)
+
+        val retrieved = ProfileManager.getActiveProfile()
         assertNotNull(retrieved)
-        assertEquals(default.id, retrieved?.id)
-        assertTrue(retrieved!!.isDefault)
+        assertEquals(profile2.id, retrieved?.id)
     }
 
     @Test
@@ -134,15 +135,14 @@ class ProfileManagerTest {
     }
 
     @Test
-    fun testSetDefaultProfile_unmarksOthers() {
+    fun testSetActiveProfile_setsActive() {
         val profile1 = ProfileManager.createProfile(Profile(name = "Profile 1", systemPrompt = "Prompt 1"))
         val profile2 = ProfileManager.createProfile(Profile(name = "Profile 2", systemPrompt = "Prompt 2"))
 
-        ProfileManager.setDefaultProfile(profile2.id)
+        ProfileManager.setActiveProfile(profile2.id)
 
-        val allProfiles = ProfileManager.getAllProfiles()
-        assertEquals(false, allProfiles.find { it.id == profile1.id }?.isDefault)
-        assertEquals(true, allProfiles.find { it.id == profile2.id }?.isDefault)
+        val active = ProfileManager.getActiveProfile()
+        assertEquals(profile2.id, active?.id)
     }
 
     @Test(expected = IllegalStateException::class)
@@ -152,17 +152,18 @@ class ProfileManagerTest {
     }
 
     @Test
-    fun testDeleteProfile_defaultProfile_promotesAnother() {
+    fun testDeleteProfile_activeProfile_promotesAnother() {
         val profile1 = ProfileManager.createProfile(Profile(name = "Profile 1", systemPrompt = "Prompt 1"))
-        ProfileManager.createProfile(Profile(name = "Profile 2", systemPrompt = "Prompt 2"))
+        val profile2 = ProfileManager.createProfile(Profile(name = "Profile 2", systemPrompt = "Prompt 2"))
 
-        assertTrue(profile1.isDefault)
+        ProfileManager.setActiveProfile(profile1.id)
+        assertEquals(profile1.id, ProfileManager.getActiveProfile()?.id)
 
         ProfileManager.deleteProfile(profile1.id)
 
         val remaining = ProfileManager.getAllProfiles()
         assertEquals(1, remaining.size)
-        assertTrue(remaining[0].isDefault)
+        assertEquals(profile2.id, ProfileManager.getActiveProfile()?.id)
     }
 
     @Test
@@ -173,7 +174,6 @@ class ProfileManagerTest {
         assertNotEquals(original.id, duplicate.id)
         assertEquals("Duplicate", duplicate.name)
         assertEquals("Original Prompt", duplicate.systemPrompt)
-        assertFalse(duplicate.isDefault)
     }
 
     @Test
@@ -184,39 +184,46 @@ class ProfileManagerTest {
         val profiles = ProfileManager.getAllProfiles()
         assertEquals(1, profiles.size)
         assertEquals("Default", profiles[0].name)
-        assertTrue(profiles[0].isDefault)
+        val active = ProfileManager.getActiveProfile()
+        assertNotNull(active)
+        assertEquals(profiles[0].id, active?.id)
     }
 
     @Test
-    fun testMarkProfileAsUsed_updatesLastUsedId() {
-        val profile = ProfileManager.createProfile(Profile(name = "Test", systemPrompt = "Prompt"))
-
-        ProfileManager.markProfileAsUsed(profile.id)
-
-        assertEquals(profile.id, ProfileManager.getLastUsedProfileId())
-    }
-
-    @Test
-    fun testGetLastUsedOrDefaultProfile_noLastUsed_returnsDefault() {
-        val profile = ProfileManager.createProfile(Profile(name = "Default", systemPrompt = "Prompt"))
-
-        val retrieved = ProfileManager.getLastUsedOrDefaultProfile()
-
-        assertNotNull(retrieved)
-        assertEquals(profile.id, retrieved?.id)
-    }
-
-    @Test
-    fun testGetLastUsedOrDefaultProfile_lastUsedDeleted_fallsBackToDefault() {
+    fun testGetActiveOrFirstProfile_returnsActiveProfile() {
         val profile1 = ProfileManager.createProfile(Profile(name = "Profile 1", systemPrompt = "Prompt 1"))
         val profile2 = ProfileManager.createProfile(Profile(name = "Profile 2", systemPrompt = "Prompt 2"))
 
-        ProfileManager.markProfileAsUsed(profile2.id)
-        ProfileManager.deleteProfile(profile2.id)
+        ProfileManager.setActiveProfile(profile2.id)
 
-        val retrieved = ProfileManager.getLastUsedOrDefaultProfile()
+        val retrieved = ProfileManager.getActiveOrFirstProfile()
 
         assertNotNull(retrieved)
-        assertEquals(profile1.id, retrieved?.id) // Falls back to default
+        assertEquals(profile2.id, retrieved?.id)
+    }
+
+    @Test
+    fun testGetActiveOrFirstProfile_noActiveSet_returnsFirstProfile() {
+        val profile1 = ProfileManager.createProfile(Profile(name = "Profile 1", systemPrompt = "Prompt 1"))
+        ProfileManager.createProfile(Profile(name = "Profile 2", systemPrompt = "Prompt 2"))
+
+        val retrieved = ProfileManager.getActiveOrFirstProfile()
+
+        assertNotNull(retrieved)
+        assertEquals(profile1.id, retrieved?.id)
+    }
+
+    @Test
+    fun testGetActiveOrFirstProfile_activeDeletedFallsBack() {
+        val profile1 = ProfileManager.createProfile(Profile(name = "Profile 1", systemPrompt = "Prompt 1"))
+        val profile2 = ProfileManager.createProfile(Profile(name = "Profile 2", systemPrompt = "Prompt 2"))
+
+        ProfileManager.setActiveProfile(profile2.id)
+        ProfileManager.deleteProfile(profile2.id)
+
+        val retrieved = ProfileManager.getActiveOrFirstProfile()
+
+        assertNotNull(retrieved)
+        assertEquals(profile1.id, retrieved?.id) // Falls back to first remaining
     }
 }

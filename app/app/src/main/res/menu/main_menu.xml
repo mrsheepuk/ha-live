@@ -6,6 +6,10 @@
         android:title="Switch Profile"
         android:icon="@drawable/ic_profiles" />
     <item
+        android:id="@+id/action_manage_profiles"
+        android:title="Manage Profiles"
+        android:icon="@drawable/ic_profiles" />
+    <item
         android:id="@+id/action_settings"
         android:title="Settings"
         android:icon="@drawable/ic_settings" />

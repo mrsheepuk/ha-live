@@ -27,6 +27,8 @@
     <string name="profile_delete_confirm">Delete this profile?</string>
     <string name="profile_delete_last_error">Cannot delete the last profile. Create another profile first.</string>
     <string name="profile_default_badge">DEFAULT</string>
+    <string name="profile_active_badge">ACTIVE</string>
+    <string name="active_profile_indicator">Active profile indicator</string>
     <string name="profile_switch_during_chat_error">Stop chat to switch profiles</string>
 
     <!-- Profile Editor -->

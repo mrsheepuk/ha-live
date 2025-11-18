@@ -184,6 +184,11 @@ class MainActivity : AppCompatActivity() {
                 showProfileSelectorDialog()
                 true
             }
+            R.id.action_manage_profiles -> {
+                val intent = Intent(this, ProfileManagementActivity::class.java)
+                startActivity(intent)
+                true
+            }
             R.id.action_settings -> {
                 val intent = Intent(this, SettingsActivity::class.java)
                 // Pass chat active state

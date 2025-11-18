@@ -14,7 +14,7 @@ import uk.co.mrsheep.halive.core.ProfileExportImport
  * ViewModel for ProfileManagementActivity.
  *
  * Manages profile list state and handles profile operations
- * (set default, delete, duplicate).
+ * (set active, delete, duplicate).
  */
 class ProfileManagementViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -27,6 +27,7 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
 
     /**
      * Loads profiles from ProfileManager and observes changes.
+     * Also loads the active profile ID and includes it in the state.
      */
     fun loadProfiles() {
         viewModelScope.launch {
@@ -35,7 +36,11 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
 
                 // Observe the profiles StateFlow from ProfileManager
                 ProfileManager.profiles.collect { profiles ->
-                    _state.value = ProfileManagementState.Loaded(profiles)
+                    val activeProfileId = ProfileManager.getActiveProfile()?.id
+                    _state.value = ProfileManagementState.Loaded(
+                        profiles = profiles,
+                        activeProfileId = activeProfileId
+                    )
                 }
             } catch (e: Exception) {
                 _state.value = ProfileManagementState.Error(
@@ -46,16 +51,21 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
     }
 
     /**
-     * Sets a profile as the default.
+     * Sets a profile as the active profile.
      */
-    fun setDefaultProfile(profileId: String) {
+    fun setActiveProfile(profileId: String) {
         viewModelScope.launch {
             try {
-                ProfileManager.setDefaultProfile(profileId)
-                // ProfileManager will emit updated list via StateFlow
+                ProfileManager.setActiveProfile(profileId)
+
+                // Manually refresh state since setActiveProfile doesn't trigger StateFlow emission
+                val currentState = _state.value
+                if (currentState is ProfileManagementState.Loaded) {
+                    _state.value = currentState.copy(activeProfileId = profileId)
+                }
             } catch (e: Exception) {
                 _state.value = ProfileManagementState.Error(
-                    e.message ?: "Failed to set default profile"
+                    e.message ?: "Failed to set active profile"
                 )
             }
         }
@@ -164,6 +174,9 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
  */
 sealed class ProfileManagementState {
     object Loading : ProfileManagementState()
-    data class Loaded(val profiles: List<Profile>) : ProfileManagementState()
+    data class Loaded(
+        val profiles: List<Profile>,
+        val activeProfileId: String? = null
+    ) : ProfileManagementState()
     data class Error(val message: String) : ProfileManagementState()
 }
