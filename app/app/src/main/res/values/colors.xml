@@ -49,4 +49,9 @@
     <!-- Base colors -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Active Profile Colors -->
+    <color name="active_profile_accent">#FF6B00</color>
+    <color name="active_profile_bg">#FFF3E0</color>
+    <color name="active_profile_stroke">#FFB74D</color>
 </resources>

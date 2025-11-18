@@ -75,7 +75,6 @@ object ProfileExportImport {
      * Imports profiles from a JSON string with conflict resolution.
      *
      * Generates new UUIDs for all imported profiles and sets:
-     * - isDefault = false
      * - createdAt = current time
      * - lastUsedAt = current time
      *
@@ -125,7 +124,6 @@ object ProfileExportImport {
                     model = exportable.model,
                     voice = exportable.voice,
                     includeLiveContext = exportable.includeLiveContext,
-                    isDefault = false,
                     createdAt = System.currentTimeMillis(),
                     lastUsedAt = System.currentTimeMillis(),
                     toolFilterMode = exportable.toolFilterMode,

@@ -32,7 +32,7 @@ import java.util.Locale
  *
  * Features:
  * - Display list of all profiles
- * - Click profile to set as default
+ * - Click profile to set as active
  * - Edit, duplicate, and delete profiles
  * - Create new profiles via FAB
  * - Delete confirmation dialog
@@ -114,8 +114,8 @@ class ProfileManagementActivity : AppCompatActivity() {
     private fun setupRecyclerView() {
         profileAdapter = ProfileAdapter(
             onItemClick = { profile ->
-                // Click to set as default
-                viewModel.setDefaultProfile(profile.id)
+                // Click to set as active
+                viewModel.setActiveProfile(profile.id)
             },
             onEdit = { profile ->
                 val intent = Intent(this, ProfileEditorActivity::class.java)
@@ -164,8 +164,8 @@ class ProfileManagementActivity : AppCompatActivity() {
                 profilesRecyclerView.visibility = View.VISIBLE
                 errorText.visibility = View.GONE
 
-                // Update the adapter with new profiles
-                profileAdapter.submitList(state.profiles)
+                // Update the adapter with new profiles and active profile ID
+                profileAdapter.submitList(state.profiles, state.activeProfileId)
             }
             is ProfileManagementState.Error -> {
                 loadingIndicator.visibility = View.GONE

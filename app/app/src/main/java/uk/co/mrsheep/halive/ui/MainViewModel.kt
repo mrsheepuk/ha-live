@@ -105,7 +105,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
 
     init {
         // Load the active profile
-        val activeProfile = ProfileManager.getLastUsedOrDefaultProfile()
+        val activeProfile = ProfileManager.getActiveOrFirstProfile()
         if (activeProfile != null) {
             currentProfileId = activeProfile.id
         }
@@ -451,7 +451,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
 
         val profile = ProfileManager.getProfileById(profileId) ?: return
         currentProfileId = profileId
-        ProfileManager.markProfileAsUsed(profileId)
+        ProfileManager.setActiveProfile(profileId)
     }
 
     /**

@@ -39,8 +39,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                 // Create a temporary profile with "Copy of" prefix
                 val duplicate = original.copy(
                     id = "", // New ID will be generated on save
-                    name = "Copy of ${original.name}",
-                    isDefault = false
+                    name = "Copy of ${original.name}"
                 )
                 _editorState.value = ProfileEditorState.Loaded(duplicate)
             } else {
@@ -133,8 +132,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         interruptable = interruptable,
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,
-                        selectedToolNames = selectedToolNames,
-                        isDefault = false
+                        selectedToolNames = selectedToolNames
                     )
 
                     ProfileManager.createProfile(newProfile)

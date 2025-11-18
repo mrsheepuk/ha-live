@@ -18,7 +18,7 @@ object ProfileManager {
 
     private const val PREFS_NAME = "profiles"
     private const val KEY_PROFILES = "profiles_list"
-    private const val KEY_LAST_USED_ID = "last_used_profile_id"
+    private const val KEY_ACTIVE_PROFILE_ID = "active_profile_id"
 
     private val json = Json {
         prettyPrint = true
@@ -37,6 +37,22 @@ object ProfileManager {
     fun initialize(context: Context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         _profiles.value = loadProfilesFromStorage()
+
+        // Migration: convert old isDefault to new active profile ID
+        migrateDefaultToActive()
+    }
+
+    private fun migrateDefaultToActive() {
+        // Check if migration already done
+        if (prefs.getString(KEY_ACTIVE_PROFILE_ID, null) != null) {
+            return // Already migrated
+        }
+
+        // Find first profile (we can't check isDefault anymore since Profile.kt was updated)
+        val firstProfile = getAllProfiles().firstOrNull()
+        if (firstProfile != null) {
+            setActiveProfile(firstProfile.id)
+        }
     }
 
     /**
@@ -65,21 +81,15 @@ object ProfileManager {
             throw IllegalArgumentException("A profile with the name '${profile.name}' already exists")
         }
 
-        // If this is the first profile, make it default
-        val profileToSave = if (existing.isEmpty()) {
-            profile.copy(isDefault = true)
-        } else {
-            // If marking as default, unmark others
-            if (profile.isDefault) {
-                val updated = existing.map { it.copy(isDefault = false) }
-                saveProfilesToStorage(updated + profile)
-                return profile
-            }
-            profile
+        // If this is the first profile, make it active
+        if (existing.isEmpty()) {
+            saveProfilesToStorage(listOf(profile))
+            setActiveProfile(profile.id)
+            return profile
         }
 
-        saveProfilesToStorage(existing + profileToSave)
-        return profileToSave
+        saveProfilesToStorage(existing + profile)
+        return profile
     }
 
     /**
@@ -97,33 +107,25 @@ object ProfileManager {
     }
 
     /**
-     * Returns the default profile (marked as isDefault = true).
-     * If no default exists, returns the first profile.
+     * Returns the active profile (stored in SharedPreferences).
+     * If no active profile is set, returns the first profile.
      * Returns null if no profiles exist.
      */
-    fun getDefaultProfile(): Profile? {
-        val all = getAllProfiles()
-        return all.find { it.isDefault } ?: all.firstOrNull()
-    }
-
-    /**
-     * Returns the last used profile ID, or null if not set.
-     */
-    fun getLastUsedProfileId(): String? {
-        return prefs.getString(KEY_LAST_USED_ID, null)
-    }
-
-    /**
-     * Returns the last used profile, falling back to default if deleted.
-     */
-    fun getLastUsedOrDefaultProfile(): Profile? {
-        val lastUsedId = getLastUsedProfileId()
-        if (lastUsedId != null) {
-            val profile = getProfileById(lastUsedId)
-            if (profile != null) return profile
+    fun getActiveProfile(): Profile? {
+        val activeId = prefs.getString(KEY_ACTIVE_PROFILE_ID, null)
+        return if (activeId != null) {
+            getProfileById(activeId)
+        } else {
+            // Fallback: return first profile if no active set
+            getAllProfiles().firstOrNull()
         }
-        // Fallback to default
-        return getDefaultProfile()
+    }
+
+    /**
+     * Returns the active profile or the first profile if no active is set.
+     */
+    fun getActiveOrFirstProfile(): Profile? {
+        return getActiveProfile()
     }
 
     /**
@@ -148,49 +150,25 @@ object ProfileManager {
         }
 
         val updated = existing.toMutableList()
-
-        // If marking as default, unmark others
-        if (profile.isDefault) {
-            updated.replaceAll {
-                if (it.id == profile.id) profile else it.copy(isDefault = false)
-            }
-        } else {
-            updated[index] = profile
-        }
+        updated[index] = profile
 
         saveProfilesToStorage(updated)
         return profile
     }
 
     /**
-     * Marks a profile as the default.
-     * Unmarks all other profiles.
+     * Sets a profile as the active profile.
      */
-    fun setDefaultProfile(profileId: String) {
-        val existing = getAllProfiles()
-        val updated = existing.map {
-            it.copy(isDefault = it.id == profileId)
-        }
-        saveProfilesToStorage(updated)
-    }
-
-    /**
-     * Marks a profile as last used.
-     */
-    fun markProfileAsUsed(profileId: String) {
-        prefs.edit().putString(KEY_LAST_USED_ID, profileId).apply()
-
-        // Update the timestamp
+    fun setActiveProfile(profileId: String) {
         val profile = getProfileById(profileId)
-        if (profile != null) {
-            updateProfile(profile.markAsUsed())
-        }
+        require(profile != null) { "Profile with ID $profileId does not exist" }
+        prefs.edit().putString(KEY_ACTIVE_PROFILE_ID, profileId).apply()
     }
 
     /**
      * Deletes a profile by ID.
      * Throws IllegalStateException if trying to delete the last profile.
-     * If deleting the default profile, promotes another to default.
+     * If deleting the active profile, sets first remaining profile as active.
      */
     fun deleteProfile(profileId: String) {
         val existing = getAllProfiles()
@@ -199,25 +177,15 @@ object ProfileManager {
             throw IllegalStateException("Cannot delete the last profile. Create another profile first.")
         }
 
-        val toDelete = existing.find { it.id == profileId }
+        existing.find { it.id == profileId }
             ?: throw IllegalArgumentException("Profile with ID $profileId does not exist")
 
         val remaining = existing.filter { it.id != profileId }
+        saveProfilesToStorage(remaining)
 
-        // If we deleted the default, make the first remaining profile the default
-        val updated = if (toDelete.isDefault) {
-            remaining.mapIndexed { index, profile ->
-                if (index == 0) profile.copy(isDefault = true) else profile
-            }
-        } else {
-            remaining
-        }
-
-        saveProfilesToStorage(updated)
-
-        // Clear last used if we deleted it
-        if (getLastUsedProfileId() == profileId) {
-            prefs.edit().remove(KEY_LAST_USED_ID).apply()
+        // If we deleted the active profile, set first remaining as active
+        if (prefs.getString(KEY_ACTIVE_PROFILE_ID, null) == profileId && remaining.isNotEmpty()) {
+            setActiveProfile(remaining.first().id)
         }
     }
 
@@ -239,8 +207,7 @@ object ProfileManager {
             includeLiveContext = original.includeLiveContext,
             autoStartChat = original.autoStartChat,
             toolFilterMode = original.toolFilterMode,
-            selectedToolNames = original.selectedToolNames,
-            isDefault = false // Duplicates are never default
+            selectedToolNames = original.selectedToolNames
         )
 
         return createProfile(duplicate)
@@ -273,5 +240,6 @@ object ProfileManager {
         prefs.edit().clear().apply()
         val defaultProfile = Profile.createDefault()
         saveProfilesToStorage(listOf(defaultProfile))
+        setActiveProfile(defaultProfile.id)
     }
 }

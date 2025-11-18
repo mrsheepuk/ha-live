@@ -21,29 +21,44 @@
             android:orientation="horizontal"
             android:layout_marginBottom="8dp">
 
+            <!-- Radio button indicator for active profile -->
+            <ImageView
+                android:id="@+id/activeRadioButton"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginEnd="12dp"
+                android:layout_gravity="center_vertical"
+                android:src="@drawable/ic_radio_checked"
+                android:contentDescription="@string/active_profile_indicator"
+                android:visibility="gone"
+                android:tint="?attr/colorPrimary" />
+
             <TextView
                 android:id="@+id/profileNameText"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="Profile Name"
+                android:layout_gravity="center_vertical"
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:textColor="?attr/colorOnSurface" />
 
-            <!-- Default Badge -->
+            <!-- Active Badge -->
             <TextView
                 android:id="@+id/defaultBadge"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/profile_default_badge"
-                android:textSize="12sp"
+                android:text="@string/profile_active_badge"
+                android:layout_gravity="center_vertical"
+                android:textSize="14sp"
+                android:textStyle="bold"
                 android:textColor="@color/white"
-                android:background="?attr/colorPrimary"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp"
+                android:background="@color/active_profile_accent"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp"
                 android:visibility="gone" />
 
         </LinearLayout>
