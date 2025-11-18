@@ -30,6 +30,13 @@ import uk.co.mrsheep.halive.core.PerformanceMode
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.core.WakeWordSettings
 import kotlinx.coroutines.launch
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.ProgressBar
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import uk.co.mrsheep.halive.services.WakeWordService
+import android.widget.RelativeLayout
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -63,6 +70,9 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var wakeWordModeText: TextView
     private lateinit var wakeWordThresholdText: TextView
     private lateinit var wakeWordConfigButton: Button
+
+    // Test mode service
+    private var testWakeWordService: WakeWordService? = null
 
     // Read-only overlay
     private lateinit var readOnlyOverlay: View
@@ -374,14 +384,8 @@ class SettingsActivity : AppCompatActivity() {
         thresholdSeekBar.progress = thresholdToProgress(currentSettings.threshold)
         thresholdValue.text = String.format("%.2f", currentSettings.threshold)
 
-        thresholdSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                val threshold = progressToThreshold(progress)
-                thresholdValue.text = String.format("%.2f", threshold)
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
+        // Note: SeekBar listener is set in setupTestMode() to handle both
+        // threshold value updates and test mode marker positioning
 
         // Advanced settings toggle
         val advancedCheckbox = dialogView.findViewById<CheckBox>(R.id.advancedCheckbox)
@@ -482,6 +486,146 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         dialog.show()
+
+        // Set up test mode UI
+        setupTestMode(dialogView, dialog, currentSettings)
+    }
+
+    private fun setupTestMode(dialogView: View, dialog: AlertDialog, settings: WakeWordSettings) {
+        val testCurrentScore = dialogView.findViewById<TextView>(R.id.testCurrentScore)
+        val testPeakScore = dialogView.findViewById<TextView>(R.id.testPeakScore)
+        val testScoreProgress = dialogView.findViewById<ProgressBar>(R.id.testScoreProgress)
+        val testThresholdMarker = dialogView.findViewById<View>(R.id.testThresholdMarker)
+        val testStatusText = dialogView.findViewById<TextView>(R.id.testStatusText)
+        val testButton = dialogView.findViewById<Button>(R.id.testButton)
+        val thresholdSeekBar = dialogView.findViewById<SeekBar>(R.id.thresholdSeekBar)
+
+        // Performance mode controls to disable during test
+        val performanceModeGroup = dialogView.findViewById<RadioGroup>(R.id.performanceModeGroup)
+        val advancedCheckbox = dialogView.findViewById<CheckBox>(R.id.advancedCheckbox)
+        val advancedSettingsLayout = dialogView.findViewById<LinearLayout>(R.id.advancedSettingsLayout)
+
+        var peakScore = 0.0f
+        var isTestActive = false
+
+        // Helper to convert threshold (0.3-0.8) to progress bar position (0-100)
+        val thresholdToProgress = { threshold: Float -> ((threshold - 0.3f) / 0.5f * 100f).toInt() }
+        val progressToThreshold = { progress: Int -> 0.3f + (progress / 100f) * 0.5f }
+
+        // Update threshold marker position when seekbar changes
+        val updateThresholdMarker = {
+            val threshold = progressToThreshold(thresholdSeekBar.progress)
+            val markerPosition = thresholdToProgress(threshold)
+            val layoutParams = testThresholdMarker.layoutParams as RelativeLayout.LayoutParams
+            layoutParams.leftMargin = (testScoreProgress.width * markerPosition / 100f).toInt()
+            testThresholdMarker.layoutParams = layoutParams
+        }
+
+        // Update marker when seekbar changes
+        thresholdSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                // Update threshold value display (already handled by existing code)
+                val threshold = progressToThreshold(progress)
+                dialogView.findViewById<TextView>(R.id.thresholdValue).text = String.format("%.2f", threshold)
+                // Update marker position
+                updateThresholdMarker()
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        // Position marker initially (post to ensure layout is complete)
+        testScoreProgress.post { updateThresholdMarker() }
+
+        testButton.setOnClickListener {
+            if (!isTestActive) {
+                // Check microphone permission
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                    != PackageManager.PERMISSION_GRANTED) {
+                    testStatusText.text = "Microphone permission required"
+                    return@setOnClickListener
+                }
+
+                // Start test
+                try {
+                    testWakeWordService = WakeWordService(this) {
+                        // No-op for wake word detection - test mode only
+                    }
+
+                    peakScore = 0.0f
+                    testCurrentScore.text = "0.00"
+                    testPeakScore.text = "0.00"
+                    testScoreProgress.progress = 0
+
+                    testWakeWordService?.startTestMode { score ->
+                        // Update UI with live score
+                        testCurrentScore.text = String.format("%.2f", score)
+
+                        // Update peak
+                        if (score > peakScore) {
+                            peakScore = score
+                            testPeakScore.text = String.format("%.2f", peakScore)
+                        }
+
+                        // Update progress bar (convert 0.0-1.0 to 0-100)
+                        testScoreProgress.progress = (score * 100).toInt()
+
+                        // Update status if score crosses threshold
+                        val currentThreshold = progressToThreshold(thresholdSeekBar.progress)
+                        if (score > currentThreshold) {
+                            testStatusText.text = "✓ Would trigger at current threshold!"
+                        } else {
+                            testStatusText.text = "Listening..."
+                        }
+                    }
+
+                    isTestActive = true
+                    testButton.text = "Stop Test"
+                    testStatusText.text = "Listening..."
+
+                    // Disable mode controls during test
+                    performanceModeGroup.isEnabled = false
+                    advancedCheckbox.isEnabled = false
+                    for (i in 0 until performanceModeGroup.childCount) {
+                        performanceModeGroup.getChildAt(i).isEnabled = false
+                    }
+                    for (i in 0 until advancedSettingsLayout.childCount) {
+                        advancedSettingsLayout.getChildAt(i).isEnabled = false
+                    }
+
+                } catch (e: Exception) {
+                    testStatusText.text = "Error: ${e.message}"
+                }
+            } else {
+                // Stop test
+                testWakeWordService?.stopTestMode()
+                testWakeWordService?.destroy()
+                testWakeWordService = null
+
+                isTestActive = false
+                testButton.text = "Start Test"
+                testStatusText.text = "Tap Start to begin testing"
+
+                // Re-enable mode controls
+                performanceModeGroup.isEnabled = true
+                advancedCheckbox.isEnabled = true
+                for (i in 0 until performanceModeGroup.childCount) {
+                    performanceModeGroup.getChildAt(i).isEnabled = true
+                }
+                for (i in 0 until advancedSettingsLayout.childCount) {
+                    advancedSettingsLayout.getChildAt(i).isEnabled = true
+                }
+            }
+        }
+
+        // Clean up test on dialog dismiss
+        dialog.setOnDismissListener {
+            if (isTestActive) {
+                testWakeWordService?.stopTestMode()
+                testWakeWordService?.destroy()
+                testWakeWordService = null
+            }
+        }
     }
 
     private fun showSuccessDialog(message: String) {

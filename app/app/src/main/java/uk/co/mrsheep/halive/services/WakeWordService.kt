@@ -45,6 +45,12 @@ class WakeWordService(
     private var currentSettings: WakeWordSettings = WakeWordConfig.getSettings(context)
 
     /**
+     * Test mode callback - if set, every detection score is reported to this callback.
+     * Used for real-time threshold tuning in settings UI.
+     */
+    private var testModeCallback: ((Float) -> Unit)? = null
+
+    /**
      * Wake word model instance. Created on-demand and can be recreated when settings change.
      * Reused across multiple listening sessions for battery efficiency.
      */
@@ -165,7 +171,15 @@ class WakeWordService(
                             try {
                                 val detectionScore = model.processFrame(floatBuffer)
 
-                                if (detectionScore > currentSettings.getEffectiveThreshold()) {
+                                // Test mode: report every score to callback
+                                testModeCallback?.let { callback ->
+                                    withContext(Dispatchers.Main) {
+                                        callback(detectionScore)
+                                    }
+                                }
+
+                                // Normal mode: only trigger on threshold (skip if in test mode)
+                                if (testModeCallback == null && detectionScore > currentSettings.getEffectiveThreshold()) {
                                     Log.i(
                                         TAG,
                                         "Wake word detected! Score: %.4f (threshold: ${currentSettings.getEffectiveThreshold()})".format(
@@ -230,13 +244,40 @@ class WakeWordService(
         }
 
         isListening = false
-        Log.d(TAG, "Stopping wake word listener")
+        Log.d(TAG, "Stopping wake word listener${if (testModeCallback != null) " (test mode)" else ""}")
 
         recordingJob?.cancel()
         recordingJob = null
 
         cleanup()
     }
+
+    /**
+     * Starts test mode for real-time score monitoring.
+     * In test mode, every detection score is reported via the callback.
+     * Wake word detection is disabled - this is for testing only.
+     *
+     * @param onScore Callback invoked with each detection score (called on Main dispatcher)
+     */
+    fun startTestMode(onScore: (Float) -> Unit) {
+        testModeCallback = onScore
+        startListening()
+        Log.d(TAG, "Test mode started")
+    }
+
+    /**
+     * Stops test mode and cleans up resources.
+     */
+    fun stopTestMode() {
+        testModeCallback = null
+        stopListening()
+        Log.d(TAG, "Test mode stopped")
+    }
+
+    /**
+     * Returns true if currently in test mode.
+     */
+    fun isTestMode(): Boolean = testModeCallback != null
 
     /**
      * Cleans up audio resources.
@@ -267,6 +308,7 @@ class WakeWordService(
      * After calling this, the service cannot be reused.
      */
     fun destroy() {
+        testModeCallback = null
         stopListening()
 
         // Close ONNX models only on destroy (not after each listening session)
