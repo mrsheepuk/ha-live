@@ -19,23 +19,38 @@ class HAGeminiApp : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        // Initialize crash logger FIRST to catch any initialization crashes
-        CrashLogger.initialize(this)
+        try {
+            // Initialize crash logger FIRST to catch any initialization crashes
+            CrashLogger.initialize(this)
 
-        // Try to initialize Firebase on launch
-        FirebaseConfig.initializeFirebase(this)
+            // Try to initialize Firebase on launch
+            FirebaseConfig.initializeFirebase(this)
 
-        // Initialize ProfileManager
-        ProfileManager.initialize(this)
+            // Initialize ProfileManager
+            ProfileManager.initialize(this)
 
-        // Ensure at least one profile exists
-        ProfileManager.ensureDefaultProfileExists()
+            // Ensure at least one profile exists
+            ProfileManager.ensureDefaultProfileExists()
 
-        // Copy TFLite model files from assets to filesDir for wake word detection
-        AssetCopyUtil.copyAssetsToFilesDir(this)
+            // Copy TFLite model files from assets to filesDir for wake word detection
+            AssetCopyUtil.copyAssetsToFilesDir(this)
 
-        // Note: MCP connection is NOT established here
-        // It will be established in MainActivity after user configures HA
+            // Note: MCP connection is NOT established here
+            // It will be established in MainActivity after user configures HA
+        } catch (e: Exception) {
+            // Log to system log as last resort if CrashLogger fails
+            android.util.Log.e("HAGeminiApp", "FATAL: App initialization failed", e)
+
+            // Try to log to crash logger if it was initialized
+            try {
+                CrashLogger.logException(this, "App initialization failed", e)
+            } catch (ignored: Exception) {
+                // CrashLogger itself failed, nothing we can do
+            }
+
+            // Re-throw to crash the app (but at least we tried to log it)
+            throw e
+        }
     }
 
     /**
