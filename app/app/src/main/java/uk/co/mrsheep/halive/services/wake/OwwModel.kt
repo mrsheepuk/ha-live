@@ -173,13 +173,13 @@ class OwwModel(
                 // Create ONNX Runtime session with optimizations configured via settings
                 val sessionOptions = OrtSession.SessionOptions().apply {
                     // Set optimization level from settings
-                    setOptimizationLevel(settings.getEffectiveOptimizationLevel().toOrtOptLevel())
+                    setOptimizationLevel(settings.optimizationLevel.toOrtOptLevel())
 
                     // Set execution mode from settings
-                    setExecutionMode(settings.getEffectiveExecutionMode().toOrtExecutionMode())
+                    setExecutionMode(settings.executionMode.toOrtExecutionMode())
 
                     // Set thread count from settings
-                    setIntraOpNumThreads(settings.getEffectiveThreadCount())
+                    setIntraOpNumThreads(settings.threadCount)
                 }
                 return OrtEnvironment.getEnvironment().createSession(modelFile.absolutePath, sessionOptions)
             } catch (t: Throwable) {

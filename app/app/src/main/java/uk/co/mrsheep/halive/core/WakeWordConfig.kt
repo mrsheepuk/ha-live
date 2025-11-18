@@ -135,21 +135,14 @@ enum class OptimizationLevel {
 }
 
 /**
- * Comprehensive configuration data model for ONNX wake word detection.
- *
- * Supports both preset performance modes and advanced manual configuration.
- * When useAdvancedSettings is true, manual settings override the preset mode.
+ * Configuration data model for ONNX wake word detection.
+ * Directly specifies detection parameters without preset modes.
  */
 data class WakeWordSettings(
     /**
      * Whether wake word detection is enabled.
      */
     val enabled: Boolean = false,
-
-    /**
-     * Preset performance mode (used when useAdvancedSettings is false).
-     */
-    val performanceMode: PerformanceMode = PerformanceMode.BALANCED,
 
     /**
      * Confidence threshold for wake word detection (range: 0.3-0.8).
@@ -159,71 +152,28 @@ data class WakeWordSettings(
     val threshold: Float = 0.5f,
 
     /**
-     * Whether to use advanced manual settings instead of performance mode preset.
+     * Number of threads to use for ONNX model execution.
      */
-    val useAdvancedSettings: Boolean = false,
+    val threadCount: Int = 1,
 
     /**
-     * Advanced setting: number of threads to use (nullable, overrides preset if set).
+     * Execution mode for ONNX Runtime session.
      */
-    val advancedThreadCount: Int? = null,
+    val executionMode: ExecutionMode = ExecutionMode.SEQUENTIAL,
 
     /**
-     * Advanced setting: execution mode (nullable, overrides preset if set).
+     * Optimization level for ONNX Runtime.
      */
-    val advancedExecutionMode: ExecutionMode? = null,
-
-    /**
-     * Advanced setting: optimization level (nullable, overrides preset if set).
-     */
-    val advancedOptimizationLevel: OptimizationLevel? = null
-) {
-    /**
-     * Returns the effective thread count.
-     * Uses advanced setting if available, otherwise returns preset value.
-     */
-    fun getEffectiveThreadCount(): Int = if (useAdvancedSettings && advancedThreadCount != null) {
-        advancedThreadCount
-    } else {
-        performanceMode.getThreadCount()
-    }
-
-    /**
-     * Returns the effective execution mode.
-     * Uses advanced setting if available, otherwise returns preset value.
-     */
-    fun getEffectiveExecutionMode(): ExecutionMode = if (useAdvancedSettings && advancedExecutionMode != null) {
-        advancedExecutionMode
-    } else {
-        performanceMode.getExecutionMode()
-    }
-
-    /**
-     * Returns the effective optimization level.
-     * Uses advanced setting if available, otherwise returns preset value.
-     */
-    fun getEffectiveOptimizationLevel(): OptimizationLevel = if (useAdvancedSettings && advancedOptimizationLevel != null) {
-        advancedOptimizationLevel
-    } else {
-        performanceMode.getOptimizationLevel()
-    }
-
-    /**
-     * Returns the effective confidence threshold.
-     * (Currently always returns the configured threshold - no preset override)
-     */
-    fun getEffectiveThreshold(): Float = threshold
-}
+    val optimizationLevel: OptimizationLevel = OptimizationLevel.BASIC_OPT
+)
 
 object WakeWordConfig {
     private const val PREFS_NAME = "wake_word_prefs"
     private const val KEY_ENABLED = "wake_word_enabled"
-    private const val KEY_PERFORMANCE_MODE = "performance_mode"
     private const val KEY_THRESHOLD = "threshold"
-    private const val KEY_USE_ADVANCED = "use_advanced_settings"
-    private const val KEY_ADVANCED_THREAD_COUNT = "advanced_thread_count"
-    private const val KEY_ADVANCED_EXECUTION_MODE = "advanced_execution_mode"
-    private const val KEY_ADVANCED_OPTIMIZATION_LEVEL = "advanced_optimization_level"
+    private const val KEY_THREAD_COUNT = "thread_count"
+    private const val KEY_EXECUTION_MODE = "execution_mode"
+    private const val KEY_OPTIMIZATION_LEVEL = "optimization_level"
 
     /**
      * Check if wake word detection is enabled (backward compatible).
@@ -249,47 +199,29 @@ object WakeWordConfig {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
         val enabled = prefs.getBoolean(KEY_ENABLED, false)
-        val performanceModeStr = prefs.getString(KEY_PERFORMANCE_MODE, PerformanceMode.BALANCED.name)
-        val performanceMode = try {
-            PerformanceMode.valueOf(performanceModeStr!!)
-        } catch (e: Exception) {
-            PerformanceMode.BALANCED
-        }
         val threshold = prefs.getFloat(KEY_THRESHOLD, 0.5f)
-        val useAdvanced = prefs.getBoolean(KEY_USE_ADVANCED, false)
+        val threadCount = prefs.getInt(KEY_THREAD_COUNT, 1)
 
-        val advancedThreadCount = if (prefs.contains(KEY_ADVANCED_THREAD_COUNT)) {
-            prefs.getInt(KEY_ADVANCED_THREAD_COUNT, -1).takeIf { it >= 0 }
-        } else {
-            null
+        val executionModeStr = prefs.getString(KEY_EXECUTION_MODE, ExecutionMode.SEQUENTIAL.name)
+        val executionMode = try {
+            ExecutionMode.valueOf(executionModeStr!!)
+        } catch (e: Exception) {
+            ExecutionMode.SEQUENTIAL
         }
 
-        val advancedExecutionModeStr = prefs.getString(KEY_ADVANCED_EXECUTION_MODE, null)
-        val advancedExecutionMode = advancedExecutionModeStr?.let {
-            try {
-                ExecutionMode.valueOf(it)
-            } catch (e: Exception) {
-                null
-            }
-        }
-
-        val advancedOptimizationLevelStr = prefs.getString(KEY_ADVANCED_OPTIMIZATION_LEVEL, null)
-        val advancedOptimizationLevel = advancedOptimizationLevelStr?.let {
-            try {
-                OptimizationLevel.valueOf(it)
-            } catch (e: Exception) {
-                null
-            }
+        val optimizationLevelStr = prefs.getString(KEY_OPTIMIZATION_LEVEL, OptimizationLevel.BASIC_OPT.name)
+        val optimizationLevel = try {
+            OptimizationLevel.valueOf(optimizationLevelStr!!)
+        } catch (e: Exception) {
+            OptimizationLevel.BASIC_OPT
         }
 
         return WakeWordSettings(
             enabled = enabled,
-            performanceMode = performanceMode,
             threshold = threshold,
-            useAdvancedSettings = useAdvanced,
-            advancedThreadCount = advancedThreadCount,
-            advancedExecutionMode = advancedExecutionMode,
-            advancedOptimizationLevel = advancedOptimizationLevel
+            threadCount = threadCount,
+            executionMode = executionMode,
+            optimizationLevel = optimizationLevel
         )
     }
 
@@ -300,27 +232,10 @@ object WakeWordConfig {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().apply {
             putBoolean(KEY_ENABLED, settings.enabled)
-            putString(KEY_PERFORMANCE_MODE, settings.performanceMode.name)
             putFloat(KEY_THRESHOLD, settings.threshold)
-            putBoolean(KEY_USE_ADVANCED, settings.useAdvancedSettings)
-
-            if (settings.advancedThreadCount != null) {
-                putInt(KEY_ADVANCED_THREAD_COUNT, settings.advancedThreadCount)
-            } else {
-                remove(KEY_ADVANCED_THREAD_COUNT)
-            }
-
-            if (settings.advancedExecutionMode != null) {
-                putString(KEY_ADVANCED_EXECUTION_MODE, settings.advancedExecutionMode.name)
-            } else {
-                remove(KEY_ADVANCED_EXECUTION_MODE)
-            }
-
-            if (settings.advancedOptimizationLevel != null) {
-                putString(KEY_ADVANCED_OPTIMIZATION_LEVEL, settings.advancedOptimizationLevel.name)
-            } else {
-                remove(KEY_ADVANCED_OPTIMIZATION_LEVEL)
-            }
+            putInt(KEY_THREAD_COUNT, settings.threadCount)
+            putString(KEY_EXECUTION_MODE, settings.executionMode.name)
+            putString(KEY_OPTIMIZATION_LEVEL, settings.optimizationLevel.name)
         }.apply()
     }
 }

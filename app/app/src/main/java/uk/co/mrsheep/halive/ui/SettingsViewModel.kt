@@ -12,7 +12,8 @@ import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ConversationServicePreference
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.core.WakeWordSettings
-import uk.co.mrsheep.halive.core.PerformanceMode
+import uk.co.mrsheep.halive.core.ExecutionMode
+import uk.co.mrsheep.halive.core.OptimizationLevel
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +23,7 @@ import kotlin.system.exitProcess
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _settingsState = MutableStateFlow<SettingsState>(
-        SettingsState.Loaded("", "", "", 0, false, "", "", false, false, "Balanced", 0.5f)
+        SettingsState.Loaded("", "", "", 0, false, "", "", false, false, "", 0.5f)
     )
     val settingsState: StateFlow<SettingsState> = _settingsState
 
@@ -46,11 +47,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             }
 
             val wakeWordSettings = WakeWordConfig.getSettings(getApplication())
-            val wakeWordModeDisplay = when (wakeWordSettings.performanceMode) {
-                PerformanceMode.BATTERY_SAVER -> "Battery Saver"
-                PerformanceMode.BALANCED -> "Balanced"
-                PerformanceMode.PERFORMANCE -> "Performance"
+            val executionModeDisplay = when (wakeWordSettings.executionMode) {
+                ExecutionMode.SEQUENTIAL -> "Sequential"
+                ExecutionMode.PARALLEL -> "Parallel"
             }
+            val optimizationLevelDisplay = when (wakeWordSettings.optimizationLevel) {
+                OptimizationLevel.NO_OPT -> "None"
+                OptimizationLevel.BASIC_OPT -> "Basic"
+                OptimizationLevel.EXTENDED_OPT -> "Extended"
+                OptimizationLevel.ALL_OPT -> "All"
+            }
+            val wakeWordDetails = "Threshold: %.2f | Threads: %d | %s | %s".format(
+                wakeWordSettings.threshold,
+                wakeWordSettings.threadCount,
+                executionModeDisplay,
+                optimizationLevelDisplay
+            )
 
             _settingsState.value = SettingsState.Loaded(
                 haUrl = haUrl,
@@ -62,7 +74,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 conversationService = serviceDisplayName,
                 canChooseService = canChooseService,
                 wakeWordEnabled = wakeWordSettings.enabled,
-                wakeWordMode = wakeWordModeDisplay,
+                wakeWordDetails = wakeWordDetails,
                 wakeWordThreshold = wakeWordSettings.threshold
             )
         }

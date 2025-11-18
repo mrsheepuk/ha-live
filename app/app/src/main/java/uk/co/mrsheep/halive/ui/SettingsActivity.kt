@@ -26,7 +26,6 @@ import uk.co.mrsheep.halive.core.CrashLogger
 import uk.co.mrsheep.halive.core.ExecutionMode
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.OptimizationLevel
-import uk.co.mrsheep.halive.core.PerformanceMode
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.core.WakeWordSettings
 import kotlinx.coroutines.launch
@@ -67,8 +66,7 @@ class SettingsActivity : AppCompatActivity() {
 
     // Wake word section
     private lateinit var wakeWordStatusText: TextView
-    private lateinit var wakeWordModeText: TextView
-    private lateinit var wakeWordThresholdText: TextView
+    private lateinit var wakeWordDetailsText: TextView
     private lateinit var wakeWordConfigButton: Button
 
     // Test mode service
@@ -160,8 +158,7 @@ class SettingsActivity : AppCompatActivity() {
 
         // Wake word section
         wakeWordStatusText = findViewById(R.id.wakeWordStatusText)
-        wakeWordModeText = findViewById(R.id.wakeWordModeText)
-        wakeWordThresholdText = findViewById(R.id.wakeWordThresholdText)
+        wakeWordDetailsText = findViewById(R.id.wakeWordDetailsText)
         wakeWordConfigButton = findViewById(R.id.wakeWordConfigButton)
 
         wakeWordConfigButton.setOnClickListener {
@@ -208,8 +205,7 @@ class SettingsActivity : AppCompatActivity() {
 
                 // Update wake word display
                 wakeWordStatusText.text = if (state.wakeWordEnabled) "Enabled" else "Disabled"
-                wakeWordModeText.text = state.wakeWordMode
-                wakeWordThresholdText.text = String.format("%.2f", state.wakeWordThreshold)
+                wakeWordDetailsText.text = state.wakeWordDetails
                 wakeWordConfigButton.isEnabled = !state.isReadOnly
 
                 // Enable/disable buttons based on read-only state
@@ -362,17 +358,6 @@ class SettingsActivity : AppCompatActivity() {
         // Load current settings
         val currentSettings = WakeWordConfig.getSettings(this)
 
-        // Performance mode radio buttons
-        val radioModeBatterySaver = dialogView.findViewById<RadioButton>(R.id.radioModeBatterySaver)
-        val radioModeBalanced = dialogView.findViewById<RadioButton>(R.id.radioModeBalanced)
-        val radioModePerformance = dialogView.findViewById<RadioButton>(R.id.radioModePerformance)
-
-        when (currentSettings.performanceMode) {
-            PerformanceMode.BATTERY_SAVER -> radioModeBatterySaver.isChecked = true
-            PerformanceMode.BALANCED -> radioModeBalanced.isChecked = true
-            PerformanceMode.PERFORMANCE -> radioModePerformance.isChecked = true
-        }
-
         // Threshold seekbar
         val thresholdSeekBar = dialogView.findViewById<SeekBar>(R.id.thresholdSeekBar)
         val thresholdValue = dialogView.findViewById<TextView>(R.id.thresholdValue)
@@ -387,30 +372,19 @@ class SettingsActivity : AppCompatActivity() {
         // Note: SeekBar listener is set in setupTestMode() to handle both
         // threshold value updates and test mode marker positioning
 
-        // Advanced settings toggle
-        val advancedCheckbox = dialogView.findViewById<CheckBox>(R.id.advancedCheckbox)
-        val advancedSettingsLayout = dialogView.findViewById<LinearLayout>(R.id.advancedSettingsLayout)
-
-        advancedCheckbox.isChecked = currentSettings.useAdvancedSettings
-        advancedSettingsLayout.visibility = if (currentSettings.useAdvancedSettings) View.VISIBLE else View.GONE
-
-        advancedCheckbox.setOnCheckedChangeListener { _, isChecked ->
-            advancedSettingsLayout.visibility = if (isChecked) View.VISIBLE else View.GONE
-        }
-
         // Thread count spinner
         val threadCountSpinner = dialogView.findViewById<Spinner>(R.id.threadCountSpinner)
         val threadOptions = listOf("1", "2", "4", "8")
         threadCountSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, threadOptions).apply {
             setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
-        val currentThreadCount = currentSettings.advancedThreadCount ?: currentSettings.performanceMode.getThreadCount()
+        val currentThreadCount = currentSettings.threadCount
         threadCountSpinner.setSelection(threadOptions.indexOf(currentThreadCount.toString()).coerceAtLeast(0))
 
         // Execution mode radio buttons
         val radioExecutionSequential = dialogView.findViewById<RadioButton>(R.id.radioExecutionSequential)
         val radioExecutionParallel = dialogView.findViewById<RadioButton>(R.id.radioExecutionParallel)
-        val currentExecutionMode = currentSettings.advancedExecutionMode ?: currentSettings.performanceMode.getExecutionMode()
+        val currentExecutionMode = currentSettings.executionMode
         when (currentExecutionMode) {
             ExecutionMode.SEQUENTIAL -> radioExecutionSequential.isChecked = true
             ExecutionMode.PARALLEL -> radioExecutionParallel.isChecked = true
@@ -421,7 +395,7 @@ class SettingsActivity : AppCompatActivity() {
         val radioOptBasic = dialogView.findViewById<RadioButton>(R.id.radioOptBasic)
         val radioOptExtended = dialogView.findViewById<RadioButton>(R.id.radioOptExtended)
         val radioOptAll = dialogView.findViewById<RadioButton>(R.id.radioOptAll)
-        val currentOptLevel = currentSettings.advancedOptimizationLevel ?: currentSettings.performanceMode.getOptimizationLevel()
+        val currentOptLevel = currentSettings.optimizationLevel
         when (currentOptLevel) {
             OptimizationLevel.NO_OPT -> radioOptNone.isChecked = true
             OptimizationLevel.BASIC_OPT -> radioOptBasic.isChecked = true
@@ -440,47 +414,31 @@ class SettingsActivity : AppCompatActivity() {
         dialog.setOnShowListener {
             val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             saveButton.setOnClickListener {
-                // Collect settings from dialog
-                val performanceMode = when {
-                    radioModeBatterySaver.isChecked -> PerformanceMode.BATTERY_SAVER
-                    radioModePerformance.isChecked -> PerformanceMode.PERFORMANCE
-                    else -> PerformanceMode.BALANCED
+                val threshold = progressToThreshold(thresholdSeekBar.progress)
+                val threadCount = threadOptions[threadCountSpinner.selectedItemPosition].toInt()
+
+                val executionMode = if (radioExecutionParallel.isChecked) {
+                    ExecutionMode.PARALLEL
+                } else {
+                    ExecutionMode.SEQUENTIAL
                 }
 
-                val threshold = progressToThreshold(thresholdSeekBar.progress)
-                val useAdvanced = advancedCheckbox.isChecked
+                val optimizationLevel = when {
+                    radioOptNone.isChecked -> OptimizationLevel.NO_OPT
+                    radioOptExtended.isChecked -> OptimizationLevel.EXTENDED_OPT
+                    radioOptAll.isChecked -> OptimizationLevel.ALL_OPT
+                    else -> OptimizationLevel.BASIC_OPT
+                }
 
-                val advancedThreadCount = if (useAdvanced) {
-                    threadOptions[threadCountSpinner.selectedItemPosition].toInt()
-                } else null
-
-                val advancedExecutionMode = if (useAdvanced) {
-                    if (radioExecutionParallel.isChecked) ExecutionMode.PARALLEL else ExecutionMode.SEQUENTIAL
-                } else null
-
-                val advancedOptLevel = if (useAdvanced) {
-                    when {
-                        radioOptNone.isChecked -> OptimizationLevel.NO_OPT
-                        radioOptExtended.isChecked -> OptimizationLevel.EXTENDED_OPT
-                        radioOptAll.isChecked -> OptimizationLevel.ALL_OPT
-                        else -> OptimizationLevel.BASIC_OPT
-                    }
-                } else null
-
-                // Create updated settings
                 val newSettings = WakeWordSettings(
                     enabled = currentSettings.enabled,
-                    performanceMode = performanceMode,
                     threshold = threshold,
-                    useAdvancedSettings = useAdvanced,
-                    advancedThreadCount = advancedThreadCount,
-                    advancedExecutionMode = advancedExecutionMode,
-                    advancedOptimizationLevel = advancedOptLevel
+                    threadCount = threadCount,
+                    executionMode = executionMode,
+                    optimizationLevel = optimizationLevel
                 )
 
-                // Save via ViewModel
                 viewModel.saveWakeWordSettings(newSettings)
-
                 dialog.dismiss()
             }
         }
@@ -499,14 +457,12 @@ class SettingsActivity : AppCompatActivity() {
         val testStatusText = dialogView.findViewById<TextView>(R.id.testStatusText)
         val testButton = dialogView.findViewById<Button>(R.id.testButton)
         val thresholdSeekBar = dialogView.findViewById<SeekBar>(R.id.thresholdSeekBar)
-
-        // Performance mode controls to disable during test
-        val performanceModeGroup = dialogView.findViewById<RadioGroup>(R.id.performanceModeGroup)
-        val advancedCheckbox = dialogView.findViewById<CheckBox>(R.id.advancedCheckbox)
-        val advancedSettingsLayout = dialogView.findViewById<LinearLayout>(R.id.advancedSettingsLayout)
+        val testSection = dialogView.findViewById<LinearLayout>(R.id.testSection)
 
         var peakScore = 0.0f
         var isTestActive = false
+        var triggerCount = 0
+        var lastTriggerTime = 0L
 
         // Helper to convert threshold (0.3-0.8) to progress bar position (0-100)
         val thresholdToProgress = { threshold: Float -> ((threshold - 0.3f) / 0.5f * 100f).toInt() }
@@ -553,6 +509,8 @@ class SettingsActivity : AppCompatActivity() {
                     }
 
                     peakScore = 0.0f
+                    triggerCount = 0
+                    lastTriggerTime = 0L
                     testCurrentScore.text = "0.00"
                     testPeakScore.text = "0.00"
                     testScoreProgress.progress = 0
@@ -570,28 +528,38 @@ class SettingsActivity : AppCompatActivity() {
                         // Update progress bar (convert 0.0-1.0 to 0-100)
                         testScoreProgress.progress = (score * 100).toInt()
 
-                        // Update status if score crosses threshold
+                        // Check if score crosses threshold
                         val currentThreshold = progressToThreshold(thresholdSeekBar.progress)
+                        val currentTime = System.currentTimeMillis()
+
                         if (score > currentThreshold) {
-                            testStatusText.text = "✓ Would trigger at current threshold!"
+                            // Trigger detected!
+                            if (currentTime - lastTriggerTime > 500) {
+                                // Only increment if it's been >500ms since last trigger (debounce)
+                                triggerCount++
+                                lastTriggerTime = currentTime
+                            }
+                            // Flash green background
+                            testSection.setBackgroundColor(0x4000FF00) // Semi-transparent green
+                            testStatusText.text = "✓ DETECTED! ($triggerCount detections)"
+                        } else if (currentTime - lastTriggerTime < 2000) {
+                            // Keep showing trigger message for 2 seconds
+                            testSection.setBackgroundColor(0x4000FF00)
+                            testStatusText.text = "✓ DETECTED! ($triggerCount detections)"
                         } else {
-                            testStatusText.text = "Listening..."
+                            // Back to normal
+                            testSection.setBackgroundColor(0x00000000) // Transparent
+                            if (triggerCount > 0) {
+                                testStatusText.text = "Listening... ($triggerCount detections)"
+                            } else {
+                                testStatusText.text = "Listening..."
+                            }
                         }
                     }
 
                     isTestActive = true
                     testButton.text = "Stop Test"
                     testStatusText.text = "Listening..."
-
-                    // Disable mode controls during test
-                    performanceModeGroup.isEnabled = false
-                    advancedCheckbox.isEnabled = false
-                    for (i in 0 until performanceModeGroup.childCount) {
-                        performanceModeGroup.getChildAt(i).isEnabled = false
-                    }
-                    for (i in 0 until advancedSettingsLayout.childCount) {
-                        advancedSettingsLayout.getChildAt(i).isEnabled = false
-                    }
 
                 } catch (e: Exception) {
                     testStatusText.text = "Error: ${e.message}"
@@ -605,16 +573,7 @@ class SettingsActivity : AppCompatActivity() {
                 isTestActive = false
                 testButton.text = "Start Test"
                 testStatusText.text = "Tap Start to begin testing"
-
-                // Re-enable mode controls
-                performanceModeGroup.isEnabled = true
-                advancedCheckbox.isEnabled = true
-                for (i in 0 until performanceModeGroup.childCount) {
-                    performanceModeGroup.getChildAt(i).isEnabled = true
-                }
-                for (i in 0 until advancedSettingsLayout.childCount) {
-                    advancedSettingsLayout.getChildAt(i).isEnabled = true
-                }
+                testSection.setBackgroundColor(0x00000000) // Transparent
             }
         }
 
@@ -714,7 +673,7 @@ sealed class SettingsState {
         val conversationService: String,
         val canChooseService: Boolean,
         val wakeWordEnabled: Boolean,
-        val wakeWordMode: String,
+        val wakeWordDetails: String,
         val wakeWordThreshold: Float
     ) : SettingsState()
     object TestingConnection : SettingsState()

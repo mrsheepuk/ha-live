@@ -249,30 +249,15 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Performance Mode:"
+                android:text="Configuration:"
                 android:textSize="12sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/wakeWordModeText"
+                android:id="@+id/wakeWordDetailsText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Balanced"
-                android:textSize="14sp"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Detection Sensitivity:"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/wakeWordThresholdText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0.5"
+                android:text="Threshold: 0.50 | Threads: 1 | Sequential | Basic"
                 android:textSize="14sp"
                 android:layout_marginBottom="12dp" />
 

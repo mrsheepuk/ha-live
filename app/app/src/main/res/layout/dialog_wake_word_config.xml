@@ -5,43 +5,6 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <!-- Performance Mode Section -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Performance Mode:"
-        android:textStyle="bold"
-        android:textSize="14sp"
-        android:layout_marginBottom="8dp" />
-
-    <RadioGroup
-        android:id="@+id/performanceModeGroup"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:layout_marginBottom="8dp">
-
-        <RadioButton
-            android:id="@+id/radioModeBatterySaver"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Battery Saver" />
-
-        <RadioButton
-            android:id="@+id/radioModeBalanced"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Balanced (Recommended)"
-            android:checked="true" />
-
-        <RadioButton
-            android:id="@+id/radioModePerformance"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Performance" />
-
-    </RadioGroup>
-
     <!-- Threshold Section -->
     <TextView
         android:layout_width="wrap_content"
@@ -80,127 +43,106 @@
         android:textStyle="bold"
         android:layout_marginBottom="16dp" />
 
-    <!-- Advanced Toggle -->
-    <com.google.android.material.checkbox.MaterialCheckBox
-        android:id="@+id/advancedCheckbox"
+    <!-- Thread Count Section -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Thread Count:"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <Spinner
+        android:id="@+id/threadCountSpinner"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Show Advanced Settings"
-        android:layout_marginBottom="8dp" />
+        android:layout_marginBottom="4dp" />
 
-    <!-- Advanced Settings Section -->
-    <LinearLayout
-        android:id="@+id/advancedSettingsLayout"
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="More threads = faster but more battery drain"
+        android:textSize="12sp"
+        android:textStyle="italic"
+        android:textColor="?android:attr/textColorSecondary"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Execution Mode Section -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Execution Mode:"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <RadioGroup
+        android:id="@+id/executionModeGroup"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:visibility="gone"
-        android:layout_marginTop="8dp"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp">
+        android:layout_marginBottom="12dp">
 
-        <!-- Thread Count Section -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Thread Count:"
-            android:textStyle="bold"
-            android:textSize="14sp"
-            android:layout_marginBottom="4dp"
-            android:layout_marginTop="8dp" />
-
-        <Spinner
-            android:id="@+id/threadCountSpinner"
+        <RadioButton
+            android:id="@+id/radioExecutionSequential"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="4dp" />
+            android:text="Sequential (Battery Efficient)"
+            android:checked="true" />
 
-        <TextView
+        <RadioButton
+            android:id="@+id/radioExecutionParallel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="More threads = faster but more battery drain"
-            android:textSize="12sp"
-            android:textStyle="italic"
-            android:textColor="?android:attr/textColorSecondary"
-            android:layout_marginBottom="12dp" />
+            android:text="Parallel (Performance)" />
 
-        <!-- Execution Mode Section -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Execution Mode:"
-            android:textStyle="bold"
-            android:textSize="14sp"
-            android:layout_marginBottom="4dp"
-            android:layout_marginTop="8dp" />
+    </RadioGroup>
 
-        <RadioGroup
-            android:id="@+id/executionModeGroup"
+    <!-- Optimization Level Section -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Optimization Level:"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <RadioGroup
+        android:id="@+id/optimizationLevelGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="12dp">
+
+        <RadioButton
+            android:id="@+id/radioOptNone"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:layout_marginBottom="12dp">
+            android:text="None" />
 
-            <RadioButton
-                android:id="@+id/radioExecutionSequential"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Sequential (Battery Efficient)"
-                android:checked="true" />
-
-            <RadioButton
-                android:id="@+id/radioExecutionParallel"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Parallel (Performance)" />
-
-        </RadioGroup>
-
-        <!-- Optimization Level Section -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Optimization Level:"
-            android:textStyle="bold"
-            android:textSize="14sp"
-            android:layout_marginBottom="4dp"
-            android:layout_marginTop="8dp" />
-
-        <RadioGroup
-            android:id="@+id/optimizationLevelGroup"
+        <RadioButton
+            android:id="@+id/radioOptBasic"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:layout_marginBottom="12dp">
+            android:text="Basic (Recommended)"
+            android:checked="true" />
 
-            <RadioButton
-                android:id="@+id/radioOptNone"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="None" />
+        <RadioButton
+            android:id="@+id/radioOptExtended"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Extended" />
 
-            <RadioButton
-                android:id="@+id/radioOptBasic"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Basic (Recommended)"
-                android:checked="true" />
+        <RadioButton
+            android:id="@+id/radioOptAll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="All" />
 
-            <RadioButton
-                android:id="@+id/radioOptExtended"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Extended" />
-
-            <RadioButton
-                android:id="@+id/radioOptAll"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="All" />
-
-        </RadioGroup>
-
-    </LinearLayout>
+    </RadioGroup>
 
     <!-- Test Detection Section -->
     <View

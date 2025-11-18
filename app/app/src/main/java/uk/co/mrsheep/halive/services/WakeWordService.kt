@@ -149,7 +149,7 @@ class WakeWordService(
             isListening = true
             Log.d(
                 TAG,
-                "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE, threshold=${currentSettings.getEffectiveThreshold()})"
+                "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE, threshold=${currentSettings.threshold})"
             )
 
             recordingJob = scope.launch {
@@ -179,10 +179,10 @@ class WakeWordService(
                                 }
 
                                 // Normal mode: only trigger on threshold (skip if in test mode)
-                                if (testModeCallback == null && detectionScore > currentSettings.getEffectiveThreshold()) {
+                                if (testModeCallback == null && detectionScore > currentSettings.threshold) {
                                     Log.i(
                                         TAG,
-                                        "Wake word detected! Score: %.4f (threshold: ${currentSettings.getEffectiveThreshold()})".format(
+                                        "Wake word detected! Score: %.4f (threshold: ${currentSettings.threshold})".format(
                                             detectionScore
                                         )
                                     )
