@@ -12,6 +12,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.services.wake.OwwModel
+import uk.co.mrsheep.halive.core.WakeWordConfig
+import uk.co.mrsheep.halive.core.WakeWordSettings
 import java.io.File
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
@@ -34,21 +36,33 @@ class WakeWordService(
         private const val TAG = "WakeWordService"
         private const val SAMPLE_RATE = 16000
         private const val CHUNK_SIZE = 1152 // OwwModel.MEL_INPUT_COUNT
-        private const val WAKE_WORD_THRESHOLD = 0.5f
     }
 
     private var audioRecord: AudioRecord? = null
     private var recordingJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isListening = false
-    private var isModelInitialized = false
+    private var currentSettings: WakeWordSettings = WakeWordConfig.getSettings(context)
 
     /**
-     * Lazy initialization of wake word models.
-     * Models are loaded once and reused across multiple listening sessions for battery efficiency.
-     * Only closed when the service is destroyed.
+     * Test mode callback - if set, every detection score is reported to this callback.
+     * Used for real-time threshold tuning in settings UI.
      */
-    private val owwModel: OwwModel by lazy {
+    private var testModeCallback: ((Float) -> Unit)? = null
+
+    /**
+     * Wake word model instance. Created on-demand and can be recreated when settings change.
+     * Reused across multiple listening sessions for battery efficiency.
+     */
+    private var owwModel: OwwModel? = null
+
+    /**
+     * Initializes or returns the existing wake word model.
+     * Models are loaded with current settings and reused until explicitly closed.
+     */
+    private fun getOrCreateModel(): OwwModel {
+        owwModel?.let { return it }
+
         val melModel = loadModelFile("melspectrogram.onnx")
         val embModel = loadModelFile("embedding_model.onnx")
         val wakeModel = loadModelFile("ok_computer.onnx")
@@ -61,9 +75,9 @@ class WakeWordService(
             throw IllegalStateException("Wake word model files not found")
         }
 
-        Log.d(TAG, "Initializing wake word models (once per service lifetime)")
-        isModelInitialized = true
-        OwwModel(melModel, embModel, wakeModel).also {
+        Log.d(TAG, "Initializing wake word models with current settings")
+        return OwwModel(melModel, embModel, wakeModel, currentSettings).also {
+            owwModel = it
             Log.d(TAG, "Wake word models initialized successfully")
         }
     }
@@ -86,10 +100,9 @@ class WakeWordService(
             return
         }
 
-        // Verify models can be loaded (lazy init happens here on first access)
+        // Verify models can be loaded and initialize if needed
         try {
-            // Touch the lazy property to trigger initialization if needed
-            owwModel.resetAccumulators()
+            getOrCreateModel().resetAccumulators()
             Log.d(TAG, "Wake word models ready")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize wake word models: ${e.message}", e)
@@ -136,12 +149,13 @@ class WakeWordService(
             isListening = true
             Log.d(
                 TAG,
-                "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE)"
+                "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE, threshold=${currentSettings.threshold})"
             )
 
             recordingJob = scope.launch {
                 val audioBuffer = ShortArray(CHUNK_SIZE)
                 val floatBuffer = FloatArray(CHUNK_SIZE)
+                val model = getOrCreateModel()
 
                 while (isActive && isListening) {
                     try {
@@ -155,12 +169,20 @@ class WakeWordService(
 
                             // Run ONNX Runtime inference on audio chunk
                             try {
-                                val detectionScore = owwModel.processFrame(floatBuffer)
+                                val detectionScore = model.processFrame(floatBuffer)
 
-                                if (detectionScore > WAKE_WORD_THRESHOLD) {
+                                // Test mode: report every score to callback
+                                testModeCallback?.let { callback ->
+                                    withContext(Dispatchers.Main) {
+                                        callback(detectionScore)
+                                    }
+                                }
+
+                                // Normal mode: only trigger on threshold (skip if in test mode)
+                                if (testModeCallback == null && detectionScore > currentSettings.threshold) {
                                     Log.i(
                                         TAG,
-                                        "Wake word detected! Score: %.4f (threshold: $WAKE_WORD_THRESHOLD)".format(
+                                        "Wake word detected! Score: %.4f (threshold: ${currentSettings.threshold})".format(
                                             detectionScore
                                         )
                                     )
@@ -222,13 +244,40 @@ class WakeWordService(
         }
 
         isListening = false
-        Log.d(TAG, "Stopping wake word listener")
+        Log.d(TAG, "Stopping wake word listener${if (testModeCallback != null) " (test mode)" else ""}")
 
         recordingJob?.cancel()
         recordingJob = null
 
         cleanup()
     }
+
+    /**
+     * Starts test mode for real-time score monitoring.
+     * In test mode, every detection score is reported via the callback.
+     * Wake word detection is disabled - this is for testing only.
+     *
+     * @param onScore Callback invoked with each detection score (called on Main dispatcher)
+     */
+    fun startTestMode(onScore: (Float) -> Unit) {
+        testModeCallback = onScore
+        startListening()
+        Log.d(TAG, "Test mode started")
+    }
+
+    /**
+     * Stops test mode and cleans up resources.
+     */
+    fun stopTestMode() {
+        testModeCallback = null
+        stopListening()
+        Log.d(TAG, "Test mode stopped")
+    }
+
+    /**
+     * Returns true if currently in test mode.
+     */
+    fun isTestMode(): Boolean = testModeCallback != null
 
     /**
      * Cleans up audio resources.
@@ -259,20 +308,47 @@ class WakeWordService(
      * After calling this, the service cannot be reused.
      */
     fun destroy() {
+        testModeCallback = null
         stopListening()
 
         // Close ONNX models only on destroy (not after each listening session)
-        if (isModelInitialized) {
+        owwModel?.let {
             try {
-                owwModel.close()
+                it.close()
                 Log.d(TAG, "OwwModel closed")
             } catch (e: Exception) {
                 Log.e(TAG, "Error closing OwwModel: ${e.message}", e)
             }
         }
+        owwModel = null
 
         scope.cancel()
         Log.d(TAG, "WakeWordService destroyed")
+    }
+
+    /**
+     * Reloads wake word settings from SharedPreferences.
+     * If currently listening, stops and restarts with new settings.
+     */
+    fun reloadSettings() {
+        currentSettings = WakeWordConfig.getSettings(context)
+
+        if (isListening) {
+            stopListening()
+
+            // Force re-initialization of model with new settings on next start
+            owwModel?.let {
+                try {
+                    it.close()
+                    Log.d(TAG, "Closed old model to apply new settings")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error closing model during reload: ${e.message}", e)
+                }
+            }
+            owwModel = null
+
+            startListening()
+        }
     }
 
     /**

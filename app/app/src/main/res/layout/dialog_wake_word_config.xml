@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+    <!-- Threshold Section -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Detection Sensitivity:"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:layout_marginBottom="8dp"
+        android:layout_marginTop="8dp" />
+
+    <TextView
+        android:id="@+id/thresholdDescription"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Higher = fewer false activations, but may miss wake word"
+        android:textSize="12sp"
+        android:layout_marginBottom="4dp"
+        android:textColor="?android:attr/textColorSecondary" />
+
+    <SeekBar
+        android:id="@+id/thresholdSeekBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:min="0"
+        android:max="100"
+        android:progress="50" />
+
+    <TextView
+        android:id="@+id/thresholdValue"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="0.5"
+        android:textAlignment="center"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Thread Count Section -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Thread Count:"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <Spinner
+        android:id="@+id/threadCountSpinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="More threads = faster but more battery drain"
+        android:textSize="12sp"
+        android:textStyle="italic"
+        android:textColor="?android:attr/textColorSecondary"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Execution Mode Section -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Execution Mode:"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <RadioGroup
+        android:id="@+id/executionModeGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="12dp">
+
+        <RadioButton
+            android:id="@+id/radioExecutionSequential"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Sequential (Battery Efficient)"
+            android:checked="true" />
+
+        <RadioButton
+            android:id="@+id/radioExecutionParallel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Parallel (Performance)" />
+
+    </RadioGroup>
+
+    <!-- Optimization Level Section -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Optimization Level:"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <RadioGroup
+        android:id="@+id/optimizationLevelGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="12dp">
+
+        <RadioButton
+            android:id="@+id/radioOptNone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="None" />
+
+        <RadioButton
+            android:id="@+id/radioOptBasic"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Basic (Recommended)"
+            android:checked="true" />
+
+        <RadioButton
+            android:id="@+id/radioOptExtended"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Extended" />
+
+        <RadioButton
+            android:id="@+id/radioOptAll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="All" />
+
+    </RadioGroup>
+
+    <!-- Test Detection Section -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="?android:attr/listDivider"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Test Detection"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:layout_marginBottom="8dp" />
+
+    <LinearLayout
+        android:id="@+id/testSection"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="?android:attr/selectableItemBackground"
+        android:padding="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Say 'OK Computer' to test your settings"
+            android:textSize="12sp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Live Score Display -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Current:"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/testCurrentScore"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0.00"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="?attr/colorPrimary" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Peak:"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/testPeakScore"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0.00"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="?attr/colorPrimary" />
+        </LinearLayout>
+
+        <!-- Visual Progress Bar -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp">
+
+            <ProgressBar
+                android:id="@+id/testScoreProgress"
+                android:layout_width="match_parent"
+                android:layout_height="20dp"
+                android:max="100"
+                android:progress="0"
+                style="?android:attr/progressBarStyleHorizontal" />
+
+            <!-- Threshold marker - positioned absolutely -->
+            <View
+                android:id="@+id/testThresholdMarker"
+                android:layout_width="2dp"
+                android:layout_height="24dp"
+                android:layout_alignTop="@id/testScoreProgress"
+                android:layout_alignBottom="@id/testScoreProgress"
+                android:layout_marginTop="-2dp"
+                android:layout_marginBottom="-2dp"
+                android:background="?attr/colorPrimary" />
+        </RelativeLayout>
+
+        <!-- Status Text -->
+        <TextView
+            android:id="@+id/testStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tap Start to begin testing"
+            android:textSize="12sp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:layout_marginBottom="12dp"
+            android:textAlignment="center" />
+
+        <!-- Test Button -->
+        <Button
+            android:id="@+id/testButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Start Test"
+            style="?android:attr/buttonBarButtonStyle" />
+
+    </LinearLayout>
+
+    </LinearLayout>
+
+</ScrollView>

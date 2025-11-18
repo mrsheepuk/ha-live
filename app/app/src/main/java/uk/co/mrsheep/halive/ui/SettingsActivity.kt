@@ -4,8 +4,15 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
+import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.ScrollView
+import android.widget.SeekBar
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -16,8 +23,19 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.CrashLogger
+import uk.co.mrsheep.halive.core.ExecutionMode
 import uk.co.mrsheep.halive.core.GeminiConfig
+import uk.co.mrsheep.halive.core.OptimizationLevel
+import uk.co.mrsheep.halive.core.WakeWordConfig
+import uk.co.mrsheep.halive.core.WakeWordSettings
 import kotlinx.coroutines.launch
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.ProgressBar
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import uk.co.mrsheep.halive.services.WakeWordService
+import android.widget.RelativeLayout
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -45,6 +63,14 @@ class SettingsActivity : AppCompatActivity() {
     // Debug section
     private lateinit var viewCrashLogsButton: Button
     private lateinit var shareCrashLogsButton: Button
+
+    // Wake word section
+    private lateinit var wakeWordStatusText: TextView
+    private lateinit var wakeWordDetailsText: TextView
+    private lateinit var wakeWordConfigButton: Button
+
+    // Test mode service
+    private var testWakeWordService: WakeWordService? = null
 
     // Read-only overlay
     private lateinit var readOnlyOverlay: View
@@ -130,6 +156,15 @@ class SettingsActivity : AppCompatActivity() {
             shareCrashLogs()
         }
 
+        // Wake word section
+        wakeWordStatusText = findViewById(R.id.wakeWordStatusText)
+        wakeWordDetailsText = findViewById(R.id.wakeWordDetailsText)
+        wakeWordConfigButton = findViewById(R.id.wakeWordConfigButton)
+
+        wakeWordConfigButton.setOnClickListener {
+            showWakeWordConfigDialog()
+        }
+
         // Read-only overlay
         readOnlyOverlay = findViewById(R.id.readOnlyOverlay)
         readOnlyMessage = findViewById(R.id.readOnlyMessage)
@@ -167,6 +202,11 @@ class SettingsActivity : AppCompatActivity() {
                 } else {
                     switchServiceButton.visibility = View.GONE
                 }
+
+                // Update wake word display
+                wakeWordStatusText.text = if (state.wakeWordEnabled) "Enabled" else "Disabled"
+                wakeWordDetailsText.text = state.wakeWordDetails
+                wakeWordConfigButton.isEnabled = !state.isReadOnly
 
                 // Enable/disable buttons based on read-only state
                 haEditButton.isEnabled = !state.isReadOnly
@@ -312,6 +352,241 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showWakeWordConfigDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_wake_word_config, null)
+
+        // Load current settings
+        val currentSettings = WakeWordConfig.getSettings(this)
+
+        // Threshold seekbar
+        val thresholdSeekBar = dialogView.findViewById<SeekBar>(R.id.thresholdSeekBar)
+        val thresholdValue = dialogView.findViewById<TextView>(R.id.thresholdValue)
+
+        // Convert 0.3-0.8 range to 0-100 seekbar
+        val thresholdToProgress = { threshold: Float -> ((threshold - 0.3f) / 0.5f * 100f).toInt() }
+        val progressToThreshold = { progress: Int -> 0.3f + (progress / 100f) * 0.5f }
+
+        thresholdSeekBar.progress = thresholdToProgress(currentSettings.threshold)
+        thresholdValue.text = String.format("%.2f", currentSettings.threshold)
+
+        // Note: SeekBar listener is set in setupTestMode() to handle both
+        // threshold value updates and test mode marker positioning
+
+        // Thread count spinner
+        val threadCountSpinner = dialogView.findViewById<Spinner>(R.id.threadCountSpinner)
+        val threadOptions = listOf("1", "2", "4", "8")
+        threadCountSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, threadOptions).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        val currentThreadCount = currentSettings.threadCount
+        threadCountSpinner.setSelection(threadOptions.indexOf(currentThreadCount.toString()).coerceAtLeast(0))
+
+        // Execution mode radio buttons
+        val radioExecutionSequential = dialogView.findViewById<RadioButton>(R.id.radioExecutionSequential)
+        val radioExecutionParallel = dialogView.findViewById<RadioButton>(R.id.radioExecutionParallel)
+        val currentExecutionMode = currentSettings.executionMode
+        when (currentExecutionMode) {
+            ExecutionMode.SEQUENTIAL -> radioExecutionSequential.isChecked = true
+            ExecutionMode.PARALLEL -> radioExecutionParallel.isChecked = true
+        }
+
+        // Optimization level radio buttons
+        val radioOptNone = dialogView.findViewById<RadioButton>(R.id.radioOptNone)
+        val radioOptBasic = dialogView.findViewById<RadioButton>(R.id.radioOptBasic)
+        val radioOptExtended = dialogView.findViewById<RadioButton>(R.id.radioOptExtended)
+        val radioOptAll = dialogView.findViewById<RadioButton>(R.id.radioOptAll)
+        val currentOptLevel = currentSettings.optimizationLevel
+        when (currentOptLevel) {
+            OptimizationLevel.NO_OPT -> radioOptNone.isChecked = true
+            OptimizationLevel.BASIC_OPT -> radioOptBasic.isChecked = true
+            OptimizationLevel.EXTENDED_OPT -> radioOptExtended.isChecked = true
+            OptimizationLevel.ALL_OPT -> radioOptAll.isChecked = true
+        }
+
+        // Build dialog
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Configure Wake Word Detection")
+            .setView(dialogView)
+            .setPositiveButton("Save", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            saveButton.setOnClickListener {
+                val threshold = progressToThreshold(thresholdSeekBar.progress)
+                val threadCount = threadOptions[threadCountSpinner.selectedItemPosition].toInt()
+
+                val executionMode = if (radioExecutionParallel.isChecked) {
+                    ExecutionMode.PARALLEL
+                } else {
+                    ExecutionMode.SEQUENTIAL
+                }
+
+                val optimizationLevel = when {
+                    radioOptNone.isChecked -> OptimizationLevel.NO_OPT
+                    radioOptExtended.isChecked -> OptimizationLevel.EXTENDED_OPT
+                    radioOptAll.isChecked -> OptimizationLevel.ALL_OPT
+                    else -> OptimizationLevel.BASIC_OPT
+                }
+
+                val newSettings = WakeWordSettings(
+                    enabled = currentSettings.enabled,
+                    threshold = threshold,
+                    threadCount = threadCount,
+                    executionMode = executionMode,
+                    optimizationLevel = optimizationLevel
+                )
+
+                viewModel.saveWakeWordSettings(newSettings)
+                dialog.dismiss()
+            }
+        }
+
+        dialog.show()
+
+        // Set up test mode UI
+        setupTestMode(dialogView, dialog, currentSettings)
+    }
+
+    private fun setupTestMode(dialogView: View, dialog: AlertDialog, settings: WakeWordSettings) {
+        val testCurrentScore = dialogView.findViewById<TextView>(R.id.testCurrentScore)
+        val testPeakScore = dialogView.findViewById<TextView>(R.id.testPeakScore)
+        val testScoreProgress = dialogView.findViewById<ProgressBar>(R.id.testScoreProgress)
+        val testThresholdMarker = dialogView.findViewById<View>(R.id.testThresholdMarker)
+        val testStatusText = dialogView.findViewById<TextView>(R.id.testStatusText)
+        val testButton = dialogView.findViewById<Button>(R.id.testButton)
+        val thresholdSeekBar = dialogView.findViewById<SeekBar>(R.id.thresholdSeekBar)
+        val testSection = dialogView.findViewById<LinearLayout>(R.id.testSection)
+
+        var peakScore = 0.0f
+        var isTestActive = false
+        var triggerCount = 0
+        var lastTriggerTime = 0L
+
+        // Helper to convert threshold (0.3-0.8) to progress bar position (0-100)
+        val thresholdToProgress = { threshold: Float -> ((threshold - 0.3f) / 0.5f * 100f).toInt() }
+        val progressToThreshold = { progress: Int -> 0.3f + (progress / 100f) * 0.5f }
+
+        // Update threshold marker position when seekbar changes
+        val updateThresholdMarker = {
+            val threshold = progressToThreshold(thresholdSeekBar.progress)
+            val markerPosition = thresholdToProgress(threshold)
+            val layoutParams = testThresholdMarker.layoutParams as RelativeLayout.LayoutParams
+            layoutParams.leftMargin = (testScoreProgress.width * markerPosition / 100f).toInt()
+            testThresholdMarker.layoutParams = layoutParams
+        }
+
+        // Update marker when seekbar changes
+        thresholdSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                // Update threshold value display (already handled by existing code)
+                val threshold = progressToThreshold(progress)
+                dialogView.findViewById<TextView>(R.id.thresholdValue).text = String.format("%.2f", threshold)
+                // Update marker position
+                updateThresholdMarker()
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        // Position marker initially (post to ensure layout is complete)
+        testScoreProgress.post { updateThresholdMarker() }
+
+        testButton.setOnClickListener {
+            if (!isTestActive) {
+                // Check microphone permission
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                    != PackageManager.PERMISSION_GRANTED) {
+                    testStatusText.text = "Microphone permission required"
+                    return@setOnClickListener
+                }
+
+                // Start test
+                try {
+                    testWakeWordService = WakeWordService(this) {
+                        // No-op for wake word detection - test mode only
+                    }
+
+                    peakScore = 0.0f
+                    triggerCount = 0
+                    lastTriggerTime = 0L
+                    testCurrentScore.text = "0.00"
+                    testPeakScore.text = "0.00"
+                    testScoreProgress.progress = 0
+
+                    testWakeWordService?.startTestMode { score ->
+                        // Update UI with live score
+                        testCurrentScore.text = String.format("%.2f", score)
+
+                        // Update peak
+                        if (score > peakScore) {
+                            peakScore = score
+                            testPeakScore.text = String.format("%.2f", peakScore)
+                        }
+
+                        // Update progress bar (convert 0.0-1.0 to 0-100)
+                        testScoreProgress.progress = (score * 100).toInt()
+
+                        // Check if score crosses threshold
+                        val currentThreshold = progressToThreshold(thresholdSeekBar.progress)
+                        val currentTime = System.currentTimeMillis()
+
+                        if (score > currentThreshold) {
+                            // Trigger detected!
+                            if (currentTime - lastTriggerTime > 500) {
+                                // Only increment if it's been >500ms since last trigger (debounce)
+                                triggerCount++
+                                lastTriggerTime = currentTime
+                            }
+                            // Flash green background
+                            testSection.setBackgroundColor(0x4000FF00) // Semi-transparent green
+                            testStatusText.text = "✓ DETECTED! ($triggerCount detections)"
+                        } else if (currentTime - lastTriggerTime < 2000) {
+                            // Keep showing trigger message for 2 seconds
+                            testSection.setBackgroundColor(0x4000FF00)
+                            testStatusText.text = "✓ DETECTED! ($triggerCount detections)"
+                        } else {
+                            // Back to normal
+                            testSection.setBackgroundColor(0x00000000) // Transparent
+                            if (triggerCount > 0) {
+                                testStatusText.text = "Listening... ($triggerCount detections)"
+                            } else {
+                                testStatusText.text = "Listening..."
+                            }
+                        }
+                    }
+
+                    isTestActive = true
+                    testButton.text = "Stop Test"
+                    testStatusText.text = "Listening..."
+
+                } catch (e: Exception) {
+                    testStatusText.text = "Error: ${e.message}"
+                }
+            } else {
+                // Stop test
+                testWakeWordService?.stopTestMode()
+                testWakeWordService?.destroy()
+                testWakeWordService = null
+
+                isTestActive = false
+                testButton.text = "Start Test"
+                testStatusText.text = "Tap Start to begin testing"
+                testSection.setBackgroundColor(0x00000000) // Transparent
+            }
+        }
+
+        // Clean up test on dialog dismiss
+        dialog.setOnDismissListener {
+            if (isTestActive) {
+                testWakeWordService?.stopTestMode()
+                testWakeWordService?.destroy()
+                testWakeWordService = null
+            }
+        }
+    }
+
     private fun showSuccessDialog(message: String) {
         AlertDialog.Builder(this)
             .setTitle("Success")
@@ -396,7 +671,10 @@ sealed class SettingsState {
         val isReadOnly: Boolean,
         val geminiApiKey: String,
         val conversationService: String,
-        val canChooseService: Boolean
+        val canChooseService: Boolean,
+        val wakeWordEnabled: Boolean,
+        val wakeWordDetails: String,
+        val wakeWordThreshold: Float
     ) : SettingsState()
     object TestingConnection : SettingsState()
     data class ConnectionSuccess(val message: String) : SettingsState()

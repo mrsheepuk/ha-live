@@ -4,11 +4,15 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import java.io.File
+import uk.co.mrsheep.halive.core.ExecutionMode
+import uk.co.mrsheep.halive.core.OptimizationLevel
+import uk.co.mrsheep.halive.core.WakeWordSettings
 
 class OwwModel(
     melSpectrogramFile: File,
     embeddingFile: File,
-    wakeWordFile: File
+    wakeWordFile: File,
+    settings: WakeWordSettings
 ) : AutoCloseable {
     private val ortEnvironment: OrtEnvironment = OrtEnvironment.getEnvironment()
 
@@ -24,20 +28,20 @@ class OwwModel(
 
     init {
         melSession = try {
-            loadModel(melSpectrogramFile)
+            loadModel(melSpectrogramFile, settings)
         } catch (t: Throwable) {
             throw t
         }
 
         embSession = try {
-            loadModel(embeddingFile)
+            loadModel(embeddingFile, settings)
         } catch (t: Throwable) {
             melSession.close()
             throw t
         }
 
         wakeSession = try {
-            loadModel(wakeWordFile)
+            loadModel(wakeWordFile, settings)
         } catch (t: Throwable) {
             melSession.close()
             embSession.close()
@@ -164,19 +168,18 @@ class OwwModel(
         // wake model shape is [1,16,96] -> [1,1]
         const val WAKE_INPUT_COUNT = 16 // hardcoded in the model
 
-        private fun loadModel(modelFile: File): OrtSession {
+        private fun loadModel(modelFile: File, settings: WakeWordSettings): OrtSession {
             try {
-                // Create ONNX Runtime session with optimizations for battery efficiency
+                // Create ONNX Runtime session with optimizations configured via settings
                 val sessionOptions = OrtSession.SessionOptions().apply {
-                    // Enable basic graph optimizations (combines operations, constant folding)
-                    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
+                    // Set optimization level from settings
+                    setOptimizationLevel(settings.optimizationLevel.toOrtOptLevel())
 
-                    // Sequential execution uses less CPU than parallel for small models
-                    setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL)
+                    // Set execution mode from settings
+                    setExecutionMode(settings.executionMode.toOrtExecutionMode())
 
-                    // Limit to single thread to reduce power consumption
-                    // Wake word detection doesn't benefit much from multi-threading
-                    setIntraOpNumThreads(1)
+                    // Set thread count from settings
+                    setIntraOpNumThreads(settings.threadCount)
                 }
                 return OrtEnvironment.getEnvironment().createSession(modelFile.absolutePath, sessionOptions)
             } catch (t: Throwable) {

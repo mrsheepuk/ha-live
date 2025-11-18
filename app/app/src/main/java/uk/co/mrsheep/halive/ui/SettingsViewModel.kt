@@ -10,6 +10,10 @@ import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ConversationServicePreference
+import uk.co.mrsheep.halive.core.WakeWordConfig
+import uk.co.mrsheep.halive.core.WakeWordSettings
+import uk.co.mrsheep.halive.core.ExecutionMode
+import uk.co.mrsheep.halive.core.OptimizationLevel
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +23,7 @@ import kotlin.system.exitProcess
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _settingsState = MutableStateFlow<SettingsState>(
-        SettingsState.Loaded("", "", "", 0, false, "", "", false)
+        SettingsState.Loaded("", "", "", 0, false, "", "", false, false, "", 0.5f)
     )
     val settingsState: StateFlow<SettingsState> = _settingsState
 
@@ -42,6 +46,24 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 ConversationServicePreference.PreferredService.FIREBASE -> "Firebase SDK"
             }
 
+            val wakeWordSettings = WakeWordConfig.getSettings(getApplication())
+            val executionModeDisplay = when (wakeWordSettings.executionMode) {
+                ExecutionMode.SEQUENTIAL -> "Sequential"
+                ExecutionMode.PARALLEL -> "Parallel"
+            }
+            val optimizationLevelDisplay = when (wakeWordSettings.optimizationLevel) {
+                OptimizationLevel.NO_OPT -> "None"
+                OptimizationLevel.BASIC_OPT -> "Basic"
+                OptimizationLevel.EXTENDED_OPT -> "Extended"
+                OptimizationLevel.ALL_OPT -> "All"
+            }
+            val wakeWordDetails = "Threshold: %.2f | Threads: %d | %s | %s".format(
+                wakeWordSettings.threshold,
+                wakeWordSettings.threadCount,
+                executionModeDisplay,
+                optimizationLevelDisplay
+            )
+
             _settingsState.value = SettingsState.Loaded(
                 haUrl = haUrl,
                 haToken = haToken,
@@ -50,7 +72,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 isReadOnly = isChatActive,
                 geminiApiKey = geminiKey,
                 conversationService = serviceDisplayName,
-                canChooseService = canChooseService
+                canChooseService = canChooseService,
+                wakeWordEnabled = wakeWordSettings.enabled,
+                wakeWordDetails = wakeWordDetails,
+                wakeWordThreshold = wakeWordSettings.threshold
             )
         }
     }
@@ -149,6 +174,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 loadSettings()
             } catch (e: Exception) {
                 _settingsState.value = SettingsState.ConnectionFailed("Failed to switch service: ${e.message}")
+                loadSettings()
+            }
+        }
+    }
+
+    fun saveWakeWordSettings(settings: WakeWordSettings) {
+        viewModelScope.launch {
+            try {
+                WakeWordConfig.saveSettings(getApplication(), settings)
+                loadSettings()
+            } catch (e: Exception) {
+                _settingsState.value = SettingsState.ConnectionFailed("Failed to save wake word settings: ${e.message}")
                 loadSettings()
             }
         }
