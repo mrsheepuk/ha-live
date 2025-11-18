@@ -192,20 +192,21 @@ Living room occupied: {{ states('binary_sensor.living_room_motion') }}
 
 To change between Firebase and Direct API:
 
-1. Settings → "Conversation Provider"
-2. Select your preferred provider
-3. If switching to a provider that's not configured yet, you'll need to set it up
+1. Settings → Scroll to "Conversation Service" section
+2. If both providers are configured, you'll see a "Switch to..." button
+3. Tap to switch between providers
 
 ### Wake Word Configuration
 
-1. Settings → "Wake Word Settings"
-2. Enable/disable wake word detection
-3. Note: Models are downloaded automatically on first use (~10MB)
+1. On the main screen, look for the "Wake Word" chip/toggle
+2. Tap to enable/disable wake word detection
+3. Note: Models are bundled with the app (~10MB) and copied to device storage on first launch
 
 ### Profile Management Tips
 
-- **Export Profiles**: Long-press a profile → "Export" → Share JSON via clipboard
-- **Import Profiles**: "Import Profile" → Paste JSON
+- **Export Single Profile**: In Manage Profiles, tap a profile's menu → "Export" → Save as `.haprofile` file
+- **Export All Profiles**: In Manage Profiles, menu → "Export All Profiles" → Save as `.haprofile` file
+- **Import Profiles**: In Manage Profiles, menu → "Import Profiles" → Select `.haprofile` file
 - **Quick Switch**: Tap the dropdown on the main screen to change active profile
 - **Auto-Start**: Enable in profile settings to start conversations immediately on app launch
 
