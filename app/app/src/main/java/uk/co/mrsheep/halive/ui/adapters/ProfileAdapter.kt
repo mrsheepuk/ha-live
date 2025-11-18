@@ -77,12 +77,14 @@ class ProfileAdapter(
             defaultBadge.visibility = if (isActive) View.VISIBLE else View.GONE
             activeRadioButton.visibility = if (isActive) View.VISIBLE else View.GONE
 
-            // Apply card stroke for active profile (no background tint)
+            // Apply card stroke (always 2dp to prevent layout shift, just change color)
+            val strokeWidth = (2 * itemView.context.resources.displayMetrics.density).toInt()
+            cardView.strokeWidth = strokeWidth
+
             if (isActive) {
                 cardView.strokeColor = ContextCompat.getColor(itemView.context, R.color.active_profile_stroke)
-                cardView.strokeWidth = (2 * itemView.context.resources.displayMetrics.density).toInt()
             } else {
-                cardView.strokeWidth = 0
+                cardView.strokeColor = ContextCompat.getColor(itemView.context, R.color.divider_light)
             }
 
             // Item click to set as active
