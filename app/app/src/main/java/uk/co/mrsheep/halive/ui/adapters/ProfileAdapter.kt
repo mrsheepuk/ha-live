@@ -16,7 +16,7 @@ import uk.co.mrsheep.halive.core.Profile
  * RecyclerView adapter for displaying a list of profiles.
  *
  * Displays profile name, system prompt preview, and active profile indicators
- * (radio button, badge, background tint, and card stroke).
+ * (radio button, badge, and card stroke).
  * Provides callbacks for various profile actions.
  */
 class ProfileAdapter(
@@ -77,17 +77,11 @@ class ProfileAdapter(
             defaultBadge.visibility = if (isActive) View.VISIBLE else View.GONE
             activeRadioButton.visibility = if (isActive) View.VISIBLE else View.GONE
 
-            // Apply card styling for active profile
+            // Apply card stroke for active profile (no background tint)
             if (isActive) {
-                cardView.setCardBackgroundColor(
-                    ContextCompat.getColor(itemView.context, R.color.active_profile_bg)
-                )
                 cardView.strokeColor = ContextCompat.getColor(itemView.context, R.color.active_profile_stroke)
                 cardView.strokeWidth = (2 * itemView.context.resources.displayMetrics.density).toInt()
             } else {
-                cardView.setCardBackgroundColor(
-                    ContextCompat.getColor(itemView.context, android.R.color.white)
-                )
                 cardView.strokeWidth = 0
             }
 

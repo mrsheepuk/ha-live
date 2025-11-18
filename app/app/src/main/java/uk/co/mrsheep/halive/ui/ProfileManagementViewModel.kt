@@ -57,7 +57,12 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
         viewModelScope.launch {
             try {
                 ProfileManager.setActiveProfile(profileId)
-                // ProfileManager will emit updated list via StateFlow
+
+                // Manually refresh state since setActiveProfile doesn't trigger StateFlow emission
+                val currentState = _state.value
+                if (currentState is ProfileManagementState.Loaded) {
+                    _state.value = currentState.copy(activeProfileId = profileId)
+                }
             } catch (e: Exception) {
                 _state.value = ProfileManagementState.Error(
                     e.message ?: "Failed to set active profile"
