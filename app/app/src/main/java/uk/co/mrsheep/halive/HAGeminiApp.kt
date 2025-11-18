@@ -23,6 +23,9 @@ class HAGeminiApp : Application() {
             // Initialize crash logger FIRST to catch any initialization crashes
             CrashLogger.initialize(this)
 
+            // Clear old crash logs on successful startup (they've already been seen/fixed)
+            CrashLogger.clearLog(this)
+
             // Try to initialize Firebase on launch
             FirebaseConfig.initializeFirebase(this)
 
