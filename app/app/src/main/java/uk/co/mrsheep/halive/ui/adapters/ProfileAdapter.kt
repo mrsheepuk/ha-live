@@ -4,8 +4,9 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
-import android.widget.ImageView
+import android.widget.ImageButton
 import android.widget.TextView
+import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
@@ -15,9 +16,9 @@ import uk.co.mrsheep.halive.core.Profile
 /**
  * RecyclerView adapter for displaying a list of profiles.
  *
- * Displays profile name, system prompt preview, and active profile indicators
- * (radio button, badge, and card stroke).
- * Provides callbacks for various profile actions.
+ * Displays profile name and active profile indicators (badge and card stroke).
+ * Primary action (Edit) is visible; secondary actions (Duplicate/Export/Delete)
+ * are in an overflow menu. Provides callbacks for various profile actions.
  */
 class ProfileAdapter(
     private val onItemClick: (Profile) -> Unit,
@@ -57,25 +58,19 @@ class ProfileAdapter(
      */
     inner class ProfileViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val profileNameText: TextView = itemView.findViewById(R.id.profileNameText)
-        private val promptPreviewText: TextView = itemView.findViewById(R.id.promptPreviewText)
         private val defaultBadge: TextView = itemView.findViewById(R.id.defaultBadge)
-        private val activeRadioButton: ImageView = itemView.findViewById(R.id.activeRadioButton)
         private val editButton: Button = itemView.findViewById(R.id.editButton)
-        private val duplicateButton: Button = itemView.findViewById(R.id.duplicateButton)
-        private val exportButton: Button = itemView.findViewById(R.id.exportButton)
-        private val deleteButton: Button = itemView.findViewById(R.id.deleteButton)
+        private val overflowButton: ImageButton = itemView.findViewById(R.id.overflowButton)
         private val cardView: MaterialCardView = itemView as MaterialCardView
 
         fun bind(profile: Profile) {
             profileNameText.text = profile.name
-            promptPreviewText.text = profile.getCombinedPrompt()
 
             // Check if this profile is active
             val isActive = profile.id == activeProfileId
 
-            // Show/hide active badge and radio button
+            // Show/hide active badge
             defaultBadge.visibility = if (isActive) View.VISIBLE else View.GONE
-            activeRadioButton.visibility = if (isActive) View.VISIBLE else View.GONE
 
             // Apply card stroke (always 2dp to prevent layout shift, just change color)
             val strokeWidth = (2 * itemView.context.resources.displayMetrics.density).toInt()
@@ -92,22 +87,40 @@ class ProfileAdapter(
                 onItemClick(profile)
             }
 
-            // Action button callbacks
+            // Edit button (primary action)
             editButton.setOnClickListener {
                 onEdit(profile)
             }
 
-            duplicateButton.setOnClickListener {
-                onDuplicate(profile)
+            // Overflow menu (secondary actions)
+            overflowButton.setOnClickListener { view ->
+                showOverflowMenu(view, profile)
+            }
+        }
+
+        private fun showOverflowMenu(view: View, profile: Profile) {
+            val popup = PopupMenu(view.context, view)
+            popup.menuInflater.inflate(R.menu.profile_overflow_menu, popup.menu)
+
+            popup.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_duplicate -> {
+                        onDuplicate(profile)
+                        true
+                    }
+                    R.id.action_export -> {
+                        onExport(profile)
+                        true
+                    }
+                    R.id.action_delete -> {
+                        onDelete(profile)
+                        true
+                    }
+                    else -> false
+                }
             }
 
-            exportButton.setOnClickListener {
-                onExport(profile)
-            }
-
-            deleteButton.setOnClickListener {
-                onDelete(profile)
-            }
+            popup.show()
         }
     }
 }

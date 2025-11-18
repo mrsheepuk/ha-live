@@ -14,24 +14,12 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- Profile Name -->
+        <!-- Profile Name and Badge -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="8dp">
-
-            <!-- Radio button indicator for active profile -->
-            <ImageView
-                android:id="@+id/activeRadioButton"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_marginEnd="12dp"
-                android:layout_gravity="center_vertical"
-                android:src="@drawable/ic_radio_checked"
-                android:contentDescription="@string/active_profile_indicator"
-                android:visibility="gone"
-                android:tint="?attr/colorPrimary" />
+            android:layout_marginBottom="12dp">
 
             <TextView
                 android:id="@+id/profileNameText"
@@ -63,18 +51,6 @@
 
         </LinearLayout>
 
-        <!-- System Prompt Preview -->
-        <TextView
-            android:id="@+id/promptPreviewText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="System prompt preview..."
-            android:textSize="14sp"
-            android:textColor="@color/text_secondary_light"
-            android:maxLines="2"
-            android:ellipsize="end"
-            android:layout_marginBottom="12dp" />
-
         <!-- Action Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -87,35 +63,18 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/profile_edit"
-                android:textSize="12sp"
+                android:textSize="14sp"
                 style="?attr/materialButtonOutlinedStyle"
-                android:layout_marginEnd="4dp" />
+                android:layout_marginEnd="8dp" />
 
-            <Button
-                android:id="@+id/duplicateButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/profile_duplicate"
-                android:textSize="12sp"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_marginEnd="4dp" />
-
-            <Button
-                android:id="@+id/exportButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/profile_export"
-                android:textSize="12sp"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_marginEnd="4dp" />
-
-            <Button
-                android:id="@+id/deleteButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/profile_delete"
-                android:textSize="12sp"
-                style="?attr/materialButtonOutlinedStyle" />
+            <ImageButton
+                android:id="@+id/overflowButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_more_vert"
+                android:contentDescription="More options"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="?attr/colorOnSurface" />
 
         </LinearLayout>
 
