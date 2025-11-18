@@ -69,15 +69,15 @@ class ProfileAdapter(
             // Check if this profile is active
             val isActive = profile.id == activeProfileId
 
-            // Show/hide active badge
-            defaultBadge.visibility = if (isActive) View.VISIBLE else View.GONE
+            // Show/hide active badge (use INVISIBLE to prevent layout shift)
+            defaultBadge.visibility = if (isActive) View.VISIBLE else View.INVISIBLE
 
             // Apply card stroke (always 2dp to prevent layout shift, just change color)
             val strokeWidth = (2 * itemView.context.resources.displayMetrics.density).toInt()
             cardView.strokeWidth = strokeWidth
 
             if (isActive) {
-                cardView.strokeColor = ContextCompat.getColor(itemView.context, R.color.active_profile_stroke)
+                cardView.strokeColor = ContextCompat.getColor(itemView.context, R.color.teal_primary)
             } else {
                 cardView.strokeColor = ContextCompat.getColor(itemView.context, R.color.divider_light)
             }
