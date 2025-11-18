@@ -22,7 +22,9 @@ data class ExportableProfile(
     val includeLiveContext: Boolean,
     val toolFilterMode: ToolFilterMode,
     val selectedToolNames: Set<String>,
-    val autoStartChat: Boolean
+    val enableTranscription: Boolean,
+    val autoStartChat: Boolean,
+    val interruptable: Boolean
 )
 
 /**
@@ -128,7 +130,9 @@ object ProfileExportImport {
                     lastUsedAt = System.currentTimeMillis(),
                     toolFilterMode = exportable.toolFilterMode,
                     selectedToolNames = exportable.selectedToolNames,
-                    autoStartChat = exportable.autoStartChat
+                    enableTranscription = exportable.enableTranscription,
+                    autoStartChat = exportable.autoStartChat,
+                    interruptable = exportable.interruptable
                 )
 
                 importedProfiles.add(importedProfile)
@@ -163,7 +167,9 @@ object ProfileExportImport {
             includeLiveContext = profile.includeLiveContext,
             toolFilterMode = profile.toolFilterMode,
             selectedToolNames = profile.selectedToolNames,
-            autoStartChat = profile.autoStartChat
+            enableTranscription = profile.enableTranscription,
+            autoStartChat = profile.autoStartChat,
+            interruptable = profile.interruptable
         )
     }
 
