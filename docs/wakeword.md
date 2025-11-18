@@ -147,10 +147,10 @@ To replace with trained models:
 
 ```kotlin
 // build.gradle.kts
-implementation(libs.onnx.runtime)  // Version 1.17.0
+implementation(libs.onnx.runtime)  // Version 1.23.2
 
 // libs.versions.toml
-onnxRuntime = "1.17.0"
+onnxRuntime = "1.23.2"
 onnx-runtime = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxRuntime" }
 ```
 
