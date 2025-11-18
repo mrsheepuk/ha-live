@@ -504,6 +504,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         wakeWordService.stopListening()
     }
 
+    /**
+     * Reloads wake word settings from SharedPreferences.
+     * Called when returning from SettingsActivity to apply configuration changes.
+     */
+    fun reloadWakeWordSettings() {
+        wakeWordService.reloadSettings()
+    }
+
     override fun onCleared() {
         super.onCleared()
         // Only cleanup if conversationService was initialized

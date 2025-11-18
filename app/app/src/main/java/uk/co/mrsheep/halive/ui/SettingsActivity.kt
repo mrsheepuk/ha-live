@@ -4,8 +4,15 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
+import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.ScrollView
+import android.widget.SeekBar
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -16,7 +23,12 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.CrashLogger
+import uk.co.mrsheep.halive.core.ExecutionMode
 import uk.co.mrsheep.halive.core.GeminiConfig
+import uk.co.mrsheep.halive.core.OptimizationLevel
+import uk.co.mrsheep.halive.core.PerformanceMode
+import uk.co.mrsheep.halive.core.WakeWordConfig
+import uk.co.mrsheep.halive.core.WakeWordSettings
 import kotlinx.coroutines.launch
 
 class SettingsActivity : AppCompatActivity() {
@@ -45,6 +57,12 @@ class SettingsActivity : AppCompatActivity() {
     // Debug section
     private lateinit var viewCrashLogsButton: Button
     private lateinit var shareCrashLogsButton: Button
+
+    // Wake word section
+    private lateinit var wakeWordStatusText: TextView
+    private lateinit var wakeWordModeText: TextView
+    private lateinit var wakeWordThresholdText: TextView
+    private lateinit var wakeWordConfigButton: Button
 
     // Read-only overlay
     private lateinit var readOnlyOverlay: View
@@ -130,6 +148,16 @@ class SettingsActivity : AppCompatActivity() {
             shareCrashLogs()
         }
 
+        // Wake word section
+        wakeWordStatusText = findViewById(R.id.wakeWordStatusText)
+        wakeWordModeText = findViewById(R.id.wakeWordModeText)
+        wakeWordThresholdText = findViewById(R.id.wakeWordThresholdText)
+        wakeWordConfigButton = findViewById(R.id.wakeWordConfigButton)
+
+        wakeWordConfigButton.setOnClickListener {
+            showWakeWordConfigDialog()
+        }
+
         // Read-only overlay
         readOnlyOverlay = findViewById(R.id.readOnlyOverlay)
         readOnlyMessage = findViewById(R.id.readOnlyMessage)
@@ -167,6 +195,12 @@ class SettingsActivity : AppCompatActivity() {
                 } else {
                     switchServiceButton.visibility = View.GONE
                 }
+
+                // Update wake word display
+                wakeWordStatusText.text = if (state.wakeWordEnabled) "Enabled" else "Disabled"
+                wakeWordModeText.text = state.wakeWordMode
+                wakeWordThresholdText.text = String.format("%.2f", state.wakeWordThreshold)
+                wakeWordConfigButton.isEnabled = !state.isReadOnly
 
                 // Enable/disable buttons based on read-only state
                 haEditButton.isEnabled = !state.isReadOnly
@@ -312,6 +346,144 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showWakeWordConfigDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_wake_word_config, null)
+
+        // Load current settings
+        val currentSettings = WakeWordConfig.getSettings(this)
+
+        // Performance mode radio buttons
+        val radioModeBatterySaver = dialogView.findViewById<RadioButton>(R.id.radioModeBatterySaver)
+        val radioModeBalanced = dialogView.findViewById<RadioButton>(R.id.radioModeBalanced)
+        val radioModePerformance = dialogView.findViewById<RadioButton>(R.id.radioModePerformance)
+
+        when (currentSettings.performanceMode) {
+            PerformanceMode.BATTERY_SAVER -> radioModeBatterySaver.isChecked = true
+            PerformanceMode.BALANCED -> radioModeBalanced.isChecked = true
+            PerformanceMode.PERFORMANCE -> radioModePerformance.isChecked = true
+        }
+
+        // Threshold seekbar
+        val thresholdSeekBar = dialogView.findViewById<SeekBar>(R.id.thresholdSeekBar)
+        val thresholdValue = dialogView.findViewById<TextView>(R.id.thresholdValue)
+
+        // Convert 0.3-0.8 range to 0-100 seekbar
+        val thresholdToProgress = { threshold: Float -> ((threshold - 0.3f) / 0.5f * 100f).toInt() }
+        val progressToThreshold = { progress: Int -> 0.3f + (progress / 100f) * 0.5f }
+
+        thresholdSeekBar.progress = thresholdToProgress(currentSettings.threshold)
+        thresholdValue.text = String.format("%.2f", currentSettings.threshold)
+
+        thresholdSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                val threshold = progressToThreshold(progress)
+                thresholdValue.text = String.format("%.2f", threshold)
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        // Advanced settings toggle
+        val advancedCheckbox = dialogView.findViewById<CheckBox>(R.id.advancedCheckbox)
+        val advancedSettingsLayout = dialogView.findViewById<LinearLayout>(R.id.advancedSettingsLayout)
+
+        advancedCheckbox.isChecked = currentSettings.useAdvancedSettings
+        advancedSettingsLayout.visibility = if (currentSettings.useAdvancedSettings) View.VISIBLE else View.GONE
+
+        advancedCheckbox.setOnCheckedChangeListener { _, isChecked ->
+            advancedSettingsLayout.visibility = if (isChecked) View.VISIBLE else View.GONE
+        }
+
+        // Thread count spinner
+        val threadCountSpinner = dialogView.findViewById<Spinner>(R.id.threadCountSpinner)
+        val threadOptions = listOf("1", "2", "4", "8")
+        threadCountSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, threadOptions).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        val currentThreadCount = currentSettings.advancedThreadCount ?: currentSettings.performanceMode.getThreadCount()
+        threadCountSpinner.setSelection(threadOptions.indexOf(currentThreadCount.toString()).coerceAtLeast(0))
+
+        // Execution mode radio buttons
+        val radioExecutionSequential = dialogView.findViewById<RadioButton>(R.id.radioExecutionSequential)
+        val radioExecutionParallel = dialogView.findViewById<RadioButton>(R.id.radioExecutionParallel)
+        val currentExecutionMode = currentSettings.advancedExecutionMode ?: currentSettings.performanceMode.getExecutionMode()
+        when (currentExecutionMode) {
+            ExecutionMode.SEQUENTIAL -> radioExecutionSequential.isChecked = true
+            ExecutionMode.PARALLEL -> radioExecutionParallel.isChecked = true
+        }
+
+        // Optimization level radio buttons
+        val radioOptNone = dialogView.findViewById<RadioButton>(R.id.radioOptNone)
+        val radioOptBasic = dialogView.findViewById<RadioButton>(R.id.radioOptBasic)
+        val radioOptExtended = dialogView.findViewById<RadioButton>(R.id.radioOptExtended)
+        val radioOptAll = dialogView.findViewById<RadioButton>(R.id.radioOptAll)
+        val currentOptLevel = currentSettings.advancedOptimizationLevel ?: currentSettings.performanceMode.getOptimizationLevel()
+        when (currentOptLevel) {
+            OptimizationLevel.NO_OPT -> radioOptNone.isChecked = true
+            OptimizationLevel.BASIC_OPT -> radioOptBasic.isChecked = true
+            OptimizationLevel.EXTENDED_OPT -> radioOptExtended.isChecked = true
+            OptimizationLevel.ALL_OPT -> radioOptAll.isChecked = true
+        }
+
+        // Build dialog
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Configure Wake Word Detection")
+            .setView(dialogView)
+            .setPositiveButton("Save", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            saveButton.setOnClickListener {
+                // Collect settings from dialog
+                val performanceMode = when {
+                    radioModeBatterySaver.isChecked -> PerformanceMode.BATTERY_SAVER
+                    radioModePerformance.isChecked -> PerformanceMode.PERFORMANCE
+                    else -> PerformanceMode.BALANCED
+                }
+
+                val threshold = progressToThreshold(thresholdSeekBar.progress)
+                val useAdvanced = advancedCheckbox.isChecked
+
+                val advancedThreadCount = if (useAdvanced) {
+                    threadOptions[threadCountSpinner.selectedItemPosition].toInt()
+                } else null
+
+                val advancedExecutionMode = if (useAdvanced) {
+                    if (radioExecutionParallel.isChecked) ExecutionMode.PARALLEL else ExecutionMode.SEQUENTIAL
+                } else null
+
+                val advancedOptLevel = if (useAdvanced) {
+                    when {
+                        radioOptNone.isChecked -> OptimizationLevel.NO_OPT
+                        radioOptExtended.isChecked -> OptimizationLevel.EXTENDED_OPT
+                        radioOptAll.isChecked -> OptimizationLevel.ALL_OPT
+                        else -> OptimizationLevel.BASIC_OPT
+                    }
+                } else null
+
+                // Create updated settings
+                val newSettings = WakeWordSettings(
+                    enabled = currentSettings.enabled,
+                    performanceMode = performanceMode,
+                    threshold = threshold,
+                    useAdvancedSettings = useAdvanced,
+                    advancedThreadCount = advancedThreadCount,
+                    advancedExecutionMode = advancedExecutionMode,
+                    advancedOptimizationLevel = advancedOptLevel
+                )
+
+                // Save via ViewModel
+                viewModel.saveWakeWordSettings(newSettings)
+
+                dialog.dismiss()
+            }
+        }
+
+        dialog.show()
+    }
+
     private fun showSuccessDialog(message: String) {
         AlertDialog.Builder(this)
             .setTitle("Success")
@@ -396,7 +568,10 @@ sealed class SettingsState {
         val isReadOnly: Boolean,
         val geminiApiKey: String,
         val conversationService: String,
-        val canChooseService: Boolean
+        val canChooseService: Boolean,
+        val wakeWordEnabled: Boolean,
+        val wakeWordMode: String,
+        val wakeWordThreshold: Float
     ) : SettingsState()
     object TestingConnection : SettingsState()
     data class ConnectionSuccess(val message: String) : SettingsState()

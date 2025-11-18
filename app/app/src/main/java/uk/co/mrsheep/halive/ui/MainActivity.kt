@@ -88,6 +88,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Reload wake word settings in case they were changed in SettingsActivity
+        viewModel.reloadWakeWordSettings()
+
         // Only start wake word if we're in ready state AND have permission
         if (viewModel.uiState.value == UiState.ReadyToTalk) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)

@@ -10,6 +10,9 @@ import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ConversationServicePreference
+import uk.co.mrsheep.halive.core.WakeWordConfig
+import uk.co.mrsheep.halive.core.WakeWordSettings
+import uk.co.mrsheep.halive.core.PerformanceMode
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +22,7 @@ import kotlin.system.exitProcess
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _settingsState = MutableStateFlow<SettingsState>(
-        SettingsState.Loaded("", "", "", 0, false, "", "", false)
+        SettingsState.Loaded("", "", "", 0, false, "", "", false, false, "Balanced", 0.5f)
     )
     val settingsState: StateFlow<SettingsState> = _settingsState
 
@@ -42,6 +45,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 ConversationServicePreference.PreferredService.FIREBASE -> "Firebase SDK"
             }
 
+            val wakeWordSettings = WakeWordConfig.getSettings(getApplication())
+            val wakeWordModeDisplay = when (wakeWordSettings.performanceMode) {
+                PerformanceMode.BATTERY_SAVER -> "Battery Saver"
+                PerformanceMode.BALANCED -> "Balanced"
+                PerformanceMode.PERFORMANCE -> "Performance"
+            }
+
             _settingsState.value = SettingsState.Loaded(
                 haUrl = haUrl,
                 haToken = haToken,
@@ -50,7 +60,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 isReadOnly = isChatActive,
                 geminiApiKey = geminiKey,
                 conversationService = serviceDisplayName,
-                canChooseService = canChooseService
+                canChooseService = canChooseService,
+                wakeWordEnabled = wakeWordSettings.enabled,
+                wakeWordMode = wakeWordModeDisplay,
+                wakeWordThreshold = wakeWordSettings.threshold
             )
         }
     }
@@ -149,6 +162,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 loadSettings()
             } catch (e: Exception) {
                 _settingsState.value = SettingsState.ConnectionFailed("Failed to switch service: ${e.message}")
+                loadSettings()
+            }
+        }
+    }
+
+    fun saveWakeWordSettings(settings: WakeWordSettings) {
+        viewModelScope.launch {
+            try {
+                WakeWordConfig.saveSettings(getApplication(), settings)
+                loadSettings()
+            } catch (e: Exception) {
+                _settingsState.value = SettingsState.ConnectionFailed("Failed to save wake word settings: ${e.message}")
                 loadSettings()
             }
         }
