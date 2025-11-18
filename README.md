@@ -227,15 +227,33 @@ Templates are re-rendered fresh at the start of each conversation.
 In addition to Home Assistant tools, HA Live provides built-in tools:
 - **EndConversation**: Allows Gemini to gracefully end the session when appropriate
 
-### Tool Call Logging
+### Debug Logs (Tool Call Logging)
 
-When transcription is enabled, you'll see detailed logs:
+Access detailed tool execution logs via the menu → "Debug Logs":
 ```
-[12:34:56] User: "Turn on the living room lights"
-[12:34:57] Assistant: "Okay, turning on the living room lights"
-[12:34:57] Tool Call: light.turn_on(entity_id: light.living_room)
-[12:34:58] Tool Result: success
+[✓] 12:34:57 - SUCCESS
+Tool: light.turn_on
+Params: {"entity_id": "light.living_room"}
+Result: {"success": true}
+
+[✓] 12:35:02 - SUCCESS
+Tool: GetLiveContext
+Params: {}
+Result: Live Context: Living room lights are on...
 ```
+
+Shows all tool calls, system events, initialization steps, and errors.
+
+### Transcription Logs (Speech-to-Text)
+
+When enabled in profile settings, a collapsible section on the main screen shows real-time speech-to-text:
+```
+User: "Turn on the living room lights"
+Model: "Okay, turning on the living room lights"
+Model (thought): "I should use the light.turn_on service"
+```
+
+Toggle the header to expand/collapse the transcription view.
 
 ## 🏛️ Architecture
 
