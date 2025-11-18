@@ -6,8 +6,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.FirebaseConfig
+import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
+import uk.co.mrsheep.halive.core.ConversationServicePreference
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,22 +18,57 @@ import kotlinx.coroutines.launch
 
 class OnboardingViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _onboardingState = MutableStateFlow<OnboardingState>(OnboardingState.Step1Firebase)
+    private val _onboardingState = MutableStateFlow<OnboardingState>(OnboardingState.Step1ProviderSelection)
     val onboardingState: StateFlow<OnboardingState> = _onboardingState
 
     private val app = application as HAGeminiApp
 
+    private var selectedProvider: ConversationServicePreference.PreferredService? = null
     private var currentHAUrl: String = ""
     private var currentHAToken: String = ""
 
     fun startOnboarding() {
-        // Check what's already configured
         viewModelScope.launch {
-            if (FirebaseApp.getApps(getApplication()).isNotEmpty()) {
-                // Firebase already done, skip to HA
-                _onboardingState.value = OnboardingState.Step2HomeAssistant
+            // Check if ANY provider is already configured
+            val hasFirebase = FirebaseConfig.isConfigured(getApplication())
+            val hasGemini = GeminiConfig.isConfigured(getApplication())
+
+            if (hasFirebase || hasGemini) {
+                // Skip provider setup, go straight to HA
+                _onboardingState.value = OnboardingState.Step3HomeAssistant
             } else {
-                _onboardingState.value = OnboardingState.Step1Firebase
+                // New user, start with provider selection
+                _onboardingState.value = OnboardingState.Step1ProviderSelection
+            }
+        }
+    }
+
+    fun selectProvider(provider: ConversationServicePreference.PreferredService) {
+        selectedProvider = provider
+        // Save preference immediately
+        ConversationServicePreference.setPreferred(getApplication(), provider)
+        // Move to config step
+        _onboardingState.value = OnboardingState.Step2ProviderConfig
+    }
+
+    fun saveGeminiApiKey(apiKey: String) {
+        viewModelScope.launch {
+            _onboardingState.value = OnboardingState.ValidatingGeminiKey
+
+            try {
+                // Basic validation
+                if (apiKey.isBlank() || apiKey.length < 20) {
+                    _onboardingState.value = OnboardingState.GeminiKeyInvalid("Invalid API key format")
+                    return@launch
+                }
+
+                // Save to config
+                GeminiConfig.saveApiKey(getApplication(), apiKey)
+
+                // Move to HA step
+                _onboardingState.value = OnboardingState.Step3HomeAssistant
+            } catch (e: Exception) {
+                _onboardingState.value = OnboardingState.GeminiKeyInvalid(e.message ?: "Failed to save API key")
             }
         }
     }
@@ -42,13 +79,17 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
                 FirebaseConfig.saveConfigFromUri(getApplication(), uri)
 
                 if (FirebaseConfig.initializeFirebase(getApplication())) {
-                    // Success, move to step 2
-                    _onboardingState.value = OnboardingState.Step2HomeAssistant
+                    // Success, move to step 3
+                    _onboardingState.value = OnboardingState.Step3HomeAssistant
                 } else {
-                    // TODO: Show error
+                    _onboardingState.value = OnboardingState.FirebaseConfigInvalid(
+                        "Failed to initialize Firebase. Please check your google-services.json file."
+                    )
                 }
             } catch (e: Exception) {
-                // TODO: Show error
+                _onboardingState.value = OnboardingState.FirebaseConfigInvalid(
+                    e.message ?: "Invalid google-services.json file"
+                )
             }
         }
     }
@@ -96,7 +137,7 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
             ProfileManager.ensureDefaultProfileExists()
 
             // Move to final step
-            _onboardingState.value = OnboardingState.Step3Complete
+            _onboardingState.value = OnboardingState.Step4Complete
         }
     }
 
