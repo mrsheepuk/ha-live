@@ -198,9 +198,16 @@ To change between Firebase and Direct API:
 
 ### Wake Word Configuration
 
-1. On the main screen, look for the "Wake Word" chip/toggle
-2. Tap to enable/disable wake word detection
-3. Note: Models are bundled with the app (~10MB) and copied to device storage on first launch
+**Quick Toggle**: Tap the "Wake Word" chip on the main screen to enable/disable detection.
+
+**Advanced Settings** (Settings → Wake Word → "Configure"):
+- **Threshold** (0.3-0.8): Sensitivity control—lower = more sensitive, higher = fewer false positives
+- **Thread Count**: CPU threads for model execution (1, 2, 4, or 8)
+- **Execution Mode**: Sequential (lower latency) or Parallel (multi-core utilization)
+- **Optimization Level**: ONNX Runtime optimization (Basic recommended, Extended/All for maximum performance)
+- **Test Mode**: Live score display with visual threshold marker to tune sensitivity
+
+Note: Models are bundled with the app (~10MB) and copied to device storage on first launch.
 
 ### Profile Management Tips
 
