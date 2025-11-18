@@ -502,7 +502,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
 
     override fun onCleared() {
         super.onCleared()
-        conversationService.cleanup()
+        // Only cleanup if conversationService was initialized
+        if (::conversationService.isInitialized) {
+            conversationService.cleanup()
+        }
         wakeWordService.destroy()
     }
 
