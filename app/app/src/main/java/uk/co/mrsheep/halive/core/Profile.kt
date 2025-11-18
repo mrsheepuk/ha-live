@@ -35,7 +35,8 @@ data class Profile(
     val toolFilterMode: ToolFilterMode = ToolFilterMode.ALL,
     val selectedToolNames: Set<String> = emptySet(),
     val enableTranscription: Boolean = SystemPromptConfig.DEFAULT_ENABLE_TRANSCRIPTION,
-    val autoStartChat: Boolean = false
+    val autoStartChat: Boolean = false,
+    val interruptable: Boolean = SystemPromptConfig.DEFAULT_INTERRUPTABLE
 ) {
     companion object {
         /**
@@ -55,7 +56,8 @@ data class Profile(
                 toolFilterMode = ToolFilterMode.ALL,
                 selectedToolNames = emptySet(),
                 enableTranscription = SystemPromptConfig.DEFAULT_ENABLE_TRANSCRIPTION,
-                autoStartChat = false
+                autoStartChat = false,
+                interruptable = SystemPromptConfig.DEFAULT_INTERRUPTABLE
             )
         }
     }
@@ -103,6 +105,7 @@ data class Profile(
             "includeLiveContext": $includeLiveContext,
             "enableTranscription": $enableTranscription,
             "autoStartChat": $autoStartChat,
+            "interruptable": $interruptable,
             "toolFilterMode": "$toolFilterMode",
             "selectedToolNames": [$toolNamesJson]
         }

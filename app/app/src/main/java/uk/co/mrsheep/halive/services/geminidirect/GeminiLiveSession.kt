@@ -30,6 +30,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import uk.co.mrsheep.halive.services.geminidirect.protocol.AudioTranscriptionConfig
+import uk.co.mrsheep.halive.services.geminidirect.protocol.RealtimeInputConfig
 import java.util.concurrent.TimeoutException
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ClientContent
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ClientMessage
@@ -132,6 +133,7 @@ class GeminiLiveSession(
         systemPrompt: String,
         tools: List<ToolDeclaration>,
         voiceName: String,
+        interruptable: Boolean = true,
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
         onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null
     ) {
@@ -188,6 +190,11 @@ class GeminiLiveSession(
                     //proactivity = ProactivtyConfig(proactiveAudio = true),
                     inputAudioTranscription = if (onTranscription != null) AudioTranscriptionConfig() else null,
                     outputAudioTranscription = if (onTranscription != null) AudioTranscriptionConfig() else null,
+                    realtimeInputConfig = if (!interruptable) {
+                        RealtimeInputConfig(activityHandling = "NO_INTERRUPTION")
+                    } else {
+                        null
+                    }
                 )
             )
 

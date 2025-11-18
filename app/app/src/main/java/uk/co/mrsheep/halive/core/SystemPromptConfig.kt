@@ -45,6 +45,7 @@ You are currently speaking with User.
     const val DEFAULT_VOICE = "Aoede"
     const val DEFAULT_INCLUDE_LIVE_CONTEXT = true
     const val DEFAULT_ENABLE_TRANSCRIPTION = false
+    const val DEFAULT_INTERRUPTABLE = true
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

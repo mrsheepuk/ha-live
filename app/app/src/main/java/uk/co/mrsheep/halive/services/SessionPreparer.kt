@@ -127,7 +127,8 @@ class SessionPreparer(
                 model,
                 voice,
                 toolExecutor,
-                transcriptor
+                transcriptor,
+                interruptable = profile?.interruptable ?: true
             )
 
         } catch (e: Exception) {

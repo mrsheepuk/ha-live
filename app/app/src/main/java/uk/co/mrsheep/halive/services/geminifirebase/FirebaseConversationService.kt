@@ -42,7 +42,7 @@ class FirebaseConversationService(private val context: Context) :
     private var liveSession: LiveSession? = null
     private var toolExecutor: ToolExecutor? = null
     private var transcriptor: ((String?, String?, Boolean) -> Unit)? = null
-
+    private var interruptable: Boolean = true
 
     private val json = Json {
         encodeDefaults = true
@@ -72,7 +72,8 @@ class FirebaseConversationService(private val context: Context) :
         modelName: String,
         voiceName: String,
         toolExecutor: ToolExecutor,
-        transcriptor: ((String?, String?, Boolean) -> Unit)?
+        transcriptor: ((String?, String?, Boolean) -> Unit)?,
+        interruptable: Boolean
     ) {
         try {
             // Transform MCP tools to Firebase format
@@ -80,6 +81,7 @@ class FirebaseConversationService(private val context: Context) :
 
             this.toolExecutor = toolExecutor
             this.transcriptor = transcriptor
+            this.interruptable = interruptable
 
             // Initialize the generative model
             generativeModel = Firebase.ai.liveModel(
@@ -144,7 +146,7 @@ class FirebaseConversationService(private val context: Context) :
             liveSession?.startAudioConversation(
                 functionCallHandler = functionCallHandlerAdapter,
                 transcriptHandler = transcriptionHandlerAdapter,
-                enableInterruptions = true
+                enableInterruptions = interruptable
             )
 
             Log.d(TAG, "FirebaseConversationService session started successfully")

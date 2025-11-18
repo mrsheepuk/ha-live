@@ -112,6 +112,23 @@
             android:checked="false"
             android:layout_marginBottom="16dp" />
 
+        <!-- Allow Interruptions Switch -->
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/interruptableSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:text="Allow Interruptions"
+            android:checked="true" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="Enable 'barge in' - interrupt the model while it's speaking"
+            android:textAppearance="?attr/textAppearanceCaption"
+            android:textColor="?android:attr/textColorSecondary" />
+
         <!-- System Prompt Expansion Panel -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/systemPromptCard"

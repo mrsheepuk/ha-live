@@ -23,6 +23,12 @@ data class ClientMessage(
 // --- SetupMessage (first message after connection) ---
 
 @Serializable
+data class RealtimeInputConfig(
+    @SerialName("activity_handling")
+    val activityHandling: String? = null
+)
+
+@Serializable
 data class SetupMessage(
     val model: String,
     @SerialName("generation_config")
@@ -36,6 +42,8 @@ data class SetupMessage(
     val inputAudioTranscription: AudioTranscriptionConfig? = null,
     @SerialName("output_audio_transcription")
     val outputAudioTranscription: AudioTranscriptionConfig? = null,
+    @SerialName("realtime_input_config")
+    val realtimeInputConfig: RealtimeInputConfig? = null,
 )
 
 @Serializable
