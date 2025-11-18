@@ -15,14 +15,12 @@ import uk.co.mrsheep.halive.services.wake.OwwModel
 import java.io.File
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
-import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
 
 /**
- * Manages wake word detection using AudioRecord and TensorFlow Lite inference.
+ * Manages wake word detection using AudioRecord and ONNX Runtime inference.
  *
  * Captures 16kHz mono PCM audio, processes it in 1152-sample chunks, and runs
- * TFLite inference via OwwModel. Triggers callback when detection confidence
+ * ONNX Runtime inference via OwwModel. Triggers callback when detection confidence
  * exceeds the configured threshold.
  *
  * @param context Application context for accessing files and audio resources
@@ -39,38 +37,34 @@ class WakeWordService(
         private const val WAKE_WORD_THRESHOLD = 0.5f
     }
 
-    private var owwModel: OwwModel? = null
     private var audioRecord: AudioRecord? = null
     private var recordingJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isListening = false
+    private var isModelInitialized = false
 
     /**
-     * Initializes the wake word model from the application's files directory.
-     * The three model files should be copied by AssetCopyUtil.
-     *
-     * @return true if model initialized successfully, false otherwise
+     * Lazy initialization of wake word models.
+     * Models are loaded once and reused across multiple listening sessions for battery efficiency.
+     * Only closed when the service is destroyed.
      */
-    private fun initializeModel(): Boolean {
-        return try {
-            val melModel = loadModelFile("oww_mel.tflite")
-            val embModel = loadModelFile("oww_emb.tflite")
-            val wakeModel = loadModelFile( "oww_wake.tflite")
+    private val owwModel: OwwModel by lazy {
+        val melModel = loadModelFile("melspectrogram.onnx")
+        val embModel = loadModelFile("embedding_model.onnx")
+        val wakeModel = loadModelFile("ok_computer.onnx")
 
-//            if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
-//                Log.e(TAG, "One or more model files not found in ${context.filesDir}")
-//                Log.e(TAG, "  oww_mel.tflite: ${melModel.exists()}")
-//                Log.e(TAG, "  oww_emb.tflite: ${embModel.exists()}")
-//                Log.e(TAG, "  oww_wake.tflite: ${wakeModel.exists()}")
-//                return false
-//            }
+        if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
+            Log.e(TAG, "One or more model files not found in ${context.filesDir}")
+            Log.e(TAG, "  melspectrogram.onnx: ${melModel.exists()}")
+            Log.e(TAG, "  embedding_model.onnx: ${embModel.exists()}")
+            Log.e(TAG, "  ok_computer.onnx: ${wakeModel.exists()}")
+            throw IllegalStateException("Wake word model files not found")
+        }
 
-            owwModel = OwwModel(melModel, embModel, wakeModel)
-            Log.d(TAG, "Wake word model initialized successfully")
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Error initializing wake word model: ${e.message}", e)
-            false
+        Log.d(TAG, "Initializing wake word models (once per service lifetime)")
+        isModelInitialized = true
+        OwwModel(melModel, embModel, wakeModel).also {
+            Log.d(TAG, "Wake word models initialized successfully")
         }
     }
 
@@ -92,8 +86,13 @@ class WakeWordService(
             return
         }
 
-        if (!initializeModel()) {
-            Log.e(TAG, "Failed to initialize wake word model, cannot start listening")
+        // Verify models can be loaded (lazy init happens here on first access)
+        try {
+            // Touch the lazy property to trigger initialization if needed
+            owwModel.resetAccumulators()
+            Log.d(TAG, "Wake word models ready")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize wake word models: ${e.message}", e)
             return
         }
 
@@ -154,46 +153,50 @@ class WakeWordService(
                                 floatBuffer[i] = audioBuffer[i] / 32768.0f
                             }
 
-                            // Run TFLite inference on audio chunk
-                            val model = owwModel
-                            if (model != null) {
-                                try {
-                                    val detectionScore = model.processFrame(floatBuffer)
+                            // Run ONNX Runtime inference on audio chunk
+                            try {
+                                val detectionScore = owwModel.processFrame(floatBuffer)
 
-                                    if (detectionScore > WAKE_WORD_THRESHOLD) {
-                                        Log.i(
-                                            TAG,
-                                            "Wake word detected! Score: %.4f (threshold: $WAKE_WORD_THRESHOLD)".format(
-                                                detectionScore
-                                            )
+                                if (detectionScore > WAKE_WORD_THRESHOLD) {
+                                    Log.i(
+                                        TAG,
+                                        "Wake word detected! Score: %.4f (threshold: $WAKE_WORD_THRESHOLD)".format(
+                                            detectionScore
                                         )
-                                        isListening = false
+                                    )
+                                    isListening = false
 
-                                        // Trigger callback on main dispatcher
-                                        withContext(Dispatchers.Main) {
-                                            onWakeWordDetected()
-                                        }
+                                    // Clean up AudioRecord before triggering callback
+                                    // This releases the microphone for the chat session
+                                    cleanup()
 
-                                        // Exit audio processing loop
-                                        return@launch
+                                    // Trigger callback on main dispatcher
+                                    withContext(Dispatchers.Main) {
+                                        onWakeWordDetected()
                                     }
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Error running TFLite inference: ${e.message}", e)
+
+                                    // Exit audio processing loop
+                                    return@launch
                                 }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error running ONNX Runtime inference: ${e.message}", e)
                             }
                         } else if (samplesRead < 0) {
                             Log.e(TAG, "AudioRecord read error: $samplesRead")
                             isListening = false
+                            cleanup()
                             return@launch
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error in audio processing loop: ${e.message}", e)
                         isListening = false
+                        cleanup()
                         return@launch
                     }
                 }
 
                 Log.d(TAG, "Audio processing loop completed")
+                cleanup()
             }
         } catch (s: SecurityException) {
             Log.e(TAG, "No permission to listen (should be handled above): ${s.message}")
@@ -228,10 +231,10 @@ class WakeWordService(
     }
 
     /**
-     * Cleans up audio and model resources.
+     * Cleans up audio resources.
      *
-     * Safely stops and releases AudioRecord, and closes the OwwModel.
-     * Exceptions during cleanup are logged but do not throw.
+     * Safely stops and releases AudioRecord. Note: Model is NOT closed here
+     * for battery efficiency - it's reused across listening sessions.
      */
     private fun cleanup() {
         try {
@@ -247,14 +250,6 @@ class WakeWordService(
         } catch (e: Exception) {
             Log.e(TAG, "Error releasing AudioRecord: ${e.message}", e)
         }
-
-        try {
-            owwModel?.close()
-            Log.d(TAG, "OwwModel closed")
-            owwModel = null
-        } catch (e: Exception) {
-            Log.e(TAG, "Error closing OwwModel: ${e.message}", e)
-        }
     }
 
     /**
@@ -265,19 +260,29 @@ class WakeWordService(
      */
     fun destroy() {
         stopListening()
+
+        // Close ONNX models only on destroy (not after each listening session)
+        if (isModelInitialized) {
+            try {
+                owwModel.close()
+                Log.d(TAG, "OwwModel closed")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error closing OwwModel: ${e.message}", e)
+            }
+        }
+
         scope.cancel()
         Log.d(TAG, "WakeWordService destroyed")
     }
 
     /**
-     * Loads a model file from the assets folder into a memory-mapped ByteBuffer.
+     * Returns a File object pointing to a model file in the application's files directory.
+     * The file should be copied there by AssetCopyUtil during app startup.
+     *
+     * @param filename Name of the model file (e.g., "melspectrogram.onnx")
+     * @return File object pointing to the model in filesDir
      */
-    private fun loadModelFile(filename: String): ByteBuffer {
-        val fileDescriptor = context.assets.openFd(filename)
-        val inputStream = fileDescriptor.createInputStream()
-        val fileChannel = inputStream.channel
-        val startOffset = fileDescriptor.startOffset
-        val declaredLength = fileDescriptor.declaredLength
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+    private fun loadModelFile(filename: String): File {
+        return File(context.filesDir, filename)
     }
 }

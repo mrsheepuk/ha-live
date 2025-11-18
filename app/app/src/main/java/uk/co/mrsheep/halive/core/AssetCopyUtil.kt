@@ -7,7 +7,7 @@ import java.io.FileOutputStream
 
 object AssetCopyUtil {
     private const val TAG = "AssetCopyUtil"
-    val MODEL_FILES = listOf("oww_mel.tflite", "oww_emb.tflite", "oww_wake.tflite")
+    val MODEL_FILES = listOf("melspectrogram.onnx", "embedding_model.onnx", "ok_computer.onnx")
 
     fun copyAssetsToFilesDir(context: Context) {
         val assetManager = context.assets
