@@ -6,6 +6,16 @@
     android:orientation="vertical"
     android:paddingBottom="16dp">
 
+    <!-- Drag Handle -->
+    <View
+        android:layout_width="32dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="12dp"
+        android:background="@drawable/drag_handle_background"
+        android:alpha="0.4" />
+
     <!-- Header -->
     <TextView
         android:layout_width="match_parent"
@@ -22,8 +32,8 @@
         android:background="?attr/colorOnSurface"
         android:alpha="0.1" />
 
-    <!-- Log Content ScrollView -->
-    <ScrollView
+    <!-- Log Content NestedScrollView -->
+    <androidx.core.widget.NestedScrollView
         android:id="@+id/debugLogScrollView"
         android:layout_width="match_parent"
         android:layout_height="400dp"
@@ -38,6 +48,6 @@
             android:textSize="12sp"
             android:textColor="?attr/colorOnSurface" />
 
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>

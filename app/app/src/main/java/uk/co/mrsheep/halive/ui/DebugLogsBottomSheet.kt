@@ -4,9 +4,11 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.R
@@ -15,7 +17,7 @@ import uk.co.mrsheep.halive.core.LogEntry
 class DebugLogsBottomSheet : BottomSheetDialogFragment() {
 
     private lateinit var debugLogText: TextView
-    private lateinit var debugLogScrollView: ScrollView
+    private lateinit var debugLogScrollView: NestedScrollView
 
     companion object {
         fun newInstance(): DebugLogsBottomSheet {
@@ -37,6 +39,12 @@ class DebugLogsBottomSheet : BottomSheetDialogFragment() {
         // Find views
         debugLogText = view.findViewById(R.id.debugLogText)
         debugLogScrollView = view.findViewById(R.id.debugLogScrollView)
+
+        // Configure bottom sheet behavior for better scroll handling
+        (dialog as? BottomSheetDialog)?.behavior?.apply {
+            skipCollapsed = true
+            state = BottomSheetBehavior.STATE_EXPANDED
+        }
 
         // Get the MainActivity's viewModel
         val viewModel = (requireActivity() as MainActivity).provideViewModel()
