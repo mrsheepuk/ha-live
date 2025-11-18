@@ -305,6 +305,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Home Assistant**: For the amazing MCP server implementation
 - **Google Gemini Team**: For the Gemini Live API
 - **OpenWakeWord**: For the ONNX wake word models
+- **Claude (Sonnet 4.5)**: For the tireless implementation efforts, marshalling teams of Haiku subagents to build most of the features in this app
 - **The Home Assistant Community**: For inspiration and feedback
 
 ## 💬 Community & Support
