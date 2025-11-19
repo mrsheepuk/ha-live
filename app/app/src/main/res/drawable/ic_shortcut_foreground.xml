@@ -5,31 +5,31 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Microphone icon - centered and scaled up -->
+    <!-- Microphone icon - centered and scaled for circular icons -->
     <group
         android:translateX="54"
-        android:translateY="54">
+        android:translateY="50">
 
-        <!-- Mic capsule - scaled 1.8x -->
+        <!-- Mic capsule - scaled 1.5x -->
         <path
             android:fillColor="#FFFFFF"
-            android:pathData="M-9,-21.6 Q-14.4,-21.6 -14.4,-16.2 L-14.4,0 Q-14.4,5.4 -9,5.4 L9,5.4 Q14.4,5.4 14.4,0 L14.4,-16.2 Q14.4,-21.6 9,-21.6 Z" />
+            android:pathData="M-7.5,-18 Q-12,-18 -12,-13.5 L-12,0 Q-12,4.5 -7.5,4.5 L7.5,4.5 Q12,4.5 12,0 L12,-13.5 Q12,-18 7.5,-18 Z" />
 
-        <!-- Mic stand arc - scaled 1.8x -->
+        <!-- Mic stand arc - scaled 1.5x -->
         <path
             android:fillColor="@android:color/transparent"
-            android:strokeWidth="4.5"
+            android:strokeWidth="3.75"
             android:strokeColor="#FFFFFF"
-            android:pathData="M-18,3.6 Q-18,18 0,18 Q18,18 18,3.6" />
+            android:pathData="M-15,3 Q-15,15 0,15 Q15,15 15,3" />
 
-        <!-- Mic stand pole - scaled 1.8x -->
+        <!-- Mic stand pole - scaled 1.5x -->
         <path
             android:fillColor="#FFFFFF"
-            android:pathData="M-2.7,18 L-2.7,28.8 L2.7,28.8 L2.7,18 Z" />
+            android:pathData="M-2.25,15 L-2.25,24 L2.25,24 L2.25,15 Z" />
 
-        <!-- Mic base - scaled 1.8x -->
+        <!-- Mic base - scaled 1.5x -->
         <path
             android:fillColor="#FFFFFF"
-            android:pathData="M-10.8,28.8 L-10.8,32.4 L10.8,32.4 L10.8,28.8 Z" />
+            android:pathData="M-9,24 L-9,27 L9,27 L9,24 Z" />
     </group>
 </vector>
