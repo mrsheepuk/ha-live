@@ -44,8 +44,8 @@ object ShortcutHelper {
                 putExtra(MainActivity.PROFILE_ID, profile.id)
             }
 
-            // Create the shortcut icon using the app launcher icon
-            val icon = IconCompat.createWithResource(context, R.mipmap.ic_launcher)
+            // Create the shortcut icon using custom shortcut icon (microphone on gradient)
+            val icon = IconCompat.createWithResource(context, R.mipmap.ic_shortcut)
 
             // Build the shortcut info with the profile's name as the label
             val shortcutInfo = ShortcutInfoCompat.Builder(context, profile.id)

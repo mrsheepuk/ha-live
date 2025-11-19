@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Microphone icon - centered and scaled up -->
+    <group
+        android:translateX="54"
+        android:translateY="54">
+
+        <!-- Mic capsule - scaled 1.8x -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M-9,-21.6 Q-14.4,-21.6 -14.4,-16.2 L-14.4,0 Q-14.4,5.4 -9,5.4 L9,5.4 Q14.4,5.4 14.4,0 L14.4,-16.2 Q14.4,-21.6 9,-21.6 Z" />
+
+        <!-- Mic stand arc - scaled 1.8x -->
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeWidth="4.5"
+            android:strokeColor="#FFFFFF"
+            android:pathData="M-18,3.6 Q-18,18 0,18 Q18,18 18,3.6" />
+
+        <!-- Mic stand pole - scaled 1.8x -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M-2.7,18 L-2.7,28.8 L2.7,28.8 L2.7,18 Z" />
+
+        <!-- Mic base - scaled 1.8x -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M-10.8,28.8 L-10.8,32.4 L10.8,32.4 L10.8,28.8 Z" />
+    </group>
+</vector>
