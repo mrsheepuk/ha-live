@@ -117,7 +117,7 @@ class ConversationWidgetConfigActivity : AppCompatActivity() {
             emptyStateText.visibility = View.GONE
 
             // Submit the profiles to the adapter (no active profile highlighting needed)
-            profileAdapter.submitList(profiles, activeProfileId = null)
+            profileAdapter.submitList(profiles, newActiveProfileId = null)
         }
     }
 
