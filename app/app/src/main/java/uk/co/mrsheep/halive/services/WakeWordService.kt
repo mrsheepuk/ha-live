@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.services.wake.OwwModel
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.core.WakeWordSettings
+import uk.co.mrsheep.halive.core.WakeWordModelManager
 import java.io.File
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
@@ -65,17 +66,29 @@ class WakeWordService(
 
         val melModel = loadModelFile("melspectrogram.onnx")
         val embModel = loadModelFile("embedding_model.onnx")
-        val wakeModel = loadModelFile("ok_computer.onnx")
 
-        if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
-            Log.e(TAG, "One or more model files not found in ${context.filesDir}")
-            Log.e(TAG, "  melspectrogram.onnx: ${melModel.exists()}")
-            Log.e(TAG, "  embedding_model.onnx: ${embModel.exists()}")
-            Log.e(TAG, "  ok_computer.onnx: ${wakeModel.exists()}")
+        // Load selected wake word model from WakeWordModelManager
+        WakeWordModelManager.ensureInitialized(context)
+        val selectedModelId = WakeWordConfig.getSelectedModelId(context)
+        val selectedModel = WakeWordModelManager.getModel(context, selectedModelId)
+            ?: WakeWordModelManager.getModel(context, "ok_computer") // Fallback to built-in
+
+        if (selectedModel == null) {
+            Log.e(TAG, "No wake word models available (not even built-in)")
             throw IllegalStateException("Wake word model files not found")
         }
 
-        Log.d(TAG, "Initializing wake word models with current settings")
+        val wakeModel = File(selectedModel.filePath)
+
+        if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
+            Log.e(TAG, "One or more model files not found")
+            Log.e(TAG, "  melspectrogram.onnx: ${melModel.exists()}")
+            Log.e(TAG, "  embedding_model.onnx: ${embModel.exists()}")
+            Log.e(TAG, "  ${selectedModel.displayName}: ${wakeModel.exists()}")
+            throw IllegalStateException("Wake word model files not found")
+        }
+
+        Log.d(TAG, "Initializing wake word models with current settings (model: ${selectedModel.id})")
         return OwwModel(melModel, embModel, wakeModel, currentSettings).also {
             owwModel = it
             Log.d(TAG, "Wake word models initialized successfully")
