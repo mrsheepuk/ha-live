@@ -35,6 +35,10 @@ import uk.co.mrsheep.halive.core.TranscriptionSpeaker
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        const val AUTO_START_CONVERSATION = "auto_start_conversation"
+        const val PROFILE_ID = "profile_id"
+    }
 
     private val viewModel: MainViewModel by viewModels()
 
@@ -178,6 +182,17 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+        // Handle widget auto-start intent
+        handleWidgetAutoStartIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Update the activity's intent to point to the new one
+        setIntent(intent)
+        // Handle widget auto-start intent
+        handleWidgetAutoStartIntent(intent)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -366,6 +381,49 @@ class MainActivity : AppCompatActivity() {
         // Ensure we're in the ready state
         if (viewModel.uiState.value != UiState.ReadyToTalk) {
             return
+        }
+
+        // Check microphone permission
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            // Small delay to ensure UI is fully settled
+            lifecycleScope.launch {
+                kotlinx.coroutines.delay(300)
+                viewModel.onChatButtonClicked()
+            }
+        } else {
+            // Don't request permission automatically - just inform user
+            Toast.makeText(
+                this,
+                "Auto-start requires microphone permission. Please grant permission and restart the app.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    private fun handleWidgetAutoStartIntent(intent: Intent) {
+        // Check if this intent has the auto-start conversation extra
+        if (!intent.getBooleanExtra(AUTO_START_CONVERSATION, false)) {
+            return
+        }
+
+        // If session is already active, don't interrupt it - just bring to foreground
+        if (viewModel.isSessionActive()) {
+            return
+        }
+
+        // Ensure we're in the ready state
+        if (viewModel.uiState.value != UiState.ReadyToTalk) {
+            return
+        }
+
+        // Handle profile switching if PROFILE_ID is provided
+        val profileId = intent.getStringExtra(PROFILE_ID)
+        if (!profileId.isNullOrEmpty()) {
+            viewModel.switchProfile(profileId)
         }
 
         // Check microphone permission

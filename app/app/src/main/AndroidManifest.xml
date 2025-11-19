@@ -19,7 +19,8 @@
 
         <activity
             android:name=".ui.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -45,6 +46,27 @@
             android:exported="false"
             android:parentActivityName=".ui.ProfileManagementActivity"
             android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.widgets.ConversationWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.MyApplication">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Widget receiver -->
+        <receiver
+            android:name=".ui.widgets.ConversationWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/conversation_widget_info" />
+        </receiver>
 
         <!-- FileProvider for sharing crash logs -->
         <provider

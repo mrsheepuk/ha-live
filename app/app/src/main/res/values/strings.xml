@@ -78,4 +78,10 @@
     <string name="import_error">Failed to import: %s</string>
     <string name="import_error_invalid_format">Invalid profile file format</string>
     <string name="import_error_read_file">Could not read file</string>
+
+    <!-- Widget -->
+    <string name="conversation_widget_description">Quick-start conversation with Home Assistant</string>
+    <string name="profile_not_found">Profile Not Found</string>
+    <string name="widget_config_title">Select Profile for Widget</string>
+    <string name="widget_config_no_profiles">No profiles available. Create a profile first.</string>
 </resources>
