@@ -78,7 +78,8 @@ class ConversationWidgetProvider : AppWidgetProvider() {
                 context,
                 appWidgetId,
                 intent,
-                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
+                false // isMutable = false (immutable pending intent)
             )
 
             // Apply the pending intent to the root container
