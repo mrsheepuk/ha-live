@@ -77,6 +77,10 @@ class SettingsActivity : AppCompatActivity() {
     // Test mode service
     private var testWakeWordService: WakeWordService? = null
 
+    // Wake word config dialog references (for refreshing after import)
+    private var currentConfigDialog: AlertDialog? = null
+    private var currentModelSpinner: Spinner? = null
+
     // Read-only overlay
     private lateinit var readOnlyOverlay: View
     private lateinit var readOnlyMessage: TextView
@@ -407,6 +411,9 @@ class SettingsActivity : AppCompatActivity() {
         val importButton = dialogView.findViewById<Button>(R.id.importModelButton)
         val deleteButton = dialogView.findViewById<Button>(R.id.deleteModelButton)
 
+        // Store spinner reference for refreshing after import
+        currentModelSpinner = modelSpinner
+
         // Load all available models and setup spinner
         refreshModelSpinner(modelSpinner, currentModelId)
 
@@ -437,10 +444,13 @@ class SettingsActivity : AppCompatActivity() {
                 showDeleteModelConfirmation(selectedModel) { confirmed ->
                     if (confirmed) {
                         // If deleting the currently selected model, switch to built-in
-                        if (selectedModelId == currentModelId) {
+                        val needsReload = selectedModelId == currentModelId
+                        if (needsReload) {
                             WakeWordConfig.setSelectedModelId(this@SettingsActivity, "ok_computer")
+                            // Reload settings to update main UI
+                            viewModel.loadSettings()
                         }
-                        refreshModelSpinner(modelSpinner, selectedModelId)
+                        refreshModelSpinner(modelSpinner, if (needsReload) "ok_computer" else selectedModelId)
                     }
                 }
             }
@@ -476,6 +486,9 @@ class SettingsActivity : AppCompatActivity() {
             .setNegativeButton("Cancel", null)
             .create()
 
+        // Store dialog reference
+        currentConfigDialog = dialog
+
         dialog.setOnShowListener {
             val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             saveButton.setOnClickListener {
@@ -507,8 +520,18 @@ class SettingsActivity : AppCompatActivity() {
                 WakeWordConfig.setSelectedModelId(this@SettingsActivity, selectedModelId)
 
                 viewModel.saveWakeWordSettings(newSettings)
+
+                // Reload settings to update main UI with new model selection
+                viewModel.loadSettings()
+
                 dialog.dismiss()
             }
+        }
+
+        // Clear references when dialog is dismissed
+        dialog.setOnDismissListener {
+            currentConfigDialog = null
+            currentModelSpinner = null
         }
 
         dialog.show()
@@ -771,20 +794,26 @@ class SettingsActivity : AppCompatActivity() {
                                     "Model imported successfully: ${importedModel.displayName}",
                                     Toast.LENGTH_SHORT
                                 ).show()
+
+                                // Refresh the spinner in the wake word config dialog
+                                currentModelSpinner?.let { spinner ->
+                                    refreshModelSpinner(spinner, importedModel.id)
+                                }
+
                                 dismiss()
                             }
                             result.onFailure { error ->
                                 Toast.makeText(
                                     this@SettingsActivity,
                                     "Error importing model: ${error.message}",
-                                    Toast.LENGTH_SHORT
+                                    Toast.LENGTH_LONG
                                 ).show()
                             }
                         } catch (e: Exception) {
                             Toast.makeText(
                                 this@SettingsActivity,
                                 "Error importing model: ${e.message}",
-                                Toast.LENGTH_SHORT
+                                Toast.LENGTH_LONG
                             ).show()
                         }
                     }
