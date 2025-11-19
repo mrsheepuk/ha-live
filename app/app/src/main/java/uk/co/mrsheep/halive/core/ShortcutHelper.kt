@@ -2,6 +2,7 @@ package uk.co.mrsheep.halive.core
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
@@ -57,8 +58,8 @@ object ShortcutHelper {
             ShortcutManagerCompat.requestPinShortcut(context, shortcutInfo, null)
             true
         } catch (e: Exception) {
-            // Log the exception if logging is available
-            AppLogger.e("ShortcutHelper", "Failed to create shortcut for profile: ${profile.name}", e)
+            // Log the exception
+            Log.e("ShortcutHelper", "Failed to create shortcut for profile: ${profile.name}", e)
             false
         }
     }
