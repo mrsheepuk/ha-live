@@ -44,8 +44,8 @@ object ShortcutHelper {
                 putExtra(MainActivity.PROFILE_ID, profile.id)
             }
 
-            // Create the shortcut icon using the hearing drawable
-            val icon = IconCompat.createWithResource(context, R.drawable.ic_hearing)
+            // Create the shortcut icon using the app launcher icon
+            val icon = IconCompat.createWithResource(context, R.mipmap.ic_launcher)
 
             // Build the shortcut info with the profile's name as the label
             val shortcutInfo = ShortcutInfoCompat.Builder(context, profile.id)

@@ -17,16 +17,16 @@ import uk.co.mrsheep.halive.core.Profile
  * RecyclerView adapter for displaying a list of profiles.
  *
  * Displays profile name and active profile indicators (badge and card stroke).
- * Primary action (Edit) is visible; secondary actions (Duplicate/Export/Delete)
+ * Primary action (Edit) is visible; secondary actions (Add Shortcut/Duplicate/Export/Delete)
  * are in an overflow menu. Provides callbacks for various profile actions.
  */
 class ProfileAdapter(
     private val onItemClick: (Profile) -> Unit,
     private val onEdit: (Profile) -> Unit,
+    private val onAddShortcut: (Profile) -> Unit,
     private val onDuplicate: (Profile) -> Unit,
     private val onExport: (Profile) -> Unit,
-    private val onDelete: (Profile) -> Unit,
-    private val onPinShortcut: (Profile) -> Unit
+    private val onDelete: (Profile) -> Unit
 ) : RecyclerView.Adapter<ProfileAdapter.ProfileViewHolder>() {
 
     private var profiles: List<Profile> = emptyList()
@@ -61,7 +61,6 @@ class ProfileAdapter(
         private val profileNameText: TextView = itemView.findViewById(R.id.profileNameText)
         private val defaultBadge: TextView = itemView.findViewById(R.id.defaultBadge)
         private val editButton: Button = itemView.findViewById(R.id.editButton)
-        private val pinButton: Button? = itemView.findViewById(R.id.pinButton)
         private val overflowButton: ImageButton = itemView.findViewById(R.id.overflowButton)
         private val cardView: MaterialCardView = itemView as MaterialCardView
 
@@ -94,11 +93,6 @@ class ProfileAdapter(
                 onEdit(profile)
             }
 
-            // Pin to Home Screen button
-            pinButton?.setOnClickListener {
-                onPinShortcut(profile)
-            }
-
             // Overflow menu (secondary actions)
             overflowButton.setOnClickListener { view ->
                 showOverflowMenu(view, profile)
@@ -111,6 +105,10 @@ class ProfileAdapter(
 
             popup.setOnMenuItemClickListener { item ->
                 when (item.itemId) {
+                    R.id.action_add_shortcut -> {
+                        onAddShortcut(profile)
+                        true
+                    }
                     R.id.action_duplicate -> {
                         onDuplicate(profile)
                         true

@@ -67,15 +67,6 @@
                 style="?attr/materialButtonOutlinedStyle"
                 android:layout_marginEnd="8dp" />
 
-            <Button
-                android:id="@+id/pinButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/profile_pin"
-                android:textSize="14sp"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_marginEnd="8dp" />
-
             <ImageButton
                 android:id="@+id/overflowButton"
                 android:layout_width="48dp"

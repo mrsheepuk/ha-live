@@ -123,6 +123,9 @@ class ProfileManagementActivity : AppCompatActivity() {
                 intent.putExtra(ProfileEditorActivity.EXTRA_PROFILE_ID, profile.id)
                 startActivity(intent)
             },
+            onAddShortcut = { profile ->
+                handleAddShortcut(profile)
+            },
             onDuplicate = { profile ->
                 val intent = Intent(this, ProfileEditorActivity::class.java)
                 intent.putExtra(ProfileEditorActivity.EXTRA_DUPLICATE_FROM_ID, profile.id)
@@ -136,9 +139,6 @@ class ProfileManagementActivity : AppCompatActivity() {
             },
             onDelete = { profile ->
                 showDeleteConfirmationDialog(profile)
-            },
-            onPinShortcut = { profile ->
-                handlePinShortcut(profile)
             }
         )
 
@@ -213,7 +213,7 @@ class ProfileManagementActivity : AppCompatActivity() {
     /**
      * Handles creating a pinned shortcut for a profile.
      */
-    private fun handlePinShortcut(profile: Profile) {
+    private fun handleAddShortcut(profile: Profile) {
         if (!ShortcutHelper.isRequestPinShortcutSupported(this)) {
             Toast.makeText(
                 this,

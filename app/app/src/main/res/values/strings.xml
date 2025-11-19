@@ -80,7 +80,7 @@
     <string name="import_error_read_file">Could not read file</string>
 
     <!-- Shortcuts -->
-    <string name="profile_pin">Pin</string>
+    <string name="profile_add_shortcut">Add shortcut to home screen</string>
     <string name="shortcut_not_supported">Shortcuts are not supported on this device</string>
     <string name="shortcut_created">Shortcut for \"%s\" created</string>
     <string name="shortcut_failed">Failed to create shortcut</string>
