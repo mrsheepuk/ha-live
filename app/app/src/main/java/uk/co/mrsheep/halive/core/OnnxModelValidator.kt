@@ -78,7 +78,11 @@ object OnnxModelValidator {
                 val inputNodeInfo = inputInfo[inputName]
                     ?: return Result.failure(Exception("Cannot read input node info for: $inputName"))
 
-                val inputShape = inputNodeInfo.shape
+                // Get shape from TensorInfo
+                val inputTensorInfo = inputNodeInfo.info as? ai.onnxruntime.TensorInfo
+                    ?: return Result.failure(Exception("Input is not a tensor: $inputName"))
+
+                val inputShape = inputTensorInfo.shape
                 Log.d(TAG, "Input '$inputName' shape: ${inputShape.contentToString()}")
 
                 // Validate input shape: [1, 16, 96]
@@ -108,7 +112,11 @@ object OnnxModelValidator {
                 val outputNodeInfo = outputInfo[outputName]
                     ?: return Result.failure(Exception("Cannot read output node info for: $outputName"))
 
-                val outputShape = outputNodeInfo.shape
+                // Get shape from TensorInfo
+                val outputTensorInfo = outputNodeInfo.info as? ai.onnxruntime.TensorInfo
+                    ?: return Result.failure(Exception("Output is not a tensor: $outputName"))
+
+                val outputShape = outputTensorInfo.shape
                 Log.d(TAG, "Output '$outputName' shape: ${outputShape.contentToString()}")
 
                 // Validate output shape: [1, 1]
