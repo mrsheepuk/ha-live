@@ -25,7 +25,8 @@ class ProfileAdapter(
     private val onEdit: (Profile) -> Unit,
     private val onDuplicate: (Profile) -> Unit,
     private val onExport: (Profile) -> Unit,
-    private val onDelete: (Profile) -> Unit
+    private val onDelete: (Profile) -> Unit,
+    private val onPinShortcut: (Profile) -> Unit
 ) : RecyclerView.Adapter<ProfileAdapter.ProfileViewHolder>() {
 
     private var profiles: List<Profile> = emptyList()
@@ -60,6 +61,7 @@ class ProfileAdapter(
         private val profileNameText: TextView = itemView.findViewById(R.id.profileNameText)
         private val defaultBadge: TextView = itemView.findViewById(R.id.defaultBadge)
         private val editButton: Button = itemView.findViewById(R.id.editButton)
+        private val pinButton: Button? = itemView.findViewById(R.id.pinButton)
         private val overflowButton: ImageButton = itemView.findViewById(R.id.overflowButton)
         private val cardView: MaterialCardView = itemView as MaterialCardView
 
@@ -90,6 +92,11 @@ class ProfileAdapter(
             // Edit button (primary action)
             editButton.setOnClickListener {
                 onEdit(profile)
+            }
+
+            // Pin to Home Screen button
+            pinButton?.setOnClickListener {
+                onPinShortcut(profile)
             }
 
             // Overflow menu (secondary actions)

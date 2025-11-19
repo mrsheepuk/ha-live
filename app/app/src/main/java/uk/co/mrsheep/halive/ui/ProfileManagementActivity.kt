@@ -21,6 +21,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.Profile
+import uk.co.mrsheep.halive.core.ShortcutHelper
 import uk.co.mrsheep.halive.ui.adapters.ProfileAdapter
 import uk.co.mrsheep.halive.util.FileUtils
 import java.text.SimpleDateFormat
@@ -135,6 +136,9 @@ class ProfileManagementActivity : AppCompatActivity() {
             },
             onDelete = { profile ->
                 showDeleteConfirmationDialog(profile)
+            },
+            onPinShortcut = { profile ->
+                handlePinShortcut(profile)
             }
         )
 
@@ -204,6 +208,35 @@ class ProfileManagementActivity : AppCompatActivity() {
             .setMessage(message)
             .setPositiveButton("OK", null)
             .show()
+    }
+
+    /**
+     * Handles creating a pinned shortcut for a profile.
+     */
+    private fun handlePinShortcut(profile: Profile) {
+        if (!ShortcutHelper.isRequestPinShortcutSupported(this)) {
+            Toast.makeText(
+                this,
+                getString(R.string.shortcut_not_supported),
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+
+        val success = ShortcutHelper.createShortcutForProfile(this, profile)
+        if (success) {
+            Toast.makeText(
+                this,
+                getString(R.string.shortcut_created, profile.name),
+                Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            Toast.makeText(
+                this,
+                getString(R.string.shortcut_failed),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
