@@ -170,6 +170,21 @@ internal class AudioHelper(
          */
         @RequiresPermission(Manifest.permission.RECORD_AUDIO)
         fun build(onPlaybackIssue: ((String) -> Unit)? = null): AudioHelper {
+            // Calculate minimum buffer size
+            val minBufferSize = AudioTrack.getMinBufferSize(
+                24000,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+
+            // Use 4x minimum buffer size to handle Gemini's streaming pattern
+            // Gemini sends audio in bursts with ~200ms gaps between generation cycles
+            // Typical minBufferSize is 80-160ms, so 4x gives us 320-640ms buffer
+            // This prevents underruns during normal inter-chunk delays
+            val playbackBufferSize = minBufferSize * 4
+
+            Log.d(TAG, "AudioTrack buffer: min=$minBufferSize bytes, using=${playbackBufferSize} bytes (~${playbackBufferSize / 48}ms at 24kHz)")
+
             val playbackTrack =
                 AudioTrack(
                     AudioAttributes.Builder()
@@ -181,11 +196,7 @@ internal class AudioHelper(
                         .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                         .build(),
-                    AudioTrack.getMinBufferSize(
-                        24000,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT
-                    ),
+                    playbackBufferSize,
                     AudioTrack.MODE_STREAM,
                     AudioManager.AUDIO_SESSION_ID_GENERATE
                 )
