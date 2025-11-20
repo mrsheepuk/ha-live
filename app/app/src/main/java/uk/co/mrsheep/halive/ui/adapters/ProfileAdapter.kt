@@ -17,12 +17,13 @@ import uk.co.mrsheep.halive.core.Profile
  * RecyclerView adapter for displaying a list of profiles.
  *
  * Displays profile name and active profile indicators (badge and card stroke).
- * Primary action (Edit) is visible; secondary actions (Duplicate/Export/Delete)
+ * Primary action (Edit) is visible; secondary actions (Add Shortcut/Duplicate/Export/Delete)
  * are in an overflow menu. Provides callbacks for various profile actions.
  */
 class ProfileAdapter(
     private val onItemClick: (Profile) -> Unit,
     private val onEdit: (Profile) -> Unit,
+    private val onAddShortcut: (Profile) -> Unit,
     private val onDuplicate: (Profile) -> Unit,
     private val onExport: (Profile) -> Unit,
     private val onDelete: (Profile) -> Unit
@@ -104,6 +105,10 @@ class ProfileAdapter(
 
             popup.setOnMenuItemClickListener { item ->
                 when (item.itemId) {
+                    R.id.action_add_shortcut -> {
+                        onAddShortcut(profile)
+                        true
+                    }
                     R.id.action_duplicate -> {
                         onDuplicate(profile)
                         true

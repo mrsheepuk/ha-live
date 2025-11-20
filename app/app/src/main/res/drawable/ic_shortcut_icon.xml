@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Background gradient (same as launcher icon) -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="135"
+                android:endColor="#0097A7"
+                android:startColor="#00BCD4"
+                android:type="linear" />
+        </shape>
+    </item>
+
+    <!-- Microphone icon centered and positioned for circular display -->
+    <item
+        android:width="42dp"
+        android:height="42dp"
+        android:gravity="center"
+        android:top="2dp">
+        <vector
+            android:width="42dp"
+            android:height="42dp"
+            android:viewportWidth="42"
+            android:viewportHeight="42">
+
+            <!-- Microphone stand icon -->
+            <group
+                android:translateX="21"
+                android:translateY="19">
+
+                <!-- Mic capsule -->
+                <path
+                    android:fillColor="#FFFFFF"
+                    android:pathData="M-5.25,-12.6 Q-8.4,-12.6 -8.4,-9.45 L-8.4,0 Q-8.4,3.15 -5.25,3.15 L5.25,3.15 Q8.4,3.15 8.4,0 L8.4,-9.45 Q8.4,-12.6 5.25,-12.6 Z" />
+
+                <!-- Mic stand arc -->
+                <path
+                    android:fillColor="@android:color/transparent"
+                    android:pathData="M-10.5,2.1 Q-10.5,10.5 0,10.5 Q10.5,10.5 10.5,2.1"
+                    android:strokeColor="#FFFFFF"
+                    android:strokeWidth="2.65" />
+
+                <!-- Mic stand pole -->
+                <path
+                    android:fillColor="#FFFFFF"
+                    android:pathData="M-1.6,10.5 L-1.6,16.8 L1.6,16.8 L1.6,10.5 Z" />
+
+                <!-- Mic base -->
+                <path
+                    android:fillColor="#FFFFFF"
+                    android:pathData="M-6.3,16.8 L-6.3,18.9 L6.3,18.9 L6.3,16.8 Z" />
+            </group>
+        </vector>
+    </item>
+</layer-list>
