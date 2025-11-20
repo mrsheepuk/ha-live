@@ -60,7 +60,9 @@ internal class AudioHelper(
 
         if (playbackTrack.playState == AudioTrack.PLAYSTATE_STOPPED) {
             playbackTrack.play()
-            Log.d(TAG, "AudioTrack started playing")
+            val startMessage = "AudioTrack started playing"
+            Log.d(TAG, startMessage)
+            onPlaybackIssue?.invoke(startMessage)
         }
 
         val result = playbackTrack.write(data, 0, data.size)

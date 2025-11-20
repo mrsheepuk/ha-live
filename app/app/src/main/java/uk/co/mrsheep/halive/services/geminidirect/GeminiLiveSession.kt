@@ -282,7 +282,10 @@ class GeminiLiveSession(
 
     private fun listenForModelPlayback(onPlaybackIssue: ((String) -> Unit)?) {
         audioScope.launch {
-            Log.d(TAG, "Starting audio playback with position monitoring")
+            val startMessage = "Audio playback started with position monitoring"
+            Log.d(TAG, startMessage)
+            onPlaybackIssue?.invoke(startMessage)
+
             var chunkCount = 0
             var totalBytesWritten = 0
             var lastLoggedChunk = 0
@@ -334,13 +337,17 @@ class GeminiLiveSession(
                     }
                 }
             } catch (e: Exception) {
-                Log.d(TAG, "Audio playback channel closed or error occurred", e)
+                val errorMessage = "Audio playback channel closed or error: ${e.message}"
+                Log.d(TAG, errorMessage, e)
+                onPlaybackIssue?.invoke(errorMessage)
             }
 
             val finalFramesPlayed = audioHelper?.getPlaybackHeadPosition() ?: 0
             val finalBytesPlayed = finalFramesPlayed * 2
             val finalAudioMs = (finalBytesPlayed * 1000) / 48000
-            Log.d(TAG, "Playback ended: $chunkCount chunks, ${totalBytesWritten}b written, ${finalAudioMs}ms played")
+            val endMessage = "Playback ended: $chunkCount chunks, ${totalBytesWritten}b written, ${finalAudioMs}ms played"
+            Log.d(TAG, endMessage)
+            onPlaybackIssue?.invoke(endMessage)
         }
     }
 
