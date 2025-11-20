@@ -142,6 +142,16 @@ internal class AudioHelper(
          */
         @RequiresPermission(Manifest.permission.RECORD_AUDIO)
         fun build(): AudioHelper {
+            // Calculate minimum buffer size
+            val minBufferSize = AudioTrack.getMinBufferSize(
+                24000,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+
+            // Use 8x minimum buffer size to prevent underruns from network jitter
+            val playbackBufferSize = minBufferSize * 8
+
             val playbackTrack =
                 AudioTrack(
                     AudioAttributes.Builder()
@@ -153,11 +163,7 @@ internal class AudioHelper(
                         .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                         .build(),
-                    AudioTrack.getMinBufferSize(
-                        24000,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT
-                    ),
+                    playbackBufferSize,
                     AudioTrack.MODE_STREAM,
                     AudioManager.AUDIO_SESSION_ID_GENERATE
                 )
