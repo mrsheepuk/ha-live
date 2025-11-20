@@ -282,44 +282,62 @@ class GeminiLiveSession(
 
     private fun listenForModelPlayback(onPlaybackIssue: ((String) -> Unit)?) {
         audioScope.launch {
-            Log.d(TAG, "starting audio playback")
-            var lastPlayTime = System.currentTimeMillis()
+            Log.d(TAG, "Starting audio playback with position monitoring")
             var chunkCount = 0
-            var totalBytesPlayed = 0
+            var totalBytesWritten = 0
+            var lastLoggedChunk = 0
 
             try {
                 // Use a for-loop to iterate over the channel, blocking until data is available
                 // Note: Continue playing all buffered audio even if session ends to avoid cutoff
                 for (playbackData in playBackQueue) {
-                    val beforePlay = System.currentTimeMillis()
-                    val gapSinceLastPlay = beforePlay - lastPlayTime
                     chunkCount++
-                    totalBytesPlayed += playbackData.size
 
-                    // Calculate how much audio we've played (for buffer analysis)
-                    val audioPlayedMs = totalBytesPlayed / 48  // 24kHz * 2 bytes = 48 bytes/ms
+                    // Write to AudioTrack and get bytes actually written
+                    val bytesWritten = audioHelper?.playAudio(playbackData) ?: 0
+                    totalBytesWritten += bytesWritten
 
-                    // Detect significant gaps in our polling loop
-                    // This measures the time we spent blocked on channel.receive()
-                    if (chunkCount > 1 && gapSinceLastPlay > 150) {
-                        val issue = "Playback polling gap: ${gapSinceLastPlay}ms between chunks (chunk #$chunkCount, ${playbackData.size}b, ${audioPlayedMs}ms played)"
+                    // Get actual playback position from hardware
+                    val framesPlayed = audioHelper?.getPlaybackHeadPosition() ?: 0
+                    val bytesPlayed = framesPlayed * 2  // 16-bit = 2 bytes per frame
+
+                    // Calculate buffer state
+                    val bufferedBytes = totalBytesWritten - bytesPlayed
+                    val bufferedMs = (bufferedBytes * 1000) / 48000  // 24kHz * 2 bytes = 48000 bytes/sec
+                    val audioPlayedMs = (bytesPlayed * 1000) / 48000
+
+                    // Detect critically low buffer (potential underrun)
+                    if (bufferedMs < 50 && chunkCount > 5) {
+                        val issue = "Buffer critically low: ${bufferedMs}ms buffered (chunk #$chunkCount, ${audioPlayedMs}ms played, wrote ${bytesWritten}b)"
+                        Log.e(TAG, issue)
+                        onPlaybackIssue?.invoke(issue)
+                    } else if (bufferedMs < 100 && chunkCount > 5) {
+                        // Warning zone
+                        val issue = "Buffer low: ${bufferedMs}ms buffered (chunk #$chunkCount, ${audioPlayedMs}ms played)"
                         Log.w(TAG, issue)
                         onPlaybackIssue?.invoke(issue)
                     }
 
-                    audioHelper?.playAudio(playbackData)
-
-                    val playDuration = System.currentTimeMillis() - beforePlay
-                    if (playDuration > 5) {
-                        Log.v(TAG, "AudioTrack.write took ${playDuration}ms for ${playbackData.size}b (blocked waiting for buffer)")
+                    // Log buffer health every 20 chunks for general monitoring
+                    if (chunkCount - lastLoggedChunk >= 20) {
+                        val playState = when (audioHelper?.getPlaybackState()) {
+                            AudioTrack.PLAYSTATE_PLAYING -> "PLAYING"
+                            AudioTrack.PLAYSTATE_PAUSED -> "PAUSED"
+                            AudioTrack.PLAYSTATE_STOPPED -> "STOPPED"
+                            else -> "UNKNOWN"
+                        }
+                        Log.d(TAG, "Buffer health: ${bufferedMs}ms buffered, ${audioPlayedMs}ms played, state=$playState (chunk #$chunkCount)")
+                        lastLoggedChunk = chunkCount
                     }
-
-                    lastPlayTime = System.currentTimeMillis()
                 }
             } catch (e: Exception) {
                 Log.d(TAG, "Audio playback channel closed or error occurred", e)
             }
-            Log.d(TAG, "Audio playback loop ended after $chunkCount chunks, ${totalBytesPlayed}b total")
+
+            val finalFramesPlayed = audioHelper?.getPlaybackHeadPosition() ?: 0
+            val finalBytesPlayed = finalFramesPlayed * 2
+            val finalAudioMs = (finalBytesPlayed * 1000) / 48000
+            Log.d(TAG, "Playback ended: $chunkCount chunks, ${totalBytesWritten}b written, ${finalAudioMs}ms played")
         }
     }
 
@@ -404,22 +422,10 @@ class GeminiLiveSession(
         } else {
             for (part in message.serverContent.modelTurn?.parts.orEmpty()) {
                 if (part.inlineData != null && part.inlineData.mimeType.startsWith("audio/pcm")) {
-                    val messageArrivalTime = System.currentTimeMillis()
-                    val encodedSize = part.inlineData.data.length
-
                     audioScope.launch(audioProcessingDispatcher) {
                         try {
-                            val decodeStart = System.currentTimeMillis()
                             val audioBytes = Base64.decode(part.inlineData.data, Base64.NO_WRAP)
-                            val decodeEnd = System.currentTimeMillis()
-                            val decodeTime = decodeEnd - decodeStart
-
                             playBackQueue.send(audioBytes)
-
-                            // Log detailed timing for debugging
-                            if (decodeTime > 10) {  // Only log if decode took >10ms
-                                Log.v(TAG, "Decode: ${encodedSize}b→${audioBytes.size}b in ${decodeTime}ms")
-                            }
                         } catch (e: Exception) {
                             // Channel may be closed during shutdown, which is expected
                             Log.v(TAG, "Could not send audio to playback queue: ${e.message}")

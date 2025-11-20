@@ -54,9 +54,9 @@ internal class AudioHelper(
      * @throws IllegalArgumentException If the playback data is invalid.
      * @throws RuntimeException If we fail to play the audio data for some unknown reason.
      */
-    fun playAudio(data: ByteArray) {
-        if (released) return
-        if (data.isEmpty()) return
+    fun playAudio(data: ByteArray): Int {
+        if (released) return 0
+        if (data.isEmpty()) return 0
 
         if (playbackTrack.playState == AudioTrack.PLAYSTATE_STOPPED) {
             playbackTrack.play()
@@ -72,13 +72,13 @@ internal class AudioHelper(
             onPlaybackIssue?.invoke(issue)
         }
 
-        if (result > 0) return
+        if (result > 0) return result
 
         if (result == 0) {
             val issue = "AudioTrack write returned 0 bytes (buffer full or track paused)"
             Log.w(TAG, issue)
             onPlaybackIssue?.invoke(issue)
-            return
+            return 0
         }
 
         // ERROR_INVALID_OPERATION and ERROR_BAD_VALUE should never occur
@@ -105,6 +105,24 @@ internal class AudioHelper(
                 throw RuntimeException("Failed to play the audio data for some unknown reason.")
             }
         }
+        return 0  // Error case
+    }
+
+    /**
+     * Get the current playback position in frames.
+     * Returns the number of frames that have been played by the hardware.
+     */
+    fun getPlaybackHeadPosition(): Int {
+        if (released) return 0
+        return playbackTrack.playbackHeadPosition
+    }
+
+    /**
+     * Get the playback state.
+     */
+    fun getPlaybackState(): Int {
+        if (released) return AudioTrack.PLAYSTATE_STOPPED
+        return playbackTrack.playState
     }
 
     /**
