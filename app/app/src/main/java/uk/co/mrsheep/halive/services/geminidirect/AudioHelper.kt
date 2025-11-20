@@ -58,10 +58,6 @@ internal class AudioHelper(
         if (released) return
         if (data.isEmpty()) return
 
-        // Check buffer state before writing to detect potential underruns
-        val playbackHead = playbackTrack.playbackHeadPosition
-        val bufferedFrames = playbackTrack.playbackHeadPosition
-
         if (playbackTrack.playState == AudioTrack.PLAYSTATE_STOPPED) {
             playbackTrack.play()
             Log.d(TAG, "AudioTrack started playing")

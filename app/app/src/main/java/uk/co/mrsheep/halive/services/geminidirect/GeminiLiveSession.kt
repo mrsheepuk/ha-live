@@ -283,33 +283,43 @@ class GeminiLiveSession(
     private fun listenForModelPlayback(onPlaybackIssue: ((String) -> Unit)?) {
         audioScope.launch {
             Log.d(TAG, "starting audio playback")
-            var lastReceiveTime = System.currentTimeMillis()
+            var lastPlayTime = System.currentTimeMillis()
             var chunkCount = 0
+            var totalBytesPlayed = 0
 
             try {
                 // Use a for-loop to iterate over the channel, blocking until data is available
                 // Note: Continue playing all buffered audio even if session ends to avoid cutoff
                 for (playbackData in playBackQueue) {
-                    val now = System.currentTimeMillis()
-                    val gap = now - lastReceiveTime
+                    val beforePlay = System.currentTimeMillis()
+                    val gapSinceLastPlay = beforePlay - lastPlayTime
                     chunkCount++
+                    totalBytesPlayed += playbackData.size
 
-                    // Detect significant gaps between chunks (potential underruns)
-                    // At 24kHz, 16-bit mono PCM, typical chunks are ~50-100ms of audio
-                    // A gap > 150ms suggests the channel was starved
-                    if (chunkCount > 1 && gap > 150) {
-                        val issue = "Playback gap detected: ${gap}ms between chunks (chunk #$chunkCount, ${playbackData.size} bytes)"
+                    // Calculate how much audio we've played (for buffer analysis)
+                    val audioPlayedMs = totalBytesPlayed / 48  // 24kHz * 2 bytes = 48 bytes/ms
+
+                    // Detect significant gaps in our polling loop
+                    // This measures the time we spent blocked on channel.receive()
+                    if (chunkCount > 1 && gapSinceLastPlay > 150) {
+                        val issue = "Playback polling gap: ${gapSinceLastPlay}ms between chunks (chunk #$chunkCount, ${playbackData.size}b, ${audioPlayedMs}ms played)"
                         Log.w(TAG, issue)
                         onPlaybackIssue?.invoke(issue)
                     }
 
                     audioHelper?.playAudio(playbackData)
-                    lastReceiveTime = now
+
+                    val playDuration = System.currentTimeMillis() - beforePlay
+                    if (playDuration > 5) {
+                        Log.v(TAG, "AudioTrack.write took ${playDuration}ms for ${playbackData.size}b (blocked waiting for buffer)")
+                    }
+
+                    lastPlayTime = System.currentTimeMillis()
                 }
             } catch (e: Exception) {
                 Log.d(TAG, "Audio playback channel closed or error occurred", e)
             }
-            Log.d(TAG, "Audio playback loop ended after $chunkCount chunks")
+            Log.d(TAG, "Audio playback loop ended after $chunkCount chunks, ${totalBytesPlayed}b total")
         }
     }
 
@@ -394,10 +404,22 @@ class GeminiLiveSession(
         } else {
             for (part in message.serverContent.modelTurn?.parts.orEmpty()) {
                 if (part.inlineData != null && part.inlineData.mimeType.startsWith("audio/pcm")) {
+                    val messageArrivalTime = System.currentTimeMillis()
+                    val encodedSize = part.inlineData.data.length
+
                     audioScope.launch(audioProcessingDispatcher) {
                         try {
+                            val decodeStart = System.currentTimeMillis()
                             val audioBytes = Base64.decode(part.inlineData.data, Base64.NO_WRAP)
+                            val decodeEnd = System.currentTimeMillis()
+                            val decodeTime = decodeEnd - decodeStart
+
                             playBackQueue.send(audioBytes)
+
+                            // Log detailed timing for debugging
+                            if (decodeTime > 10) {  // Only log if decode took >10ms
+                                Log.v(TAG, "Decode: ${encodedSize}b→${audioBytes.size}b in ${decodeTime}ms")
+                            }
                         } catch (e: Exception) {
                             // Channel may be closed during shutdown, which is expected
                             Log.v(TAG, "Could not send audio to playback queue: ${e.message}")
