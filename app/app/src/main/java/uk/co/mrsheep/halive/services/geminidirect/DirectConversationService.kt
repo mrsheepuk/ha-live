@@ -43,6 +43,7 @@ class DirectConversationService(private val context: Context) :
     private var voiceName: String? = null
     private var toolExecutor: ToolExecutor? = null
     private var transcriptor: ((String?, String?, Boolean) -> Unit)? = null
+    private var playbackIssueLogger: ((String) -> Unit)? = null
     private var interruptable: Boolean = true
 
     private val json = Json {
@@ -69,7 +70,8 @@ class DirectConversationService(private val context: Context) :
         voiceName: String,
         toolExecutor: ToolExecutor,
         transcriptor: ((String?, String?, Boolean) -> Unit)?,
-        interruptable: Boolean
+        interruptable: Boolean,
+        playbackIssueLogger: ((String) -> Unit)? = null
     ) {
         try {
             Log.d(TAG, "Initializing DirectConversationService with ${tools.size} tools")
@@ -78,6 +80,7 @@ class DirectConversationService(private val context: Context) :
             this.toolDeclarations = GeminiLiveMCPToolTransformer.transform(tools)
             this.toolExecutor = toolExecutor
             this.transcriptor = transcriptor
+            this.playbackIssueLogger = playbackIssueLogger
 
             // Store configuration for later use
             this.systemPrompt = systemPrompt
@@ -133,7 +136,8 @@ class DirectConversationService(private val context: Context) :
                 voiceName = voiceName ?: "Aoede",
                 interruptable = interruptable,
                 onToolCall = protocolToolCallHandler,
-                onTranscription = transcriptor
+                onTranscription = transcriptor,
+                onPlaybackIssue = playbackIssueLogger
             )
 
             Log.d(TAG, "Direct protocol session started successfully")

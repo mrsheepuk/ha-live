@@ -24,6 +24,8 @@ internal class AudioHelper(
     private val recorder: AudioRecord,
     /** Track for playing back what the model says. */
     private val playbackTrack: AudioTrack,
+    /** Optional callback to report playback issues for debugging */
+    private val onPlaybackIssue: ((String) -> Unit)? = null
 ) {
     private var released: Boolean = false
 
@@ -56,30 +58,56 @@ internal class AudioHelper(
         if (released) return
         if (data.isEmpty()) return
 
-        if (playbackTrack.playState == AudioTrack.PLAYSTATE_STOPPED) playbackTrack.play()
+        // Check buffer state before writing to detect potential underruns
+        val playbackHead = playbackTrack.playbackHeadPosition
+        val bufferedFrames = playbackTrack.playbackHeadPosition
+
+        if (playbackTrack.playState == AudioTrack.PLAYSTATE_STOPPED) {
+            playbackTrack.play()
+            Log.d(TAG, "AudioTrack started playing")
+        }
 
         val result = playbackTrack.write(data, 0, data.size)
+
+        // Detect partial writes or underruns
+        if (result > 0 && result < data.size) {
+            val issue = "Partial write: ${result}/${data.size} bytes written (potential buffer issue)"
+            Log.w(TAG, issue)
+            onPlaybackIssue?.invoke(issue)
+        }
+
         if (result > 0) return
+
         if (result == 0) {
-            Log.w(
-                TAG,
-                "Failed to write any audio bytes to the playback track. The audio track may have been stopped or paused."
-            )
+            val issue = "AudioTrack write returned 0 bytes (buffer full or track paused)"
+            Log.w(TAG, issue)
+            onPlaybackIssue?.invoke(issue)
             return
         }
 
         // ERROR_INVALID_OPERATION and ERROR_BAD_VALUE should never occur
         when (result) {
-            AudioTrack.ERROR_INVALID_OPERATION ->
+            AudioTrack.ERROR_INVALID_OPERATION -> {
+                val issue = "AudioTrack not properly initialized"
+                onPlaybackIssue?.invoke(issue)
                 throw IllegalStateException("The playback track was not properly initialized.")
-            AudioTrack.ERROR_BAD_VALUE ->
+            }
+            AudioTrack.ERROR_BAD_VALUE -> {
+                val issue = "Invalid audio data"
+                onPlaybackIssue?.invoke(issue)
                 throw IllegalArgumentException("Playback data is somehow invalid.")
+            }
             AudioTrack.ERROR_DEAD_OBJECT -> {
+                val issue = "AudioTrack was released"
                 Log.w(TAG, "Attempted to playback some audio, but the track has been released.")
+                onPlaybackIssue?.invoke(issue)
                 release() // to ensure `released` is set and `record` is released too
             }
-            AudioTrack.ERROR ->
+            AudioTrack.ERROR -> {
+                val issue = "AudioTrack write failed with unknown error"
+                onPlaybackIssue?.invoke(issue)
                 throw RuntimeException("Failed to play the audio data for some unknown reason.")
+            }
         }
     }
 
@@ -141,7 +169,7 @@ internal class AudioHelper(
          * constructor.
          */
         @RequiresPermission(Manifest.permission.RECORD_AUDIO)
-        fun build(): AudioHelper {
+        fun build(onPlaybackIssue: ((String) -> Unit)? = null): AudioHelper {
             val playbackTrack =
                 AudioTrack(
                     AudioAttributes.Builder()
@@ -191,7 +219,7 @@ internal class AudioHelper(
                 AcousticEchoCanceler.create(recorder.audioSessionId)?.enabled = true
             }
 
-            return AudioHelper(recorder, playbackTrack)
+            return AudioHelper(recorder, playbackTrack, onPlaybackIssue)
         }
     }
 }

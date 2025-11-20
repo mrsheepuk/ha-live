@@ -73,7 +73,8 @@ class FirebaseConversationService(private val context: Context) :
         voiceName: String,
         toolExecutor: ToolExecutor,
         transcriptor: ((String?, String?, Boolean) -> Unit)?,
-        interruptable: Boolean
+        interruptable: Boolean,
+        playbackIssueLogger: ((String) -> Unit)?
     ) {
         try {
             // Transform MCP tools to Firebase format

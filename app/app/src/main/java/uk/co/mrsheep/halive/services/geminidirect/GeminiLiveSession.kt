@@ -133,6 +133,7 @@ class GeminiLiveSession(
      * @param onToolCall Callback to execute tool calls. Called for each function call
      *                   with the call details, expected to return the execution result.
      * @param onTranscription Optional callback for transcription events (user input, model output)
+     * @param onPlaybackIssue Optional callback for audio playback issues (for debugging)
      * @throws IllegalStateException if connection fails or setup doesn't complete
      * @throws TimeoutException if setup doesn't complete within timeout
      */
@@ -143,7 +144,8 @@ class GeminiLiveSession(
         voiceName: String,
         interruptable: Boolean = true,
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
-        onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null
+        onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null,
+        onPlaybackIssue: ((String) -> Unit)? = null
     ) {
         if (sessionScope.isActive || audioScope.isActive) {
             throw IllegalStateException("Audio / session scope already active, cannot start")
@@ -153,7 +155,7 @@ class GeminiLiveSession(
         sessionScope =
             CoroutineScope(Dispatchers.Default + SupervisorJob() + CoroutineName("LiveSession Network"))
         audioScope = CoroutineScope(audioDispatcher + CoroutineName("LiveSession Audio"))
-        audioHelper = AudioHelper.build()
+        audioHelper = AudioHelper.build(onPlaybackIssue)
 
         try {
             Log.d(TAG, "Starting Gemini Live session with model: $model")
@@ -231,7 +233,7 @@ class GeminiLiveSession(
 
             recordUserAudio()
             Log.d(TAG, "Recording loop started")
-            listenForModelPlayback()
+            listenForModelPlayback(onPlaybackIssue)
             Log.d(TAG, "Audio playback started")
 
             Log.i(TAG, "Gemini Live session started successfully")
@@ -278,19 +280,36 @@ class GeminiLiveSession(
         Log.v(TAG, "Sent audio chunk: ${audio.size} bytes")
     }
 
-    private fun listenForModelPlayback() {
+    private fun listenForModelPlayback(onPlaybackIssue: ((String) -> Unit)?) {
         audioScope.launch {
             Log.d(TAG, "starting audio playback")
+            var lastReceiveTime = System.currentTimeMillis()
+            var chunkCount = 0
+
             try {
                 // Use a for-loop to iterate over the channel, blocking until data is available
                 // Note: Continue playing all buffered audio even if session ends to avoid cutoff
                 for (playbackData in playBackQueue) {
+                    val now = System.currentTimeMillis()
+                    val gap = now - lastReceiveTime
+                    chunkCount++
+
+                    // Detect significant gaps between chunks (potential underruns)
+                    // At 24kHz, 16-bit mono PCM, typical chunks are ~50-100ms of audio
+                    // A gap > 150ms suggests the channel was starved
+                    if (chunkCount > 1 && gap > 150) {
+                        val issue = "Playback gap detected: ${gap}ms between chunks (chunk #$chunkCount, ${playbackData.size} bytes)"
+                        Log.w(TAG, issue)
+                        onPlaybackIssue?.invoke(issue)
+                    }
+
                     audioHelper?.playAudio(playbackData)
+                    lastReceiveTime = now
                 }
             } catch (e: Exception) {
                 Log.d(TAG, "Audio playback channel closed or error occurred", e)
             }
-            Log.d(TAG, "Audio playback loop ended")
+            Log.d(TAG, "Audio playback loop ended after $chunkCount chunks")
         }
     }
 

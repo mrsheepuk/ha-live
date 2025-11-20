@@ -120,6 +120,21 @@ class SessionPreparer(
                     null
                 }
 
+            // Callback to log audio playback issues for debugging
+            val playbackIssueLogger: ((String) -> Unit) = { issue: String ->
+                val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                    .format(java.util.Date())
+                logger.addLogEntry(
+                    LogEntry(
+                        timestamp = timestamp,
+                        toolName = "Audio Playback",
+                        parameters = "Buffer monitoring",
+                        success = false,
+                        result = issue
+                    )
+                )
+            }
+
             // Initialize the conversation service with tools and prompt
             conversationService.initialize(
                 mcpToolsResult.tools,
@@ -128,7 +143,8 @@ class SessionPreparer(
                 voice,
                 toolExecutor,
                 transcriptor,
-                interruptable = profile?.interruptable ?: true
+                interruptable = profile?.interruptable ?: true,
+                playbackIssueLogger = playbackIssueLogger
             )
 
         } catch (e: Exception) {
