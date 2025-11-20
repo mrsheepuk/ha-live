@@ -296,9 +296,23 @@ class GeminiLiveSession(
                 for (playbackData in playBackQueue) {
                     chunkCount++
 
+                    // Validate chunk size (must be even for 16-bit PCM)
+                    if (playbackData.size % 2 != 0) {
+                        val issue = "Invalid chunk size: ${playbackData.size} bytes (not 16-bit aligned!) - chunk #$chunkCount"
+                        Log.e(TAG, issue)
+                        onPlaybackIssue?.invoke(issue)
+                    }
+
                     // Write to AudioTrack and get bytes actually written
                     val bytesWritten = audioHelper?.playAudio(playbackData) ?: 0
                     totalBytesWritten += bytesWritten
+
+                    // Detect if we didn't write all the bytes (AudioHelper should log this too)
+                    if (bytesWritten != playbackData.size && bytesWritten > 0) {
+                        val issue = "Incomplete write: ${bytesWritten}/${playbackData.size} bytes written - chunk #$chunkCount"
+                        Log.w(TAG, issue)
+                        onPlaybackIssue?.invoke(issue)
+                    }
 
                     // Get actual playback position from hardware
                     val framesPlayed = audioHelper?.getPlaybackHeadPosition() ?: 0
@@ -329,7 +343,7 @@ class GeminiLiveSession(
                             AudioTrack.PLAYSTATE_STOPPED -> "STOPPED"
                             else -> "UNKNOWN"
                         }
-                        val healthMessage = "Buffer OK: ${bufferedMs}ms buffered, ${audioPlayedMs}ms played, state=$playState (chunk #$chunkCount)"
+                        val healthMessage = "Buffer OK: ${bufferedMs}ms buffered, ${audioPlayedMs}ms played, state=$playState, last chunk=${playbackData.size}b (#$chunkCount)"
                         Log.d(TAG, healthMessage)
                         // Send to app log so user can see without ADB
                         onPlaybackIssue?.invoke(healthMessage)
