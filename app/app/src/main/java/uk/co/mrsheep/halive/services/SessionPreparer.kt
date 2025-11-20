@@ -128,9 +128,12 @@ class SessionPreparer(
                 // Determine if this is an error/warning or just informational
                 val isError = message.contains("critically low", ignoreCase = true) ||
                               message.contains("error", ignoreCase = true) ||
-                              message.contains("failed", ignoreCase = true)
+                              message.contains("failed", ignoreCase = true) ||
+                              message.contains("invalid chunk size", ignoreCase = true) ||
+                              message.contains("not 16-bit aligned", ignoreCase = true)
                 val isWarning = message.contains("low:", ignoreCase = true) ||
-                                message.contains("partial write", ignoreCase = true)
+                                message.contains("partial write", ignoreCase = true) ||
+                                message.contains("incomplete write", ignoreCase = true)
 
                 logger.addLogEntry(
                     LogEntry(
