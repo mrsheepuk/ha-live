@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -51,7 +52,6 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.Turn
 import uk.co.mrsheep.halive.services.geminidirect.protocol.VoiceConfig
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicLong
@@ -87,6 +87,14 @@ class GeminiLiveSession(
     val audioDispatcher =
         Executors.newCachedThreadPool(AudioThreadFactory()).asCoroutineDispatcher()
 
+    @SuppressLint("ThreadPoolCreation")
+    private val audioProcessingExecutor =
+        Executors.newFixedThreadPool(2, AudioProcessingThreadFactory())
+
+    @SuppressLint("ThreadPoolCreation")
+    private val audioProcessingDispatcher =
+        audioProcessingExecutor.asCoroutineDispatcher()
+
     private var sessionScope: CoroutineScope = CoroutineScope(EmptyCoroutineContext).apply { cancel() }
     private var audioScope: CoroutineScope = CoroutineScope(EmptyCoroutineContext).apply { cancel() }
 
@@ -96,7 +104,7 @@ class GeminiLiveSession(
         prettyPrint = false
     }
 
-    private val playBackQueue = ConcurrentLinkedQueue<ByteArray>()
+    private val playBackQueue = Channel<ByteArray>(capacity = UNLIMITED)
     private var isSessionActive = false
     private var audioHelper: AudioHelper? = null
 
@@ -273,16 +281,16 @@ class GeminiLiveSession(
     private fun listenForModelPlayback() {
         audioScope.launch {
             Log.d(TAG, "starting audio playback")
-            while (isActive) {
-                val playbackData = playBackQueue.poll()
-                if (playbackData == null) {
-                    // delay uses a different scheduler in the backend, so it's "stickier" in its enforcement
-                    // when compared to yield.
-                    delay(0)
-                } else {
+            try {
+                // Use a for-loop to iterate over the channel, blocking until data is available
+                // Note: Continue playing all buffered audio even if session ends to avoid cutoff
+                for (playbackData in playBackQueue) {
                     audioHelper?.playAudio(playbackData)
                 }
+            } catch (e: Exception) {
+                Log.d(TAG, "Audio playback channel closed or error occurred", e)
             }
+            Log.d(TAG, "Audio playback loop ended")
         }
     }
 
@@ -359,12 +367,23 @@ class GeminiLiveSession(
         }
         if (message.serverContent.interrupted == true) {
             Log.d(TAG, "Turn interrupted")
-            playBackQueue.clear()
+            // Drain the channel using tryReceive() to clear pending audio chunks
+            while (true) {
+                val result = playBackQueue.tryReceive()
+                if (result.isFailure) break
+            }
         } else {
             for (part in message.serverContent.modelTurn?.parts.orEmpty()) {
                 if (part.inlineData != null && part.inlineData.mimeType.startsWith("audio/pcm")) {
-                    val audioBytes = Base64.decode(part.inlineData.data, Base64.NO_WRAP)
-                    playBackQueue.add(audioBytes)
+                    audioScope.launch(audioProcessingDispatcher) {
+                        try {
+                            val audioBytes = Base64.decode(part.inlineData.data, Base64.NO_WRAP)
+                            playBackQueue.send(audioBytes)
+                        } catch (e: Exception) {
+                            // Channel may be closed during shutdown, which is expected
+                            Log.v(TAG, "Could not send audio to playback queue: ${e.message}")
+                        }
+                    }
                 }
                 if (part.text != null) {
                     onTranscription?.invoke(null, part.text, true)
@@ -478,11 +497,13 @@ class GeminiLiveSession(
      * Close the session and clean up all resources.
      *
      * This method:
-     * 1. Marks session as inactive (stops loops)
-     * 2. Closes playback channel
-     * 3. Cleans up audio manager (stops recording/playback)
-     * 4. Closes WebSocket connection
-     * 5. Cancels all session coroutines
+     * 1. Marks session as inactive (stops new work)
+     * 2. Cancels audio scope (stops all coroutines)
+     * 3. Shuts down audio processing executor (interrupts decode threads)
+     * 4. Closes playback channel (signals playback loop to exit)
+     * 5. Cleans up audio manager (stops recording/playback)
+     * 6. Closes WebSocket connection
+     * 7. Cancels session scope
      *
      * Safe to call multiple times.
      */
@@ -491,9 +512,24 @@ class GeminiLiveSession(
 
         isSessionActive = false
 
-
+        // Cancel audio scope first to stop all coroutines
         audioScope.cancel()
-        playBackQueue.clear()
+
+        // Shutdown audio processing executor to interrupt any running decode operations
+        try {
+            audioProcessingExecutor.shutdownNow()
+            Log.d(TAG, "Audio processing executor shutdown")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error shutting down audio processing executor", e)
+        }
+
+        // Close the playback channel to unblock the listening coroutine
+        try {
+            playBackQueue.close()
+            Log.d(TAG, "Playback channel closed")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error closing playback channel", e)
+        }
 
         audioHelper?.release()
         audioHelper = null
@@ -528,6 +564,31 @@ internal class AudioThreadFactory : ThreadFactory {
                 task?.run()
             }
         thread.name = "Audio Thread #${threadCount.andIncrement}"
+        return thread
+    }
+
+    companion object {
+        val DEFAULT: ThreadFactory = Executors.defaultThreadFactory()
+
+        private fun audioPolicy(): ThreadPolicy {
+            val builder = ThreadPolicy.Builder().detectNetwork()
+            return builder.penaltyLog().build()
+        }
+    }
+}
+
+internal class AudioProcessingThreadFactory : ThreadFactory {
+    private val threadCount = AtomicLong()
+    private val policy: ThreadPolicy = audioPolicy()
+
+    override fun newThread(task: Runnable?): Thread? {
+        val thread =
+            DEFAULT.newThread {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+                StrictMode.setThreadPolicy(policy)
+                task?.run()
+            }
+        thread.name = "AudioProcessing Thread #${threadCount.andIncrement}"
         return thread
     }
 
