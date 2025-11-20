@@ -326,7 +326,10 @@ class GeminiLiveSession(
                             AudioTrack.PLAYSTATE_STOPPED -> "STOPPED"
                             else -> "UNKNOWN"
                         }
-                        Log.d(TAG, "Buffer health: ${bufferedMs}ms buffered, ${audioPlayedMs}ms played, state=$playState (chunk #$chunkCount)")
+                        val healthMessage = "Buffer OK: ${bufferedMs}ms buffered, ${audioPlayedMs}ms played, state=$playState (chunk #$chunkCount)"
+                        Log.d(TAG, healthMessage)
+                        // Send to app log so user can see without ADB
+                        onPlaybackIssue?.invoke(healthMessage)
                         lastLoggedChunk = chunkCount
                     }
                 }

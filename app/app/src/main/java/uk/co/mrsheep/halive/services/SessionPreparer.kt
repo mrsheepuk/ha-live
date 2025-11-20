@@ -120,17 +120,25 @@ class SessionPreparer(
                     null
                 }
 
-            // Callback to log audio playback issues for debugging
-            val playbackIssueLogger: ((String) -> Unit) = { issue: String ->
+            // Callback to log audio playback monitoring for debugging
+            val playbackIssueLogger: ((String) -> Unit) = { message: String ->
                 val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
                     .format(java.util.Date())
+
+                // Determine if this is an error/warning or just informational
+                val isError = message.contains("critically low", ignoreCase = true) ||
+                              message.contains("error", ignoreCase = true) ||
+                              message.contains("failed", ignoreCase = true)
+                val isWarning = message.contains("low:", ignoreCase = true) ||
+                                message.contains("partial write", ignoreCase = true)
+
                 logger.addLogEntry(
                     LogEntry(
                         timestamp = timestamp,
                         toolName = "Audio Playback",
                         parameters = "Buffer monitoring",
-                        success = false,
-                        result = issue
+                        success = !isError && !isWarning,  // Only mark errors/warnings as failures
+                        result = message
                     )
                 )
             }
