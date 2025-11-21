@@ -359,7 +359,7 @@ class GeminiLiveSession(
             for (part in message.serverContent.modelTurn?.parts.orEmpty()) {
                 if (part.inlineData != null && part.inlineData.mimeType.startsWith("audio/pcm")) {
                     val audioBytes = Base64.decode(part.inlineData.data, Base64.NO_WRAP)
-                    playBackQueue.trySend(audioBytes)
+                    playBackQueue.send(audioBytes)
                 }
                 if (part.text != null) {
                     onTranscription?.invoke(null, part.text, true)
