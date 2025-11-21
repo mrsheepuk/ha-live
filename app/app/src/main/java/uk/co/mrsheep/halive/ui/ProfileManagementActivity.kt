@@ -92,7 +92,7 @@ class ProfileManagementActivity : AppCompatActivity() {
 
         // Enable back button
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.title = "Manage Profiles"
+        supportActionBar?.title = "Personalities"
 
         initViews()
         setupRecyclerView()

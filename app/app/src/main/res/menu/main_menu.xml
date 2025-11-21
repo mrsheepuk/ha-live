@@ -2,12 +2,8 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
-        android:id="@+id/action_profiles"
-        android:title="Switch Profile"
-        android:icon="@drawable/ic_profiles" />
-    <item
         android:id="@+id/action_manage_profiles"
-        android:title="Manage Profiles"
+        android:title="Personalities"
         android:icon="@drawable/ic_profiles" />
     <item
         android:id="@+id/action_settings"

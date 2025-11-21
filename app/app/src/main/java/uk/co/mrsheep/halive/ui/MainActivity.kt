@@ -219,10 +219,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
-            R.id.action_profiles -> {
-                showProfileSelectorDialog()
-                true
-            }
             R.id.action_manage_profiles -> {
                 val intent = Intent(this, ProfileManagementActivity::class.java)
                 startActivity(intent)
@@ -255,39 +251,6 @@ class MainActivity : AppCompatActivity() {
             }
             else -> super.onOptionsItemSelected(item)
         }
-    }
-
-    private fun showProfileSelectorDialog() {
-        val profiles = viewModel.profiles.value
-        if (profiles.isEmpty()) {
-            Toast.makeText(this, "No profiles available", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val profileNames = profiles.map { it.name }.toTypedArray()
-        val currentIndex = profiles.indexOfFirst { it.id == viewModel.currentProfileId }
-
-        AlertDialog.Builder(this)
-            .setTitle("Switch Profile")
-            .setSingleChoiceItems(profileNames, currentIndex) { dialog, which ->
-                val selectedProfile = profiles[which]
-
-                // Check if chat is active
-                if (viewModel.isSessionActive()) {
-                    Toast.makeText(
-                        this,
-                        R.string.profile_switch_during_chat_error,
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    dialog.dismiss()
-                    return@setSingleChoiceItems
-                }
-
-                viewModel.switchProfile(selectedProfile.id)
-                dialog.dismiss()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
     }
 
     private fun updateUiForState(state: UiState) {
