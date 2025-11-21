@@ -82,10 +82,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     private val _wakeWordEnabled = MutableStateFlow(false)
     val wakeWordEnabled: StateFlow<Boolean> = _wakeWordEnabled
 
-    // Transcription expanded state
-    private val _transcriptionExpanded = MutableStateFlow(false)
-    val transcriptionExpanded: StateFlow<Boolean> = _transcriptionExpanded
-
     // Audio level for visualization
     private val _audioLevel = MutableStateFlow(0f)
     val audioLevel: StateFlow<Float> = _audioLevel.asStateFlow()
@@ -431,10 +427,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
             // User turned it ON and we're ready -> start listening
             startWakeWordListening()
         }
-    }
-
-    fun toggleTranscriptionExpanded() {
-        _transcriptionExpanded.value = !_transcriptionExpanded.value
     }
 
     override fun addLogEntry(log: LogEntry) {

@@ -1,7 +1,6 @@
 package uk.co.mrsheep.halive.ui
 
 import android.Manifest
-import android.animation.ObjectAnimator
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -53,8 +52,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var audioVisualizer: AudioVisualizerView
     private lateinit var wakeWordChip: MaterialButton
 
-    private lateinit var transcriptionHeaderContainer: LinearLayout
-    private lateinit var transcriptionChevronIcon: ImageView
     private lateinit var transcriptionRecyclerView: RecyclerView
     private lateinit var transcriptionAdapter: TranscriptionAdapter
 
@@ -135,8 +132,6 @@ class MainActivity : AppCompatActivity() {
         audioVisualizer = findViewById(R.id.audioVisualizer)
         wakeWordChip = findViewById(R.id.wakeWordChip)
 
-        transcriptionHeaderContainer = findViewById(R.id.transcriptionHeaderContainer)
-        transcriptionChevronIcon = findViewById(R.id.transcriptionChevronIcon)
         transcriptionRecyclerView = findViewById(R.id.transcriptionRecyclerView)
 
         // Initialize RecyclerView
@@ -165,11 +160,6 @@ class MainActivity : AppCompatActivity() {
             viewModel.toggleWakeWord(!viewModel.wakeWordEnabled.value)
         }
 
-        // Add click listener for log header collapse/expand
-        transcriptionHeaderContainer.setOnClickListener {
-            viewModel.toggleTranscriptionExpanded()
-        }
-
         // Observe the UI state from the ViewModel
         lifecycleScope.launch {
             viewModel.uiState.collect { state ->
@@ -177,12 +167,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Observe transcription expanded state
-        lifecycleScope.launch {
-            viewModel.transcriptionExpanded.collect { isExpanded ->
-                updateTranscriptionExpandedState(isExpanded)
-            }
-        }
         lifecycleScope.launch {
             viewModel.transcriptionLogs.collect { logs ->
                 updateTranscriptionLogs(logs)
@@ -496,30 +480,6 @@ class MainActivity : AppCompatActivity() {
             // Outlined style when disabled
             wakeWordChip.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.transparent)
             wakeWordChip.strokeWidth = (1 * resources.displayMetrics.density).toInt() // 1dp stroke
-        }
-    }
-
-    private fun updateTranscriptionExpandedState(isExpanded: Boolean) {
-        if (isExpanded) {
-            // Expand log content
-            transcriptionRecyclerView.visibility = View.VISIBLE
-            ObjectAnimator.ofFloat(transcriptionChevronIcon, "rotation", 0f, 180f).apply {
-                duration = 300
-                start()
-            }
-            // Auto-scroll to bottom when opening to show most recent entries
-            transcriptionRecyclerView.post {
-                if (transcriptionAdapter.itemCount > 0) {
-                    transcriptionRecyclerView.smoothScrollToPosition(transcriptionAdapter.itemCount - 1)
-                }
-            }
-        } else {
-            // Collapse log content
-            transcriptionRecyclerView.visibility = View.GONE
-            ObjectAnimator.ofFloat(transcriptionChevronIcon, "rotation", 180f, 0f).apply {
-                duration = 300
-                start()
-            }
         }
     }
 
