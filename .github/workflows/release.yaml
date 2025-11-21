@@ -1,25 +1,26 @@
-name: Main
+name: Release
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*'
 
 permissions:
-  contents: read # Required for actions/checkout
-  checks: write # Set status of checks
-  issues: write # Comment the PR as we go
-  statuses: write # Set commit statuses as tests pass or fail
+  contents: write # Required for creating releases
 
 concurrency:
-  group: ${{ github.workflow }}-main
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -29,11 +30,12 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
+
       - name: Decode Debug Keystore
         run: |
           echo "Decoding and installing debug keystore..."
           mkdir -p ~/.config/.android
-          
+
           echo "${DEBUG_KEYSTORE_B64}" | base64 --decode > ~/.config/.android/debug.keystore
           ls -l ~/.config/.android/debug.keystore
           echo "Debug keystore installed."
@@ -46,8 +48,12 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleDebug
 
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v5
+      - name: Rename APK
+        run: |
+          mv ./app/app/build/outputs/apk/debug/app-debug.apk ./app/app/build/outputs/apk/debug/ha-live-${{ steps.version.outputs.VERSION }}.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: ha-live-main-${{ github.sha }}
-          path: ./app/app/build/outputs/apk/debug/app-debug.apk
+          generate_release_notes: true
+          files: ./app/app/build/outputs/apk/debug/ha-live-${{ steps.version.outputs.VERSION }}.apk
