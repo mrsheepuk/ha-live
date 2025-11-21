@@ -43,7 +43,7 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
         private val messageText: TextView = itemView.findViewById(R.id.messageText)
 
         override fun bind(turn: TranscriptionTurn) {
-            messageText.text = turn.fullText
+            messageText.text = turn.fullText.trim()
         }
     }
 
