@@ -4,6 +4,7 @@ import android.Manifest
 import android.animation.ObjectAnimator
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
@@ -480,10 +481,14 @@ class MainActivity : AppCompatActivity() {
         if (enabled) {
             // Filled style when enabled
             wakeWordChip.backgroundTintList = ContextCompat.getColorStateList(this, R.color.orange_accent)
+            wakeWordChip.setTextColor(ContextCompat.getColor(this, R.color.white))
+            wakeWordChip.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.white))
             wakeWordChip.strokeWidth = 0
         } else {
             // Outlined style when disabled
             wakeWordChip.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.transparent)
+            wakeWordChip.setTextColor(ContextCompat.getColor(this, R.color.teal_primary))
+            wakeWordChip.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.teal_primary))
             wakeWordChip.strokeWidth = (1 * resources.displayMetrics.density).toInt() // 1dp stroke
         }
     }
