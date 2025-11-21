@@ -480,10 +480,12 @@ class MainActivity : AppCompatActivity() {
         if (enabled) {
             // Filled style when enabled
             wakeWordChip.backgroundTintList = ContextCompat.getColorStateList(this, R.color.orange_accent)
+            wakeWordChip.setTextColor(ContextCompat.getColor(this, R.color.white))
             wakeWordChip.strokeWidth = 0
         } else {
             // Outlined style when disabled
             wakeWordChip.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.transparent)
+            wakeWordChip.setTextColor(ContextCompat.getColor(this, R.color.teal_primary))
             wakeWordChip.strokeWidth = (1 * resources.displayMetrics.density).toInt() // 1dp stroke
         }
     }
