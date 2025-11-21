@@ -314,9 +314,8 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
 
-                // Populate quick message chips
+                // Populate quick message chips (visibility handled inside)
                 populateQuickMessageChips()
-                quickMessageScrollView.visibility = View.VISIBLE
                 // Listener is already active
             }
             is UiState.ExecutingAction -> {
@@ -489,6 +488,15 @@ class MainActivity : AppCompatActivity() {
 
         // Get enabled quick messages from viewModel
         val quickMessages = viewModel.getEnabledQuickMessages()
+
+        // Hide the entire scroll view if there are no quick messages
+        if (quickMessages.isEmpty()) {
+            quickMessageScrollView.visibility = View.GONE
+            return
+        }
+
+        // Show scroll view and populate chips
+        quickMessageScrollView.visibility = View.VISIBLE
 
         // Create chip for each quick message
         for (quickMessage in quickMessages) {
