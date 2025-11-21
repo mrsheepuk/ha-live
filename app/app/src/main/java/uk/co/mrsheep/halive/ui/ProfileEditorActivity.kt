@@ -482,6 +482,29 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
     private fun loadAvailableTools() {
         lifecycleScope.launch {
             val app = application as HAGeminiApp
+
+            // Check if Home Assistant credentials are configured
+            if (app.haUrl == null || app.haToken == null) {
+                // Show warning and use cached tools if available
+                toolCacheWarning.visibility = View.VISIBLE
+
+                // Use cached tools from last session if available
+                if (!app.lastAvailableTools.isNullOrEmpty()) {
+                    val cachedTools = app.lastAvailableTools!!.map { toolName ->
+                        SelectableTool(
+                            name = toolName,
+                            description = "Cached from last session",
+                            isSelected = selectedToolNames.contains(toolName),
+                            isAvailable = true
+                        )
+                    }
+                    availableTools = cachedTools
+                    toolAdapter.submitFullList(availableTools)
+                    updateToolCountLabel()
+                }
+                return@launch
+            }
+
             val mcp = McpClientManager(app.haUrl!!, app.haToken!!)
             try {
                 mcp.connect()
