@@ -31,7 +31,7 @@ class GeminiLiveClient(
         private const val TAG = "GeminiLiveClient"
         private const val API_ENDPOINT_V1ALPHA = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
         private const val API_ENDPOINT_V1BETA = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
-        private const val MESSAGE_QUEUE_CAPACITY = 64
+        private const val MESSAGE_QUEUE_CAPACITY = 512
         private const val CONNECTION_TIMEOUT_MS = 5000L
     }
 
@@ -50,7 +50,7 @@ class GeminiLiveClient(
     private val messageFlow = MutableSharedFlow<ServerMessage>(
         replay = 0,
         extraBufferCapacity = MESSAGE_QUEUE_CAPACITY,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
+        onBufferOverflow = BufferOverflow.SUSPEND
     )
 
     private var isConnected = false

@@ -46,6 +46,9 @@ internal class AudioHelper(
     /**
      * Play the provided audio data on the playback track.
      *
+     * This method handles partial writes by looping until all bytes are written,
+     * ensuring zero packet loss during playback.
+     *
      * Does nothing if this [AudioHelper] has been [released][release].
      *
      * @throws IllegalStateException If the playback track was not properly initialized.
@@ -56,30 +59,57 @@ internal class AudioHelper(
         if (released) return
         if (data.isEmpty()) return
 
-        if (playbackTrack.playState == AudioTrack.PLAYSTATE_STOPPED) playbackTrack.play()
-
-        val result = playbackTrack.write(data, 0, data.size)
-        if (result > 0) return
-        if (result == 0) {
-            Log.w(
-                TAG,
-                "Failed to write any audio bytes to the playback track. The audio track may have been stopped or paused."
-            )
-            return
+        if (playbackTrack.playState == AudioTrack.PLAYSTATE_STOPPED) {
+            playbackTrack.play()
         }
 
-        // ERROR_INVALID_OPERATION and ERROR_BAD_VALUE should never occur
-        when (result) {
-            AudioTrack.ERROR_INVALID_OPERATION ->
-                throw IllegalStateException("The playback track was not properly initialized.")
-            AudioTrack.ERROR_BAD_VALUE ->
-                throw IllegalArgumentException("Playback data is somehow invalid.")
-            AudioTrack.ERROR_DEAD_OBJECT -> {
-                Log.w(TAG, "Attempted to playback some audio, but the track has been released.")
-                release() // to ensure `released` is set and `record` is released too
+        var bytesWritten = 0
+        while (bytesWritten < data.size) {
+            // Check if released during the loop (race condition mitigation)
+            if (released) return
+
+            // Write only the remaining bytes
+            val result = try {
+                playbackTrack.write(
+                    data,
+                    bytesWritten,
+                    data.size - bytesWritten
+                )
+            } catch (e: IllegalStateException) {
+                // AudioTrack was released while we were writing (race condition with close())
+                Log.w(TAG, "AudioTrack released during write, stopping playback")
+                return
             }
-            AudioTrack.ERROR ->
-                throw RuntimeException("Failed to play the audio data for some unknown reason.")
+
+            if (result < 0) {
+                // Handle errors
+                when (result) {
+                    AudioTrack.ERROR_INVALID_OPERATION ->
+                        throw IllegalStateException("The playback track was not properly initialized.")
+                    AudioTrack.ERROR_BAD_VALUE ->
+                        throw IllegalArgumentException("Playback data is somehow invalid.")
+                    AudioTrack.ERROR_DEAD_OBJECT -> {
+                        Log.w(TAG, "Attempted to playback some audio, but the track has been released.")
+                        release() // to ensure `released` is set and `record` is released too
+                        return
+                    }
+                    AudioTrack.ERROR ->
+                        throw RuntimeException("Failed to play the audio data for some unknown reason.")
+                }
+                Log.e(TAG, "AudioTrack write error: $result")
+                return
+            }
+
+            if (result == 0) {
+                // Buffer is full, sleep briefly to avoid busy-wait burning CPU
+                try {
+                    Thread.sleep(1)
+                } catch (e: InterruptedException) {
+                    return
+                }
+            }
+
+            bytesWritten += result
         }
     }
 
@@ -142,6 +172,16 @@ internal class AudioHelper(
          */
         @RequiresPermission(Manifest.permission.RECORD_AUDIO)
         fun build(): AudioHelper {
+            // Calculate minimum buffer size
+            val minBufferSize = AudioTrack.getMinBufferSize(
+                24000,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+
+            // Use 8x minimum buffer size to prevent underruns from network jitter
+            val playbackBufferSize = minBufferSize * 8
+
             val playbackTrack =
                 AudioTrack(
                     AudioAttributes.Builder()
@@ -153,11 +193,7 @@ internal class AudioHelper(
                         .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                         .build(),
-                    AudioTrack.getMinBufferSize(
-                        24000,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT
-                    ),
+                    playbackBufferSize,
                     AudioTrack.MODE_STREAM,
                     AudioManager.AUDIO_SESSION_ID_GENERATE
                 )

@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -51,7 +52,6 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.Turn
 import uk.co.mrsheep.halive.services.geminidirect.protocol.VoiceConfig
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicLong
@@ -96,7 +96,7 @@ class GeminiLiveSession(
         prettyPrint = false
     }
 
-    private val playBackQueue = ConcurrentLinkedQueue<ByteArray>()
+    private val playBackQueue = Channel<ByteArray>(Channel.UNLIMITED)
     private var isSessionActive = false
     private var audioHelper: AudioHelper? = null
 
@@ -273,15 +273,9 @@ class GeminiLiveSession(
     private fun listenForModelPlayback() {
         audioScope.launch {
             Log.d(TAG, "starting audio playback")
-            while (isActive) {
-                val playbackData = playBackQueue.poll()
-                if (playbackData == null) {
-                    // delay uses a different scheduler in the backend, so it's "stickier" in its enforcement
-                    // when compared to yield.
-                    delay(0)
-                } else {
-                    audioHelper?.playAudio(playbackData)
-                }
+            // Channel iterator automatically suspends when empty (no busy-wait)
+            for (playbackData in playBackQueue) {
+                audioHelper?.playAudio(playbackData)
             }
         }
     }
@@ -359,12 +353,13 @@ class GeminiLiveSession(
         }
         if (message.serverContent.interrupted == true) {
             Log.d(TAG, "Turn interrupted")
-            playBackQueue.clear()
+            // Drain the channel to clear queued audio
+            while (playBackQueue.tryReceive().isSuccess) { /* drain */ }
         } else {
             for (part in message.serverContent.modelTurn?.parts.orEmpty()) {
                 if (part.inlineData != null && part.inlineData.mimeType.startsWith("audio/pcm")) {
                     val audioBytes = Base64.decode(part.inlineData.data, Base64.NO_WRAP)
-                    playBackQueue.add(audioBytes)
+                    playBackQueue.send(audioBytes)
                 }
                 if (part.text != null) {
                     onTranscription?.invoke(null, part.text, true)
@@ -493,7 +488,7 @@ class GeminiLiveSession(
 
 
         audioScope.cancel()
-        playBackQueue.clear()
+        playBackQueue.close()
 
         audioHelper?.release()
         audioHelper = null
