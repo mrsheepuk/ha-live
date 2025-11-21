@@ -296,7 +296,7 @@ class AudioVisualizerView @JvmOverloads constructor(
 
         // Calculate audio-reactive orbit radius (breathes in/out with sound)
         val baseOrbitRadius = radius * 0.65f
-        val orbitRadius = baseOrbitRadius * (0.8f + smoothedAudioLevel * 0.4f)  // Range: 80% - 120%
+        val orbitRadius = baseOrbitRadius * (0.8f + smoothedAudioLevel * 0.65f)  // Range: 80% - 145% (0.52 - 0.94 of radius)
 
         // Draw visual elements in order
         drawRotatingBackground(canvas, centerX, centerY, radius, elapsedSeconds, stateParams.opacity)
