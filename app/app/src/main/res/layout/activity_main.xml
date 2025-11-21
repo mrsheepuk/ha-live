@@ -151,24 +151,14 @@
             </LinearLayout>
 
             <!-- Log Content -->
-            <ScrollView
-                android:id="@+id/transcriptionContentScroll"
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/transcriptionRecyclerView"
                 android:layout_width="match_parent"
                 android:layout_height="200dp"
                 android:visibility="gone"
                 android:padding="8dp"
-                android:background="@color/surface_variant_light">
-
-                <TextView
-                    android:id="@+id/transcriptionLogText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:text="Transcription will appear here..."
-                    android:textSize="12sp"
-                    android:textColor="?attr/colorOnSurface" />
-
-            </ScrollView>
+                android:clipToPadding="false"
+                android:background="@color/surface_variant_light" />
 
         </LinearLayout>
 

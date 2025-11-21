@@ -12,7 +12,6 @@ import android.view.View
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import com.google.android.material.chip.Chip
@@ -24,6 +23,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
@@ -34,6 +35,7 @@ import uk.co.mrsheep.halive.core.HAConfig
 import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
+import uk.co.mrsheep.halive.core.TranscriptionTurn
 
 class MainActivity : AppCompatActivity() {
 
@@ -52,9 +54,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var wakeWordChip: MaterialButton
 
     private lateinit var transcriptionHeaderContainer: LinearLayout
-    private lateinit var transcriptionLogText: TextView
     private lateinit var transcriptionChevronIcon: ImageView
-    private lateinit var transcriptionContentScroll: ScrollView
+    private lateinit var transcriptionRecyclerView: RecyclerView
+    private lateinit var transcriptionAdapter: TranscriptionAdapter
 
     private lateinit var quickMessageScrollView: View
     private lateinit var quickMessageChipGroup: ChipGroup
@@ -133,10 +135,16 @@ class MainActivity : AppCompatActivity() {
         audioVisualizer = findViewById(R.id.audioVisualizer)
         wakeWordChip = findViewById(R.id.wakeWordChip)
 
-        transcriptionLogText = findViewById(R.id.transcriptionLogText)
         transcriptionHeaderContainer = findViewById(R.id.transcriptionHeaderContainer)
         transcriptionChevronIcon = findViewById(R.id.transcriptionChevronIcon)
-        transcriptionContentScroll = findViewById(R.id.transcriptionContentScroll)
+        transcriptionRecyclerView = findViewById(R.id.transcriptionRecyclerView)
+
+        // Initialize RecyclerView
+        transcriptionAdapter = TranscriptionAdapter()
+        transcriptionRecyclerView.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            adapter = transcriptionAdapter
+        }
 
         quickMessageScrollView = findViewById(R.id.quickMessageScrollView)
         quickMessageChipGroup = findViewById(R.id.quickMessageChipGroup)
@@ -437,42 +445,45 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateTranscriptionLogs(logs: List<TranscriptionEntry>) {
+        // Group consecutive entries by speaker into "turns"
+        val turns = mutableListOf<TranscriptionTurn>()
+
         if (logs.isEmpty()) {
-            transcriptionLogText.text = "Transcription will appear here..."
+            transcriptionAdapter.updateTurns(emptyList())
             return
         }
 
-        // Iterate through the transcription logs, putting '\nModel: ' or '\nUser: ' each time
-        // the spokenBy value changes in the log.
-        var lastSpokenBy: TranscriptionSpeaker? = null
-        var fullLog = ""
-        logs.forEach { (spokenBy, chunk) ->
-            run {
-                if (spokenBy != lastSpokenBy) {
-                    lastSpokenBy = spokenBy
-                    fullLog += when (spokenBy) {
-                        TranscriptionSpeaker.MODELTHOUGHT -> """
-                    
-                    Model (thinking): """.trimIndent()
-                        TranscriptionSpeaker.MODEL -> """
-                    
-                    Model: """.trimIndent()
+        var currentSpeaker: TranscriptionSpeaker? = null
+        var currentText = StringBuilder()
 
-                        TranscriptionSpeaker.USER -> """
-                    
-                    User: 
-                    """.trimIndent()
-                    }
+        logs.forEach { entry ->
+            if (entry.spokenBy != currentSpeaker) {
+                // Speaker changed - save previous turn if exists
+                if (currentSpeaker != null && currentText.isNotEmpty()) {
+                    turns.add(TranscriptionTurn(currentSpeaker!!, currentText.toString()))
                 }
-                fullLog += chunk
+                // Start new turn
+                currentSpeaker = entry.spokenBy
+                currentText = StringBuilder(entry.chunk)
+            } else {
+                // Same speaker - append to current turn
+                currentText.append(entry.chunk)
             }
         }
 
-        transcriptionLogText.text = fullLog
+        // Add final turn
+        if (currentSpeaker != null && currentText.isNotEmpty()) {
+            turns.add(TranscriptionTurn(currentSpeaker!!, currentText.toString()))
+        }
 
-        // Auto-scroll to bottom to show most recent log entry
-        transcriptionContentScroll.post {
-            transcriptionContentScroll.fullScroll(View.FOCUS_DOWN)
+        // Update adapter
+        transcriptionAdapter.updateTurns(turns)
+
+        // Auto-scroll to bottom to show most recent message
+        if (turns.isNotEmpty()) {
+            transcriptionRecyclerView.post {
+                transcriptionRecyclerView.smoothScrollToPosition(turns.size - 1)
+            }
         }
     }
 
@@ -491,18 +502,20 @@ class MainActivity : AppCompatActivity() {
     private fun updateTranscriptionExpandedState(isExpanded: Boolean) {
         if (isExpanded) {
             // Expand log content
-            transcriptionContentScroll.visibility = View.VISIBLE
+            transcriptionRecyclerView.visibility = View.VISIBLE
             ObjectAnimator.ofFloat(transcriptionChevronIcon, "rotation", 0f, 180f).apply {
                 duration = 300
                 start()
             }
             // Auto-scroll to bottom when opening to show most recent entries
-            transcriptionContentScroll.post {
-                transcriptionContentScroll.fullScroll(View.FOCUS_DOWN)
+            transcriptionRecyclerView.post {
+                if (transcriptionAdapter.itemCount > 0) {
+                    transcriptionRecyclerView.smoothScrollToPosition(transcriptionAdapter.itemCount - 1)
+                }
             }
         } else {
             // Collapse log content
-            transcriptionContentScroll.visibility = View.GONE
+            transcriptionRecyclerView.visibility = View.GONE
             ObjectAnimator.ofFloat(transcriptionChevronIcon, "rotation", 180f, 0f).apply {
                 duration = 300
                 start()
