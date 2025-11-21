@@ -73,8 +73,10 @@ class FirebaseConversationService(private val context: Context) :
         voiceName: String,
         toolExecutor: ToolExecutor,
         transcriptor: ((String?, String?, Boolean) -> Unit)?,
-        interruptable: Boolean
+        interruptable: Boolean,
+        onAudioLevel: ((Float) -> Unit)?
     ) {
+        // Note: onAudioLevel is not used by Firebase SDK as it doesn't expose raw audio data
         try {
             // Transform MCP tools to Firebase format
             val mcpToolsList = FirebaseMCPToolTransformer.transform(tools)

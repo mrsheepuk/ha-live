@@ -181,6 +181,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Observe audio level from ViewModel
+        lifecycleScope.launch {
+            viewModel.audioLevel.collect { level ->
+                audioVisualizer.setAudioLevel(level)
+            }
+        }
+
         // Observe auto-start intent
         lifecycleScope.launch {
             viewModel.shouldAttemptAutoStart.collect { shouldAutoStart ->

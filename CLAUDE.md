@@ -232,6 +232,23 @@ suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
 3. Verify **return types** match actual type definitions
 4. Check **property access patterns** (nested properties, nullable chains)
 
+### Kotlin Interface Override Rules
+- **NEVER specify default values in override functions** - Kotlin does not allow `= defaultValue` in overriding functions
+- Default values should ONLY be declared in the interface definition, not in implementing classes
+- Example:
+  ```kotlin
+  // Interface - defaults go HERE
+  interface MyService {
+      fun doThing(callback: (() -> Unit)? = null)
+  }
+
+  // Implementation - NO defaults allowed
+  class MyServiceImpl : MyService {
+      override fun doThing(callback: (() -> Unit)?) { ... }  // Correct
+      // override fun doThing(callback: (() -> Unit)? = null)  // WRONG - compile error
+  }
+  ```
+
 ### Provider SDK Constraints
 - Firebase AI SDK properties are **internal** - cannot access `Tool.functionDeclarations` or `FunctionDeclaration.name`
 - **Solution:** Access tool information from MCP layer before transformation, or use direct API

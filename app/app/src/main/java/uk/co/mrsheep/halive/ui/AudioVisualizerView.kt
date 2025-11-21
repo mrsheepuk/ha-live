@@ -57,6 +57,10 @@ class AudioVisualizerView @JvmOverloads constructor(
 
     private var currentState = VisualizerState.DORMANT
 
+    // Audio level smoothing with attack/decay envelope
+    private var targetAudioLevel: Float = 0f
+    private var smoothedAudioLevel: Float = 0f
+
     /**
      * Sets the animation state of the visualizer.
      *
@@ -65,6 +69,17 @@ class AudioVisualizerView @JvmOverloads constructor(
     fun setState(state: VisualizerState) {
         currentState = state
         invalidate()
+    }
+
+    /**
+     * Sets the audio amplitude level for reactive visualization.
+     * Uses attack/decay envelope for smooth transitions.
+     *
+     * @param level A normalized audio level from 0.0 (silent) to 1.0 (loud)
+     */
+    fun setAudioLevel(level: Float) {
+        targetAudioLevel = level.coerceIn(0f, 1f)
+        // Note: invalidate() called by animation loop, not here
     }
 
     // ===================== Particle Data Model =====================
@@ -267,8 +282,21 @@ class AudioVisualizerView @JvmOverloads constructor(
         val elapsedMs = SystemClock.elapsedRealtime() - startTimeMs
         val elapsedSeconds = elapsedMs / 1000f
 
-        // Get state parameters based on current animation state
+        // Apply attack/decay envelope to audio level for smooth transitions
+        if (targetAudioLevel > smoothedAudioLevel) {
+            // Fast attack: respond quickly to louder audio
+            smoothedAudioLevel += (targetAudioLevel - smoothedAudioLevel) * 0.3f
+        } else {
+            // Slow decay: fade out gradually when quieter
+            smoothedAudioLevel += (targetAudioLevel - smoothedAudioLevel) * 0.05f
+        }
+
+        // Get state parameters based on current animation state (uses smoothedAudioLevel)
         val stateParams = getStateParameters(currentState)
+
+        // Calculate audio-reactive orbit radius (breathes in/out with sound)
+        val baseOrbitRadius = radius * 0.65f
+        val orbitRadius = baseOrbitRadius * (0.8f + smoothedAudioLevel * 0.65f)  // Range: 80% - 145% (0.52 - 0.94 of radius)
 
         // Draw visual elements in order
         drawRotatingBackground(canvas, centerX, centerY, radius, elapsedSeconds, stateParams.opacity)
@@ -277,7 +305,7 @@ class AudioVisualizerView @JvmOverloads constructor(
             stateParams.pulseFrequency, stateParams.opacity
         )
         drawParticles(
-            canvas, centerX, centerY, radius * 0.65f,
+            canvas, centerX, centerY, orbitRadius,
             elapsedSeconds, stateParams.particleSpeed, stateParams.opacity, stateParams.colorBlend
         )
         drawCentralOrb(
@@ -304,12 +332,18 @@ class AudioVisualizerView @JvmOverloads constructor(
                 opacity = 0.5f,
                 colorBlend = 0f
             )
-            VisualizerState.ACTIVE -> StateParameters(
-                pulseFrequency = 1f / 2f,  // 0.5 Hz = one pulse every 2 seconds
-                particleSpeed = 1f,
-                opacity = 1f,
-                colorBlend = 0f
-            )
+            VisualizerState.ACTIVE -> {
+                // Audio-reactive modulation: dramatically modulate based on smoothed audio level
+                val modulatedPulseFrequency = 0.3f + (smoothedAudioLevel * 2.0f)   // Range: 0.3 - 2.3 Hz (slow to rapid)
+                val modulatedParticleSpeed = 0.5f + (smoothedAudioLevel * 4.0f)    // Range: 0.5 - 4.5x (dramatic speed up)
+                val modulatedColorBlend = smoothedAudioLevel * 0.5f                 // Range: 0.0 - 0.5 (shift toward accent)
+                StateParameters(
+                    pulseFrequency = modulatedPulseFrequency,
+                    particleSpeed = modulatedParticleSpeed,
+                    opacity = 1f,
+                    colorBlend = modulatedColorBlend
+                )
+            }
             VisualizerState.EXECUTING -> StateParameters(
                 pulseFrequency = 1f / 1.2f,  // 0.83 Hz = one pulse every 1.2 seconds
                 particleSpeed = 1.5f,
