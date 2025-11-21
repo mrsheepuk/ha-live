@@ -27,6 +27,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
 import uk.co.mrsheep.halive.core.AppLogger
 import uk.co.mrsheep.halive.core.LogEntry
+import uk.co.mrsheep.halive.core.QuickMessage
+import uk.co.mrsheep.halive.core.QuickMessageConfig
 import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
 import uk.co.mrsheep.halive.services.AppToolExecutor
@@ -510,6 +512,58 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
      */
     fun reloadWakeWordSettings() {
         wakeWordService.reloadSettings()
+    }
+
+    /**
+     * Send a quick message to the conversation service.
+     * Similar to initial message to agent but triggered by user clicking a quick message chip.
+     */
+    fun sendQuickMessage(message: String) {
+        if (!isSessionActive) {
+            Log.d(TAG, "Attempted to send quick message but session is not active")
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                conversationService.sendText(message)
+
+                val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                    .format(java.util.Date())
+
+                // Log it to tool logs
+                addLogEntry(
+                    LogEntry(
+                        timestamp = timestamp,
+                        toolName = "Quick Message",
+                        parameters = "User Quick Message",
+                        success = true,
+                        result = "Sent: $message"
+                    )
+                )
+            } catch (e: Exception) {
+                val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                    .format(java.util.Date())
+
+                addLogEntry(
+                    LogEntry(
+                        timestamp = timestamp,
+                        toolName = "Quick Message",
+                        parameters = "User Quick Message",
+                        success = false,
+                        result = "Failed to send: ${e.message}"
+                    )
+                )
+                Log.e(TAG, "Error sending quick message: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Get all enabled quick messages from configuration.
+     */
+    fun getEnabledQuickMessages(): List<QuickMessage> {
+        return QuickMessageConfig(getApplication()).getEnabledQuickMessages()
     }
 
     override fun onCleared() {

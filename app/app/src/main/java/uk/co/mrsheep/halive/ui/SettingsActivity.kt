@@ -36,6 +36,15 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import uk.co.mrsheep.halive.services.WakeWordService
 import android.widget.RelativeLayout
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import android.widget.EditText
+import androidx.appcompat.widget.SwitchCompat
+import android.view.LayoutInflater
+import android.view.ViewGroup
+import androidx.recyclerview.widget.RecyclerView.ViewHolder
+import uk.co.mrsheep.halive.core.QuickMessage
+import java.util.UUID
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -69,6 +78,11 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var wakeWordDetailsText: TextView
     private lateinit var wakeWordConfigButton: Button
 
+    // Quick messages section
+    private lateinit var quickMessagesRecyclerView: RecyclerView
+    private lateinit var addQuickMessageButton: Button
+    private lateinit var quickMessagesAdapter: QuickMessagesAdapter
+
     // Test mode service
     private var testWakeWordService: WakeWordService? = null
 
@@ -100,6 +114,7 @@ class SettingsActivity : AppCompatActivity() {
         observeState()
 
         viewModel.loadSettings()
+        viewModel.loadQuickMessages()
     }
 
     private fun initViews() {
@@ -165,6 +180,23 @@ class SettingsActivity : AppCompatActivity() {
             showWakeWordConfigDialog()
         }
 
+        // Quick messages section
+        quickMessagesRecyclerView = findViewById(R.id.quickMessagesRecyclerView)
+        addQuickMessageButton = findViewById(R.id.addQuickMessageButton)
+
+        quickMessagesAdapter = QuickMessagesAdapter(
+            onEditClick = { qm -> showAddEditQuickMessageDialog(qm) },
+            onDeleteClick = { qm -> showDeleteQuickMessageDialog(qm) },
+            onToggleClick = { qm -> viewModel.toggleQuickMessageEnabled(qm.id) }
+        )
+
+        quickMessagesRecyclerView.adapter = quickMessagesAdapter
+        quickMessagesRecyclerView.layoutManager = LinearLayoutManager(this)
+
+        addQuickMessageButton.setOnClickListener {
+            showAddEditQuickMessageDialog(null)
+        }
+
         // Read-only overlay
         readOnlyOverlay = findViewById(R.id.readOnlyOverlay)
         readOnlyMessage = findViewById(R.id.readOnlyMessage)
@@ -174,6 +206,12 @@ class SettingsActivity : AppCompatActivity() {
         lifecycleScope.launch {
             viewModel.settingsState.collect { state ->
                 updateUIForState(state)
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.quickMessages.collect { messages ->
+                quickMessagesAdapter.submitList(messages)
             }
         }
     }
@@ -655,9 +693,138 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    private fun showAddEditQuickMessageDialog(quickMessage: QuickMessage?) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_quick_message_config, null)
+        val labelInput = dialogView.findViewById<EditText>(R.id.quickMessageLabelInput)
+        val messageInput = dialogView.findViewById<EditText>(R.id.quickMessageInput)
+
+        val isEdit = quickMessage != null
+        val title = if (isEdit) "Edit Quick Message" else "Add Quick Message"
+
+        if (isEdit) {
+            labelInput.setText(quickMessage!!.label)
+            messageInput.setText(quickMessage.message)
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(dialogView)
+            .setPositiveButton("Save", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            saveButton.setOnClickListener {
+                val label = labelInput.text.toString().trim()
+                val message = messageInput.text.toString().trim()
+
+                if (label.isBlank()) {
+                    labelInput.error = "Label is required"
+                    return@setOnClickListener
+                }
+                if (message.isBlank()) {
+                    messageInput.error = "Message is required"
+                    return@setOnClickListener
+                }
+
+                if (isEdit) {
+                    val updated = quickMessage!!.copy(label = label, message = message)
+                    viewModel.updateQuickMessage(updated)
+                } else {
+                    val newQm = QuickMessage(
+                        id = UUID.randomUUID().toString(),
+                        label = label,
+                        message = message,
+                        enabled = true
+                    )
+                    viewModel.addQuickMessage(newQm)
+                }
+
+                dialog.dismiss()
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun showDeleteQuickMessageDialog(quickMessage: QuickMessage) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete Quick Message?")
+            .setMessage("Delete \"${quickMessage.label}\"?")
+            .setPositiveButton("Delete") { _, _ ->
+                viewModel.deleteQuickMessage(quickMessage.id)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     override fun onSupportNavigateUp(): Boolean {
         finish()
         return true
+    }
+}
+
+// Quick Messages Adapter
+private class QuickMessagesAdapter(
+    private val onEditClick: (QuickMessage) -> Unit,
+    private val onDeleteClick: (QuickMessage) -> Unit,
+    private val onToggleClick: (QuickMessage) -> Unit
+) : RecyclerView.Adapter<QuickMessagesAdapter.QuickMessageViewHolder>() {
+
+    private val items = mutableListOf<QuickMessage>()
+
+    fun submitList(newItems: List<QuickMessage>) {
+        items.clear()
+        items.addAll(newItems)
+        notifyDataSetChanged()
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): QuickMessageViewHolder {
+        val view = LayoutInflater.from(parent.context).inflate(
+            R.layout.item_quick_message,
+            parent,
+            false
+        )
+        return QuickMessageViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: QuickMessageViewHolder, position: Int) {
+        holder.bind(items[position])
+    }
+
+    override fun getItemCount(): Int = items.size
+
+    inner class QuickMessageViewHolder(itemView: android.view.View) : ViewHolder(itemView) {
+        private val labelText = itemView.findViewById<TextView>(R.id.quickMessageLabel)
+        private val messagePreview = itemView.findViewById<TextView>(R.id.quickMessagePreview)
+        private val enableSwitch = itemView.findViewById<SwitchCompat>(R.id.quickMessageEnableSwitch)
+        private val editButton = itemView.findViewById<Button>(R.id.quickMessageEditButton)
+        private val deleteButton = itemView.findViewById<Button>(R.id.quickMessageDeleteButton)
+
+        fun bind(qm: QuickMessage) {
+            labelText.text = qm.label
+            // Show preview of message (truncated if too long)
+            val preview = if (qm.message.length > 50) {
+                qm.message.substring(0, 50) + "..."
+            } else {
+                qm.message
+            }
+            messagePreview.text = preview
+
+            enableSwitch.isChecked = qm.enabled
+            enableSwitch.setOnCheckedChangeListener { _, _ ->
+                onToggleClick(qm)
+            }
+
+            editButton.setOnClickListener {
+                onEditClick(qm)
+            }
+
+            deleteButton.setOnClickListener {
+                onDeleteClick(qm)
+            }
+        }
     }
 }
 
