@@ -1,0 +1,66 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # Required for creating releases
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Decode Keystore
+        run: |
+          echo "Decoding and installing keystore..."
+          mkdir -p ~/.config/.android
+
+          echo "${DEBUG_KEYSTORE_B64}" | base64 --decode > ~/.config/.android/debug.keystore
+          ls -l ~/.config/.android/debug.keystore
+          echo "Keystore installed."
+        env:
+          DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+
+      - name: Build Release APK
+        working-directory: ./app
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease
+
+      - name: Build Release AAB
+        working-directory: ./app
+        run: ./gradlew bundleRelease
+
+      - name: Rename artifacts
+        run: |
+          mv ./app/app/build/outputs/apk/release/app-release.apk ./app/app/build/outputs/apk/release/ha-live-${{ steps.version.outputs.VERSION }}.apk
+          mv ./app/app/build/outputs/bundle/release/app-release.aab ./app/app/build/outputs/bundle/release/ha-live-${{ steps.version.outputs.VERSION }}.aab
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            ./app/app/build/outputs/apk/release/ha-live-${{ steps.version.outputs.VERSION }}.apk
+            ./app/app/build/outputs/bundle/release/ha-live-${{ steps.version.outputs.VERSION }}.aab
