@@ -316,14 +316,15 @@ class AudioVisualizerView @JvmOverloads constructor(
                 colorBlend = 0f
             )
             VisualizerState.ACTIVE -> {
-                // Audio-reactive modulation: modulate pulse and particle speed based on audio level
-                val modulatedPulseFrequency = 0.5f + (audioLevel * 0.5f)  // Range: 0.5 - 1.0 Hz
-                val modulatedParticleSpeed = 1f + (audioLevel * 1.5f)      // Range: 1.0 - 2.5x
+                // Audio-reactive modulation: dramatically modulate based on audio level
+                val modulatedPulseFrequency = 0.3f + (audioLevel * 2.0f)   // Range: 0.3 - 2.3 Hz (slow to rapid)
+                val modulatedParticleSpeed = 0.5f + (audioLevel * 4.0f)    // Range: 0.5 - 4.5x (dramatic speed up)
+                val modulatedColorBlend = audioLevel * 0.5f                 // Range: 0.0 - 0.5 (shift toward accent)
                 StateParameters(
                     pulseFrequency = modulatedPulseFrequency,
                     particleSpeed = modulatedParticleSpeed,
                     opacity = 1f,
-                    colorBlend = 0f
+                    colorBlend = modulatedColorBlend
                 )
             }
             VisualizerState.EXECUTING -> StateParameters(
