@@ -12,6 +12,7 @@ import uk.co.mrsheep.halive.core.TranscriptionTurn
 class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.TranscriptionViewHolder>() {
 
     private val turns = mutableListOf<TranscriptionTurn>()
+    private val expandedThoughts = mutableSetOf<Int>()
 
     companion object {
         private const val VIEW_TYPE_USER = 1
@@ -20,13 +21,13 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
     }
 
     abstract class TranscriptionViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        abstract fun bind(turn: TranscriptionTurn)
+        abstract fun bind(turn: TranscriptionTurn, position: Int)
     }
 
     class UserViewHolder(itemView: View) : TranscriptionViewHolder(itemView) {
         private val messageText: TextView = itemView.findViewById(R.id.messageText)
 
-        override fun bind(turn: TranscriptionTurn) {
+        override fun bind(turn: TranscriptionTurn, position: Int) {
             messageText.text = turn.fullText
         }
     }
@@ -34,16 +35,31 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
     class ModelViewHolder(itemView: View) : TranscriptionViewHolder(itemView) {
         private val messageText: TextView = itemView.findViewById(R.id.messageText)
 
-        override fun bind(turn: TranscriptionTurn) {
+        override fun bind(turn: TranscriptionTurn, position: Int) {
             messageText.text = turn.fullText
         }
     }
 
-    class ModelThoughtViewHolder(itemView: View) : TranscriptionViewHolder(itemView) {
+    inner class ModelThoughtViewHolder(itemView: View) : TranscriptionViewHolder(itemView) {
         private val messageText: TextView = itemView.findViewById(R.id.messageText)
 
-        override fun bind(turn: TranscriptionTurn) {
-            messageText.text = turn.fullText.trim()
+        override fun bind(turn: TranscriptionTurn, position: Int) {
+            val isExpanded = expandedThoughts.contains(position)
+
+            messageText.text = if (isExpanded) {
+                turn.fullText.trim()
+            } else {
+                "(thinking... tap to expand)"
+            }
+
+            itemView.setOnClickListener {
+                if (expandedThoughts.contains(position)) {
+                    expandedThoughts.remove(position)
+                } else {
+                    expandedThoughts.add(position)
+                }
+                notifyItemChanged(position)
+            }
         }
     }
 
@@ -75,7 +91,7 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
     }
 
     override fun onBindViewHolder(holder: TranscriptionViewHolder, position: Int) {
-        holder.bind(turns[position])
+        holder.bind(turns[position], position)
     }
 
     override fun getItemCount(): Int = turns.size
@@ -83,6 +99,7 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
     fun updateTurns(newTurns: List<TranscriptionTurn>) {
         turns.clear()
         turns.addAll(newTurns)
+        expandedThoughts.clear()
         notifyDataSetChanged()
     }
 }
