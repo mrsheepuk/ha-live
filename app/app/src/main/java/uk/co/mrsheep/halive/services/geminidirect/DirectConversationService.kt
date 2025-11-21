@@ -43,6 +43,7 @@ class DirectConversationService(private val context: Context) :
     private var voiceName: String? = null
     private var toolExecutor: ToolExecutor? = null
     private var transcriptor: ((String?, String?, Boolean) -> Unit)? = null
+    private var onAudioLevel: ((Float) -> Unit)? = null
     private var interruptable: Boolean = true
 
     private val json = Json {
@@ -69,7 +70,8 @@ class DirectConversationService(private val context: Context) :
         voiceName: String,
         toolExecutor: ToolExecutor,
         transcriptor: ((String?, String?, Boolean) -> Unit)?,
-        interruptable: Boolean
+        interruptable: Boolean,
+        onAudioLevel: ((Float) -> Unit)? = null
     ) {
         try {
             Log.d(TAG, "Initializing DirectConversationService with ${tools.size} tools")
@@ -78,6 +80,7 @@ class DirectConversationService(private val context: Context) :
             this.toolDeclarations = GeminiLiveMCPToolTransformer.transform(tools)
             this.toolExecutor = toolExecutor
             this.transcriptor = transcriptor
+            this.onAudioLevel = onAudioLevel
 
             // Store configuration for later use
             this.systemPrompt = systemPrompt
@@ -113,7 +116,7 @@ class DirectConversationService(private val context: Context) :
             Log.d(TAG, "Starting session with direct protocol")
 
             // Create session
-            session = GeminiLiveSession(apiKey, context)
+            session = GeminiLiveSession(apiKey, context, onAudioLevel = onAudioLevel)
 
             val protocolToolCallHandler: suspend (FunctionCall) -> FunctionResponse = { call ->
                 try {
@@ -188,6 +191,7 @@ class DirectConversationService(private val context: Context) :
             systemPrompt = null
             modelName = null
             voiceName = null
+            onAudioLevel = null
             Log.d(TAG, "Cleanup completed")
         } catch (e: Exception) {
             Log.e(TAG, "Error during cleanup", e)

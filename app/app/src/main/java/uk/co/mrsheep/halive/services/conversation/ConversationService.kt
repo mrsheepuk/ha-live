@@ -26,6 +26,7 @@ interface ConversationService {
      * @param modelName Model to use (e.g., "gemini-2.0-flash-exp")
      * @param voiceName Voice to use (e.g., "Aoede")
      * @param interruptable Whether the conversation can be interrupted by the user
+     * @param onAudioLevel Optional callback for audio level updates (0.0-1.0), used for visualization
      */
     suspend fun initialize(
         tools: List<McpTool>,
@@ -34,7 +35,8 @@ interface ConversationService {
         voiceName: String,
         toolExecutor: ToolExecutor,
         transcriptor: ((String?, String?, Boolean) -> Unit)? = null,
-        interruptable: Boolean = true
+        interruptable: Boolean = true,
+        onAudioLevel: ((Float) -> Unit)? = null
     )
 
     /**

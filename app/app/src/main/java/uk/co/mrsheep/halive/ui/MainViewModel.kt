@@ -22,6 +22,7 @@ import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
@@ -82,6 +83,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     // Transcription expanded state
     private val _transcriptionExpanded = MutableStateFlow(false)
     val transcriptionExpanded: StateFlow<Boolean> = _transcriptionExpanded
+
+    // Audio level for visualization
+    private val _audioLevel = MutableStateFlow(0f)
+    val audioLevel: StateFlow<Float> = _audioLevel.asStateFlow()
 
     // Track if this is the first initialization (survives activity recreation, not process death)
     private var hasCheckedAutoStart = false
@@ -300,6 +305,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
                     haApiClient = app.haApiClient!!,
                     logger = this@MainViewModel,
                     localTools = localTools.keys,
+                    onAudioLevel = { level -> _audioLevel.value = level }
                 )
 
                 sessionPreparer.prepareAndInitialize(profile, conversationService)
@@ -390,6 +396,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         toolExecutor = null
         mcpClient?.shutdown()
         mcpClient = null
+
+        // Reset audio level
+        _audioLevel.value = 0f
 
         isSessionActive = false
         _uiState.value = UiState.ReadyToTalk

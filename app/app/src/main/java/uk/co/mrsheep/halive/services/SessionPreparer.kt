@@ -31,6 +31,7 @@ class SessionPreparer(
     private val haApiClient: HomeAssistantApiClient,
     private val logger: AppLogger,
     private val localTools: Set<String>,
+    private val onAudioLevel: ((Float) -> Unit)? = null,
 ) {
     companion object {
         private const val TAG = "SessionPreparer"
@@ -128,7 +129,8 @@ class SessionPreparer(
                 voice,
                 toolExecutor,
                 transcriptor,
-                interruptable = profile?.interruptable ?: true
+                interruptable = profile?.interruptable ?: true,
+                onAudioLevel = onAudioLevel
             )
 
         } catch (e: Exception) {

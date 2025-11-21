@@ -74,7 +74,8 @@ import kotlin.coroutines.EmptyCoroutineContext
  */
 class GeminiLiveSession(
     private val apiKey: String,
-    private val context: Context
+    private val context: Context,
+    private val onAudioLevel: ((Float) -> Unit)? = null
 ) {
     companion object {
         private const val TAG = "GeminiLiveSession"
@@ -270,11 +271,24 @@ class GeminiLiveSession(
         Log.v(TAG, "Sent audio chunk: ${audio.size} bytes")
     }
 
+    private fun calculateRmsLevel(data: ByteArray): Float {
+        if (data.size < 2) return 0f
+        var sum = 0.0
+        for (i in 0 until data.size - 1 step 2) {
+            val sample = (data[i].toInt() and 0xFF) or (data[i + 1].toInt() shl 8)
+            val signedSample = if (sample > 32767) sample - 65536 else sample
+            sum += signedSample * signedSample
+        }
+        val rms = kotlin.math.sqrt(sum / (data.size / 2))
+        return (rms / 32768.0).toFloat().coerceIn(0f, 1f)
+    }
+
     private fun listenForModelPlayback() {
         audioScope.launch {
             Log.d(TAG, "starting audio playback")
             // Channel iterator automatically suspends when empty (no busy-wait)
             for (playbackData in playBackQueue) {
+                onAudioLevel?.invoke(calculateRmsLevel(playbackData))
                 audioHelper?.playAudio(playbackData)
             }
         }

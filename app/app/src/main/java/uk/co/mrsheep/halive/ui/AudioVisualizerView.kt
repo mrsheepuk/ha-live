@@ -56,6 +56,7 @@ class AudioVisualizerView @JvmOverloads constructor(
     // ===================== State =====================
 
     private var currentState = VisualizerState.DORMANT
+    private var audioLevel: Float = 0f
 
     /**
      * Sets the animation state of the visualizer.
@@ -64,6 +65,16 @@ class AudioVisualizerView @JvmOverloads constructor(
      */
     fun setState(state: VisualizerState) {
         currentState = state
+        invalidate()
+    }
+
+    /**
+     * Sets the audio amplitude level for reactive visualization.
+     *
+     * @param level A normalized audio level from 0.0 (silent) to 1.0 (loud)
+     */
+    fun setAudioLevel(level: Float) {
+        audioLevel = level.coerceIn(0f, 1f)
         invalidate()
     }
 
@@ -304,12 +315,17 @@ class AudioVisualizerView @JvmOverloads constructor(
                 opacity = 0.5f,
                 colorBlend = 0f
             )
-            VisualizerState.ACTIVE -> StateParameters(
-                pulseFrequency = 1f / 2f,  // 0.5 Hz = one pulse every 2 seconds
-                particleSpeed = 1f,
-                opacity = 1f,
-                colorBlend = 0f
-            )
+            VisualizerState.ACTIVE -> {
+                // Audio-reactive modulation: modulate pulse and particle speed based on audio level
+                val modulatedPulseFrequency = 0.5f + (audioLevel * 0.5f)  // Range: 0.5 - 1.0 Hz
+                val modulatedParticleSpeed = 1f + (audioLevel * 1.5f)      // Range: 1.0 - 2.5x
+                StateParameters(
+                    pulseFrequency = modulatedPulseFrequency,
+                    particleSpeed = modulatedParticleSpeed,
+                    opacity = 1f,
+                    colorBlend = 0f
+                )
+            }
             VisualizerState.EXECUTING -> StateParameters(
                 pulseFrequency = 1f / 1.2f,  // 0.83 Hz = one pulse every 1.2 seconds
                 particleSpeed = 1.5f,
