@@ -275,6 +275,35 @@
                 android:background="@color/divider_light"
                 android:layout_marginBottom="16dp" />
 
+            <!-- Quick Messages Section -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Quick Messages"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/quickMessagesRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp" />
+
+            <Button
+                android:id="@+id/addQuickMessageButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Add Quick Message"
+                android:layout_marginBottom="24dp" />
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/divider_light"
+                android:layout_marginBottom="16dp" />
+
             <!-- Debug Section -->
             <TextView
                 android:layout_width="wrap_content"

@@ -14,6 +14,8 @@ import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.core.WakeWordSettings
 import uk.co.mrsheep.halive.core.ExecutionMode
 import uk.co.mrsheep.halive.core.OptimizationLevel
+import uk.co.mrsheep.halive.core.QuickMessage
+import uk.co.mrsheep.halive.core.QuickMessageConfig
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +28,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         SettingsState.Loaded("", "", "", 0, false, "", "", false, false, "", 0.5f)
     )
     val settingsState: StateFlow<SettingsState> = _settingsState
+
+    private val _quickMessages = MutableStateFlow<List<QuickMessage>>(emptyList())
+    val quickMessages: StateFlow<List<QuickMessage>> = _quickMessages
 
     private val app = application as HAGeminiApp
 
@@ -187,6 +192,70 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             } catch (e: Exception) {
                 _settingsState.value = SettingsState.ConnectionFailed("Failed to save wake word settings: ${e.message}")
                 loadSettings()
+            }
+        }
+    }
+
+    fun loadQuickMessages() {
+        viewModelScope.launch {
+            try {
+                val config = QuickMessageConfig(getApplication())
+                _quickMessages.value = config.getQuickMessages()
+            } catch (e: Exception) {
+                _settingsState.value = SettingsState.ConnectionFailed("Failed to load quick messages: ${e.message}")
+            }
+        }
+    }
+
+    fun addQuickMessage(qm: QuickMessage) {
+        viewModelScope.launch {
+            try {
+                val config = QuickMessageConfig(getApplication())
+                config.addQuickMessage(qm)
+                loadQuickMessages()
+            } catch (e: Exception) {
+                _settingsState.value = SettingsState.ConnectionFailed("Failed to add quick message: ${e.message}")
+            }
+        }
+    }
+
+    fun updateQuickMessage(qm: QuickMessage) {
+        viewModelScope.launch {
+            try {
+                val config = QuickMessageConfig(getApplication())
+                config.updateQuickMessage(qm)
+                loadQuickMessages()
+            } catch (e: Exception) {
+                _settingsState.value = SettingsState.ConnectionFailed("Failed to update quick message: ${e.message}")
+            }
+        }
+    }
+
+    fun deleteQuickMessage(id: String) {
+        viewModelScope.launch {
+            try {
+                val config = QuickMessageConfig(getApplication())
+                config.deleteQuickMessage(id)
+                loadQuickMessages()
+            } catch (e: Exception) {
+                _settingsState.value = SettingsState.ConnectionFailed("Failed to delete quick message: ${e.message}")
+            }
+        }
+    }
+
+    fun toggleQuickMessageEnabled(id: String) {
+        viewModelScope.launch {
+            try {
+                val config = QuickMessageConfig(getApplication())
+                val messages = config.getQuickMessages()
+                val message = messages.find { it.id == id }
+                if (message != null) {
+                    val updatedMessage = message.copy(enabled = !message.enabled)
+                    config.updateQuickMessage(updatedMessage)
+                    loadQuickMessages()
+                }
+            } catch (e: Exception) {
+                _settingsState.value = SettingsState.ConnectionFailed("Failed to toggle quick message: ${e.message}")
             }
         }
     }

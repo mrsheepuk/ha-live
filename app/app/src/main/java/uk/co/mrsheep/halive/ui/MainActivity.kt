@@ -15,6 +15,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -53,6 +55,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var transcriptionLogText: TextView
     private lateinit var transcriptionChevronIcon: ImageView
     private lateinit var transcriptionContentScroll: ScrollView
+
+    private lateinit var quickMessageScrollView: View
+    private lateinit var quickMessageChipGroup: ChipGroup
 
     private fun checkConfigurationAndLaunch() {
         // Check if app is configured - need at least one provider AND Home Assistant
@@ -132,6 +137,9 @@ class MainActivity : AppCompatActivity() {
         transcriptionHeaderContainer = findViewById(R.id.transcriptionHeaderContainer)
         transcriptionChevronIcon = findViewById(R.id.transcriptionChevronIcon)
         transcriptionContentScroll = findViewById(R.id.transcriptionContentScroll)
+
+        quickMessageScrollView = findViewById(R.id.quickMessageScrollView)
+        quickMessageChipGroup = findViewById(R.id.quickMessageChipGroup)
 
         retryButton.setOnClickListener {
             viewModel.retryInitialization()
@@ -285,6 +293,7 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Loading..."
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
+                quickMessageScrollView.visibility = View.GONE
             }
             UiState.ProviderConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -294,6 +303,7 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Please complete onboarding"
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
+                quickMessageScrollView.visibility = View.GONE
             }
             UiState.HAConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -303,6 +313,7 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Please complete onboarding"
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
+                quickMessageScrollView.visibility = View.GONE
             }
             UiState.Initializing -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -312,6 +323,7 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Initializing..."
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
+                quickMessageScrollView.visibility = View.GONE
             }
             UiState.ReadyToTalk -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -328,6 +340,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 mainButton.setOnTouchListener(null) // Remove touch listener
                 mainButton.setOnClickListener(chatButtonClickListener)
+                quickMessageScrollView.visibility = View.GONE
             }
             UiState.ChatActive -> {
                 audioVisualizer.setState(VisualizerState.ACTIVE)
@@ -338,6 +351,10 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Chat active - listening..."
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
+
+                // Populate quick message chips
+                populateQuickMessageChips()
+                quickMessageScrollView.visibility = View.VISIBLE
                 // Listener is already active
             }
             is UiState.ExecutingAction -> {
@@ -349,6 +366,7 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Executing ${state.tool}..."
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
+                quickMessageScrollView.visibility = View.GONE
             }
             is UiState.Error -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -358,6 +376,7 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = state.message
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
+                quickMessageScrollView.visibility = View.GONE
             }
         }
     }
@@ -518,6 +537,26 @@ class MainActivity : AppCompatActivity() {
                 duration = 300
                 start()
             }
+        }
+    }
+
+    private fun populateQuickMessageChips() {
+        // Clear any existing chips
+        quickMessageChipGroup.removeAllViews()
+
+        // Get enabled quick messages from viewModel
+        val quickMessages = viewModel.getEnabledQuickMessages()
+
+        // Create chip for each quick message
+        for (quickMessage in quickMessages) {
+            val chip = Chip(this).apply {
+                text = quickMessage.label
+                isClickable = true
+                setOnClickListener {
+                    viewModel.sendQuickMessage(quickMessage.message)
+                }
+            }
+            quickMessageChipGroup.addView(chip)
         }
     }
 
