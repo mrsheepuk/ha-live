@@ -65,12 +65,21 @@ internal class AudioHelper(
 
         var bytesWritten = 0
         while (bytesWritten < data.size) {
+            // Check if released during the loop (race condition mitigation)
+            if (released) return
+
             // Write only the remaining bytes
-            val result = playbackTrack.write(
-                data,
-                bytesWritten,
-                data.size - bytesWritten
-            )
+            val result = try {
+                playbackTrack.write(
+                    data,
+                    bytesWritten,
+                    data.size - bytesWritten
+                )
+            } catch (e: IllegalStateException) {
+                // AudioTrack was released while we were writing (race condition with close())
+                Log.w(TAG, "AudioTrack released during write, stopping playback")
+                return
+            }
 
             if (result < 0) {
                 // Handle errors
