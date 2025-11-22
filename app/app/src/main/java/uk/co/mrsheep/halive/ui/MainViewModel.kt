@@ -441,6 +441,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         _hasEverChatted.value = true
     }
 
+    /**
+     * Reset the chat state flag.
+     * Called when clearing transcription to allow the next chat to animate the layout transition.
+     */
+    fun resetChatState() {
+        _hasEverChatted.value = false
+    }
+
     override fun addLogEntry(log: LogEntry) {
         _toolLogs.value += log
     }
@@ -457,6 +465,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
             spokenBy = TranscriptionSpeaker.USER,
             chunk = chunk,
         )
+    }
+
+    /**
+     * Clear all transcription logs
+     */
+    fun clearTranscriptionLogs() {
+        _transcriptionLogs.value = emptyList()
     }
 
     /**
