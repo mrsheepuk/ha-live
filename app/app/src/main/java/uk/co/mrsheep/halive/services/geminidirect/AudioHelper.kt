@@ -39,7 +39,24 @@ internal class AudioHelper(
         if (released) return
         released = true
 
+        // Stop recording before releasing to ensure threads terminate cleanly
+        if (recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+            try {
+                recorder.stop()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error stopping recorder", e)
+            }
+        }
         recorder.release()
+
+        // Stop playback before releasing to ensure threads terminate cleanly
+        if (playbackTrack.playState != AudioTrack.PLAYSTATE_STOPPED) {
+            try {
+                playbackTrack.stop()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error stopping playback track", e)
+            }
+        }
         playbackTrack.release()
     }
 
