@@ -503,10 +503,21 @@ class GeminiLiveSession(
 
         isSessionActive = false
 
-
-        audioScope.cancel()
+        // Close playback queue first to stop new audio from being queued
         playBackQueue.close()
 
+        // Cancel audioScope and wait for it to finish
+        audioScope.cancel()
+        // Give the audio playback loop time to exit cleanly
+        try {
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.delay(100) // Allow playback loop to see closed queue and exit
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error waiting for audio scope", e)
+        }
+
+        // Now safe to release audio resources
         audioHelper?.release()
         audioHelper = null
 
