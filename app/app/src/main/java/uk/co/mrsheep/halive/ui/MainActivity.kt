@@ -649,6 +649,9 @@ class MainActivity : AppCompatActivity() {
         // Clear transcription logs from ViewModel
         viewModel.clearTranscriptionLogs()
 
+        // Reset chat state so next chat will animate transition again
+        viewModel.resetChatState()
+
         // Hide transcription view and quick messages
         transcriptionRecyclerView.visibility = View.GONE
         quickMessageScrollView.visibility = View.GONE
