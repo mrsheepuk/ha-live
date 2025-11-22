@@ -510,19 +510,20 @@ class GeminiLiveSession(
         audioHelper?.release()
         audioHelper = null
 
-        // Close WebSocket (non-blocking)
-        sessionScope.launch {
-            try {
-                client.cleanup()
-                Log.d(TAG, "GeminiLiveClient cleaned up")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error cleaning up GeminiLiveClient", e)
-            }
-        }
-
-        // Cancel all coroutines in session scope
+        // Cancel all coroutines in session scope FIRST
         sessionScope.cancel()
         Log.d(TAG, "Session scope cancelled")
+
+        // Close WebSocket and cleanup client (blocking call outside sessionScope)
+        // Must be done synchronously to ensure cleanup completes
+        try {
+            kotlinx.coroutines.runBlocking {
+                client.cleanup()
+            }
+            Log.d(TAG, "GeminiLiveClient cleaned up")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cleaning up GeminiLiveClient", e)
+        }
 
         // Shutdown audio thread pool to prevent thread leaks (shutdownNow for immediate termination)
         try {
@@ -548,7 +549,7 @@ internal class AudioThreadFactory : ThreadFactory {
                 StrictMode.setThreadPolicy(policy)
                 task?.run()
             }
-        thread.name = "Audio Thread #${threadCount.andIncrement}"
+        thread.name = "GeminiAudio-${threadCount.andIncrement}"
         return thread
     }
 
