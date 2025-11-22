@@ -14,7 +14,7 @@
         app:cardBackgroundColor="@color/surface_light"
         app:strokeColor="@color/cyan_secondary"
         app:strokeWidth="1dp"
-        app:cardCornerRadius="16dp"
+        app:cardCornerRadius="8dp"
         app:cardElevation="2dp">
 
         <TextView

@@ -13,7 +13,7 @@
         android:layout_marginEnd="48dp"
         android:alpha="0.85"
         app:cardBackgroundColor="@color/surface_variant_light"
-        app:cardCornerRadius="16dp"
+        app:cardCornerRadius="8dp"
         app:cardElevation="1dp">
 
         <TextView
