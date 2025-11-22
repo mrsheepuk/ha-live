@@ -113,6 +113,11 @@ class MainActivity : AppCompatActivity() {
             ConstraintSet.CHAIN_PACKED
         )
 
+        // Preserve original margins between chain elements for proper spacing
+        val density = resources.displayMetrics.density
+        centeredConstraintSet.setMargin(R.id.audioVisualizer, ConstraintSet.TOP, (16 * density).toInt())
+        centeredConstraintSet.setMargin(R.id.buttonContainer, ConstraintSet.TOP, (8 * density).toInt())
+
         // Anchor chain to parent top/bottom for vertical centering
         centeredConstraintSet.connect(
             R.id.statusContainer,
@@ -417,13 +422,14 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
 
-                // Populate quick message chips (visibility handled inside)
-                populateQuickMessageChips()
-
                 // Animate one-time layout transition to top-aligned mode (if first chat)
                 if (!viewModel.hasEverChatted.value) {
                     transitionToTopAlignedLayout()
                 }
+
+                // Populate quick message chips (visibility handled inside)
+                // Done after transition to avoid visibility being overridden by constraint set
+                populateQuickMessageChips()
                 // Listener is already active
             }
             is UiState.ExecutingAction -> {
