@@ -174,8 +174,8 @@ class GeminiLiveClient(
             scope.cancel()
             Log.d(TAG, "Coroutine scope cancelled")
 
-            // Shutdown HTTP client resources
-            httpClient.dispatcher.executorService.shutdown()
+            // Shutdown HTTP client resources (shutdownNow for immediate termination)
+            httpClient.dispatcher.executorService.shutdownNow()
             httpClient.connectionPool.evictAll()
             Log.d(TAG, "HTTP client resources cleaned up")
 

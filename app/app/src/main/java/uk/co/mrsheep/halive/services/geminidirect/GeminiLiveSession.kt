@@ -523,9 +523,9 @@ class GeminiLiveSession(
         sessionScope.cancel()
         Log.d(TAG, "Session scope cancelled")
 
-        // Shutdown audio thread pool to prevent thread leaks
+        // Shutdown audio thread pool to prevent thread leaks (shutdownNow for immediate termination)
         try {
-            (audioDispatcher.executor as? ExecutorService)?.shutdown()
+            (audioDispatcher.executor as? ExecutorService)?.shutdownNow()
             Log.d(TAG, "Audio dispatcher thread pool shut down")
         } catch (e: Exception) {
             Log.e(TAG, "Error shutting down audio dispatcher", e)
