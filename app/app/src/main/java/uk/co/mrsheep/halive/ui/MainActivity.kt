@@ -1,7 +1,6 @@
 package uk.co.mrsheep.halive.ui
 
 import android.Manifest
-import android.animation.ObjectAnimator
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
@@ -13,7 +12,6 @@ import android.view.View
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import com.google.android.material.chip.Chip
@@ -23,8 +21,16 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import androidx.transition.ChangeBounds
+import androidx.transition.Fade
+import androidx.transition.TransitionManager
+import androidx.transition.TransitionSet
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
@@ -35,6 +41,7 @@ import uk.co.mrsheep.halive.core.HAConfig
 import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
+import uk.co.mrsheep.halive.core.TranscriptionTurn
 
 class MainActivity : AppCompatActivity() {
 
@@ -52,13 +59,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var audioVisualizer: AudioVisualizerView
     private lateinit var wakeWordChip: MaterialButton
 
-    private lateinit var transcriptionHeaderContainer: LinearLayout
-    private lateinit var transcriptionLogText: TextView
-    private lateinit var transcriptionChevronIcon: ImageView
-    private lateinit var transcriptionContentScroll: ScrollView
+    private lateinit var transcriptionRecyclerView: RecyclerView
+    private lateinit var transcriptionAdapter: TranscriptionAdapter
 
     private lateinit var quickMessageScrollView: View
     private lateinit var quickMessageChipGroup: ChipGroup
+
+    // Layout transition support
+    private lateinit var mainConstraintLayout: ConstraintLayout
+    private val centeredConstraintSet = ConstraintSet()
+    private val topAlignedConstraintSet = ConstraintSet()
+    private var hasTransitionedToTop = false
 
     private fun checkConfigurationAndLaunch() {
         // Check if app is configured - need at least one provider AND Home Assistant
@@ -73,6 +84,88 @@ class MainActivity : AppCompatActivity() {
             finish()
             return
         }
+    }
+
+    /**
+     * Sets up both constraint configurations:
+     * - Centered: vertical chain with CHAIN_PACKED for centered appearance
+     * - TopAligned: current XML layout (top-to-bottom flow)
+     */
+    private fun setupConstraintSets() {
+        // Top-aligned: clone from current XML (this is our "chat mode" layout)
+        topAlignedConstraintSet.clone(mainConstraintLayout)
+
+        // Centered: create vertical chain for centered appearance (pre-chat mode)
+        centeredConstraintSet.clone(mainConstraintLayout)
+
+        // Clear existing bottom constraints for chain elements
+        centeredConstraintSet.clear(R.id.statusContainer, ConstraintSet.BOTTOM)
+        centeredConstraintSet.clear(R.id.audioVisualizer, ConstraintSet.BOTTOM)
+        centeredConstraintSet.clear(R.id.buttonContainer, ConstraintSet.BOTTOM)
+
+        // Create vertical chain: statusContainer -> audioVisualizer -> buttonContainer
+        centeredConstraintSet.createVerticalChain(
+            R.id.statusContainer,
+            ConstraintSet.TOP,
+            R.id.buttonContainer,
+            ConstraintSet.BOTTOM,
+            intArrayOf(R.id.statusContainer, R.id.audioVisualizer, R.id.buttonContainer),
+            null,
+            ConstraintSet.CHAIN_PACKED
+        )
+
+        // Preserve original margins between chain elements for proper spacing
+        val density = resources.displayMetrics.density
+        centeredConstraintSet.setMargin(R.id.audioVisualizer, ConstraintSet.TOP, (16 * density).toInt())
+        centeredConstraintSet.setMargin(R.id.buttonContainer, ConstraintSet.TOP, (8 * density).toInt())
+
+        // Anchor chain to parent top/bottom for vertical centering
+        centeredConstraintSet.connect(
+            R.id.statusContainer,
+            ConstraintSet.TOP,
+            ConstraintSet.PARENT_ID,
+            ConstraintSet.TOP
+        )
+        centeredConstraintSet.connect(
+            R.id.buttonContainer,
+            ConstraintSet.BOTTOM,
+            ConstraintSet.PARENT_ID,
+            ConstraintSet.BOTTOM
+        )
+
+        // Hide transcript and quick messages in centered mode
+        centeredConstraintSet.setVisibility(R.id.transcriptionRecyclerView, View.GONE)
+        centeredConstraintSet.setVisibility(R.id.quickMessageScrollView, View.GONE)
+    }
+
+    /**
+     * Animate one-time transition from centered to top-aligned layout.
+     * Called only on first chat activation.
+     */
+    private fun transitionToTopAlignedLayout() {
+        if (hasTransitionedToTop) {
+            return
+        }
+
+        hasTransitionedToTop = true
+        viewModel.markHasChatted()
+
+        // Make transcript visible before transition
+        transcriptionRecyclerView.visibility = View.VISIBLE
+
+        // Create smooth transition with bounds change and fade
+        val transitionSet = TransitionSet().apply {
+            addTransition(ChangeBounds().apply {
+                duration = 400
+            })
+            addTransition(Fade(Fade.IN).apply {
+                duration = 300
+                addTarget(transcriptionRecyclerView)
+            })
+        }
+
+        TransitionManager.beginDelayedTransition(mainConstraintLayout, transitionSet)
+        topAlignedConstraintSet.applyTo(mainConstraintLayout)
     }
 
     // Activity Result Launcher for the file picker
@@ -125,6 +218,20 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_main)
 
+        // Get reference to main constraint layout for transitions
+        mainConstraintLayout = findViewById(R.id.mainConstraintLayout)
+        setupConstraintSets()
+
+        // Apply initial layout based on whether user has ever chatted
+        if (viewModel.hasEverChatted.value) {
+            // Already chatted before (e.g., after rotation) - use top layout immediately
+            topAlignedConstraintSet.applyTo(mainConstraintLayout)
+            hasTransitionedToTop = true
+        } else {
+            // Never chatted - start with centered layout
+            centeredConstraintSet.applyTo(mainConstraintLayout)
+        }
+
         toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
 
@@ -134,10 +241,14 @@ class MainActivity : AppCompatActivity() {
         audioVisualizer = findViewById(R.id.audioVisualizer)
         wakeWordChip = findViewById(R.id.wakeWordChip)
 
-        transcriptionLogText = findViewById(R.id.transcriptionLogText)
-        transcriptionHeaderContainer = findViewById(R.id.transcriptionHeaderContainer)
-        transcriptionChevronIcon = findViewById(R.id.transcriptionChevronIcon)
-        transcriptionContentScroll = findViewById(R.id.transcriptionContentScroll)
+        transcriptionRecyclerView = findViewById(R.id.transcriptionRecyclerView)
+
+        // Initialize RecyclerView
+        transcriptionAdapter = TranscriptionAdapter()
+        transcriptionRecyclerView.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            adapter = transcriptionAdapter
+        }
 
         quickMessageScrollView = findViewById(R.id.quickMessageScrollView)
         quickMessageChipGroup = findViewById(R.id.quickMessageChipGroup)
@@ -158,11 +269,6 @@ class MainActivity : AppCompatActivity() {
             viewModel.toggleWakeWord(!viewModel.wakeWordEnabled.value)
         }
 
-        // Add click listener for log header collapse/expand
-        transcriptionHeaderContainer.setOnClickListener {
-            viewModel.toggleTranscriptionExpanded()
-        }
-
         // Observe the UI state from the ViewModel
         lifecycleScope.launch {
             viewModel.uiState.collect { state ->
@@ -170,12 +276,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Observe transcription expanded state
-        lifecycleScope.launch {
-            viewModel.transcriptionExpanded.collect { isExpanded ->
-                updateTranscriptionExpandedState(isExpanded)
-            }
-        }
         lifecycleScope.launch {
             viewModel.transcriptionLogs.collect { logs ->
                 updateTranscriptionLogs(logs)
@@ -323,9 +423,14 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
 
-                // Populate quick message chips
+                // Animate one-time layout transition to top-aligned mode (if first chat)
+                if (!viewModel.hasEverChatted.value) {
+                    transitionToTopAlignedLayout()
+                }
+
+                // Populate quick message chips (visibility handled inside)
+                // Done after transition to avoid visibility being overridden by constraint set
                 populateQuickMessageChips()
-                quickMessageScrollView.visibility = View.VISIBLE
                 // Listener is already active
             }
             is UiState.ExecutingAction -> {
@@ -438,42 +543,45 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateTranscriptionLogs(logs: List<TranscriptionEntry>) {
+        // Group consecutive entries by speaker into "turns"
+        val turns = mutableListOf<TranscriptionTurn>()
+
         if (logs.isEmpty()) {
-            transcriptionLogText.text = "Transcription will appear here..."
+            transcriptionAdapter.updateTurns(emptyList())
             return
         }
 
-        // Iterate through the transcription logs, putting '\nModel: ' or '\nUser: ' each time
-        // the spokenBy value changes in the log.
-        var lastSpokenBy: TranscriptionSpeaker? = null
-        var fullLog = ""
-        logs.forEach { (spokenBy, chunk) ->
-            run {
-                if (spokenBy != lastSpokenBy) {
-                    lastSpokenBy = spokenBy
-                    fullLog += when (spokenBy) {
-                        TranscriptionSpeaker.MODELTHOUGHT -> """
-                    
-                    Model (thinking): """.trimIndent()
-                        TranscriptionSpeaker.MODEL -> """
-                    
-                    Model: """.trimIndent()
+        var currentSpeaker: TranscriptionSpeaker? = null
+        var currentText = StringBuilder()
 
-                        TranscriptionSpeaker.USER -> """
-                    
-                    User: 
-                    """.trimIndent()
-                    }
+        logs.forEach { entry ->
+            if (entry.spokenBy != currentSpeaker) {
+                // Speaker changed - save previous turn if exists
+                if (currentSpeaker != null && currentText.isNotEmpty()) {
+                    turns.add(TranscriptionTurn(currentSpeaker!!, currentText.toString()))
                 }
-                fullLog += chunk
+                // Start new turn
+                currentSpeaker = entry.spokenBy
+                currentText = StringBuilder(entry.chunk)
+            } else {
+                // Same speaker - append to current turn
+                currentText.append(entry.chunk)
             }
         }
 
-        transcriptionLogText.text = fullLog
+        // Add final turn
+        if (currentSpeaker != null && currentText.isNotEmpty()) {
+            turns.add(TranscriptionTurn(currentSpeaker!!, currentText.toString()))
+        }
 
-        // Auto-scroll to bottom to show most recent log entry
-        transcriptionContentScroll.post {
-            transcriptionContentScroll.fullScroll(View.FOCUS_DOWN)
+        // Update adapter
+        transcriptionAdapter.updateTurns(turns)
+
+        // Auto-scroll to bottom to show most recent message
+        if (turns.isNotEmpty()) {
+            transcriptionRecyclerView.post {
+                transcriptionRecyclerView.smoothScrollToPosition(turns.size - 1)
+            }
         }
     }
 
@@ -493,34 +601,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateTranscriptionExpandedState(isExpanded: Boolean) {
-        if (isExpanded) {
-            // Expand log content
-            transcriptionContentScroll.visibility = View.VISIBLE
-            ObjectAnimator.ofFloat(transcriptionChevronIcon, "rotation", 0f, 180f).apply {
-                duration = 300
-                start()
-            }
-            // Auto-scroll to bottom when opening to show most recent entries
-            transcriptionContentScroll.post {
-                transcriptionContentScroll.fullScroll(View.FOCUS_DOWN)
-            }
-        } else {
-            // Collapse log content
-            transcriptionContentScroll.visibility = View.GONE
-            ObjectAnimator.ofFloat(transcriptionChevronIcon, "rotation", 180f, 0f).apply {
-                duration = 300
-                start()
-            }
-        }
-    }
-
     private fun populateQuickMessageChips() {
         // Clear any existing chips
         quickMessageChipGroup.removeAllViews()
 
         // Get enabled quick messages from viewModel
         val quickMessages = viewModel.getEnabledQuickMessages()
+
+        // Hide the entire scroll view if there are no quick messages
+        if (quickMessages.isEmpty()) {
+            quickMessageScrollView.visibility = View.GONE
+            return
+        }
+
+        // Show scroll view and populate chips
+        quickMessageScrollView.visibility = View.VISIBLE
 
         // Create chip for each quick message
         for (quickMessage in quickMessages) {

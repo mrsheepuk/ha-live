@@ -82,13 +82,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     private val _wakeWordEnabled = MutableStateFlow(false)
     val wakeWordEnabled: StateFlow<Boolean> = _wakeWordEnabled
 
-    // Transcription expanded state
-    private val _transcriptionExpanded = MutableStateFlow(false)
-    val transcriptionExpanded: StateFlow<Boolean> = _transcriptionExpanded
-
     // Audio level for visualization
     private val _audioLevel = MutableStateFlow(0f)
     val audioLevel: StateFlow<Float> = _audioLevel.asStateFlow()
+
+    // Track if user has ever started a chat in this session (for layout transition)
+    private val _hasEverChatted = MutableStateFlow(false)
+    val hasEverChatted: StateFlow<Boolean> = _hasEverChatted
 
     // Track if this is the first initialization (survives activity recreation, not process death)
     private var hasCheckedAutoStart = false
@@ -433,8 +433,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         }
     }
 
-    fun toggleTranscriptionExpanded() {
-        _transcriptionExpanded.value = !_transcriptionExpanded.value
+    /**
+     * Mark that the user has activated chat in this session.
+     * Called to trigger the one-time layout transition from centered to top-aligned.
+     */
+    fun markHasChatted() {
+        _hasEverChatted.value = true
     }
 
     override fun addLogEntry(log: LogEntry) {
