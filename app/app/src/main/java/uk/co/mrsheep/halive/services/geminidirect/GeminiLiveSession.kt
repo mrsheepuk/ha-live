@@ -52,6 +52,7 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.Turn
 import uk.co.mrsheep.halive.services.geminidirect.protocol.VoiceConfig
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicLong
@@ -492,6 +493,7 @@ class GeminiLiveSession(
      * 3. Cleans up audio manager (stops recording/playback)
      * 4. Closes WebSocket connection
      * 5. Cancels all session coroutines
+     * 6. Shuts down audio thread pool
      *
      * Safe to call multiple times.
      */
@@ -510,16 +512,24 @@ class GeminiLiveSession(
         // Close WebSocket (non-blocking)
         sessionScope.launch {
             try {
-                client.close()
-                Log.d(TAG, "GeminiLiveClient closed")
+                client.cleanup()
+                Log.d(TAG, "GeminiLiveClient cleaned up")
             } catch (e: Exception) {
-                Log.e(TAG, "Error closing GeminiLiveClient", e)
+                Log.e(TAG, "Error cleaning up GeminiLiveClient", e)
             }
         }
 
         // Cancel all coroutines in session scope
         sessionScope.cancel()
         Log.d(TAG, "Session scope cancelled")
+
+        // Shutdown audio thread pool to prevent thread leaks
+        try {
+            (audioDispatcher.executor as? ExecutorService)?.shutdown()
+            Log.d(TAG, "Audio dispatcher thread pool shut down")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error shutting down audio dispatcher", e)
+        }
 
         Log.i(TAG, "Session closed")
     }

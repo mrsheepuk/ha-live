@@ -161,6 +161,30 @@ class GeminiLiveClient(
     }
 
     /**
+     * Clean up all resources including WebSocket, coroutine scope, and HTTP client.
+     * Call this when the client is no longer needed to prevent resource leaks.
+     * After calling cleanup(), this client instance cannot be reused.
+     */
+    suspend fun cleanup() {
+        try {
+            // Close WebSocket first
+            close()
+
+            // Cancel coroutine scope
+            scope.cancel()
+            Log.d(TAG, "Coroutine scope cancelled")
+
+            // Shutdown HTTP client resources
+            httpClient.dispatcher.executorService.shutdown()
+            httpClient.connectionPool.evictAll()
+            Log.d(TAG, "HTTP client resources cleaned up")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during cleanup", e)
+        }
+    }
+
+    /**
      * Check if connected
      */
     fun isConnected(): Boolean = isConnected
