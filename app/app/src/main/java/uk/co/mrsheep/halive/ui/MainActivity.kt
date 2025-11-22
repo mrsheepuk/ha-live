@@ -98,24 +98,24 @@ class MainActivity : AppCompatActivity() {
         centeredConstraintSet.clone(mainConstraintLayout)
 
         // Clear existing bottom constraints for chain elements
-        centeredConstraintSet.clear(R.id.audioVisualizer, ConstraintSet.BOTTOM)
         centeredConstraintSet.clear(R.id.statusContainer, ConstraintSet.BOTTOM)
+        centeredConstraintSet.clear(R.id.audioVisualizer, ConstraintSet.BOTTOM)
         centeredConstraintSet.clear(R.id.buttonContainer, ConstraintSet.BOTTOM)
 
-        // Create vertical chain: audioVisualizer -> statusContainer -> buttonContainer
+        // Create vertical chain: statusContainer -> audioVisualizer -> buttonContainer
         centeredConstraintSet.createVerticalChain(
-            R.id.audioVisualizer,
+            R.id.statusContainer,
             ConstraintSet.TOP,
             R.id.buttonContainer,
             ConstraintSet.BOTTOM,
-            intArrayOf(R.id.audioVisualizer, R.id.statusContainer, R.id.buttonContainer),
+            intArrayOf(R.id.statusContainer, R.id.audioVisualizer, R.id.buttonContainer),
             null,
             ConstraintSet.CHAIN_PACKED
         )
 
         // Anchor chain to parent top/bottom for vertical centering
         centeredConstraintSet.connect(
-            R.id.audioVisualizer,
+            R.id.statusContainer,
             ConstraintSet.TOP,
             ConstraintSet.PARENT_ID,
             ConstraintSet.TOP
