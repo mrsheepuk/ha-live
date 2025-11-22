@@ -86,8 +86,9 @@ class GeminiLiveSession(
     private val client = GeminiLiveClient(apiKey)
 
     @SuppressLint("ThreadPoolCreation")
-    val audioDispatcher =
-        Executors.newCachedThreadPool(AudioThreadFactory()).asCoroutineDispatcher()
+    private val audioExecutor = Executors.newCachedThreadPool(AudioThreadFactory())
+
+    private val audioDispatcher = audioExecutor.asCoroutineDispatcher()
 
     private var sessionScope: CoroutineScope = CoroutineScope(EmptyCoroutineContext).apply { cancel() }
     private var audioScope: CoroutineScope = CoroutineScope(EmptyCoroutineContext).apply { cancel() }
@@ -525,10 +526,11 @@ class GeminiLiveSession(
 
         // Shutdown audio thread pool to prevent thread leaks (shutdownNow for immediate termination)
         try {
-            (audioDispatcher.executor as? ExecutorService)?.shutdownNow()
-            Log.d(TAG, "Audio dispatcher thread pool shut down")
+            audioDispatcher.close() // Close the coroutine dispatcher wrapper
+            audioExecutor.shutdownNow() // Shutdown the underlying thread pool
+            Log.d(TAG, "Audio executor thread pool shut down")
         } catch (e: Exception) {
-            Log.e(TAG, "Error shutting down audio dispatcher", e)
+            Log.e(TAG, "Error shutting down audio executor", e)
         }
 
         Log.i(TAG, "Session closed")
