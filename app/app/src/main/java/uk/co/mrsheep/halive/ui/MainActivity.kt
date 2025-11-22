@@ -20,10 +20,16 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.transition.ChangeBounds
+import androidx.transition.Fade
+import androidx.transition.TransitionManager
+import androidx.transition.TransitionSet
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
@@ -58,6 +64,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var quickMessageScrollView: View
     private lateinit var quickMessageChipGroup: ChipGroup
 
+    // Layout transition support
+    private lateinit var mainConstraintLayout: ConstraintLayout
+    private val centeredConstraintSet = ConstraintSet()
+    private val topAlignedConstraintSet = ConstraintSet()
+    private var hasTransitionedToTop = false
+
     private fun checkConfigurationAndLaunch() {
         // Check if app is configured - need at least one provider AND Home Assistant
         val hasFirebase = FirebaseConfig.isConfigured(this)
@@ -71,6 +83,83 @@ class MainActivity : AppCompatActivity() {
             finish()
             return
         }
+    }
+
+    /**
+     * Sets up both constraint configurations:
+     * - Centered: vertical chain with CHAIN_PACKED for centered appearance
+     * - TopAligned: current XML layout (top-to-bottom flow)
+     */
+    private fun setupConstraintSets() {
+        // Top-aligned: clone from current XML (this is our "chat mode" layout)
+        topAlignedConstraintSet.clone(mainConstraintLayout)
+
+        // Centered: create vertical chain for centered appearance (pre-chat mode)
+        centeredConstraintSet.clone(mainConstraintLayout)
+
+        // Clear existing bottom constraints for chain elements
+        centeredConstraintSet.clear(R.id.audioVisualizer, ConstraintSet.BOTTOM)
+        centeredConstraintSet.clear(R.id.statusContainer, ConstraintSet.BOTTOM)
+        centeredConstraintSet.clear(R.id.buttonContainer, ConstraintSet.BOTTOM)
+
+        // Create vertical chain: audioVisualizer -> statusContainer -> buttonContainer
+        centeredConstraintSet.createVerticalChain(
+            R.id.audioVisualizer,
+            ConstraintSet.TOP,
+            R.id.buttonContainer,
+            ConstraintSet.BOTTOM,
+            intArrayOf(R.id.audioVisualizer, R.id.statusContainer, R.id.buttonContainer),
+            null,
+            ConstraintSet.CHAIN_PACKED
+        )
+
+        // Anchor chain to parent top/bottom for vertical centering
+        centeredConstraintSet.connect(
+            R.id.audioVisualizer,
+            ConstraintSet.TOP,
+            ConstraintSet.PARENT_ID,
+            ConstraintSet.TOP
+        )
+        centeredConstraintSet.connect(
+            R.id.buttonContainer,
+            ConstraintSet.BOTTOM,
+            ConstraintSet.PARENT_ID,
+            ConstraintSet.BOTTOM
+        )
+
+        // Hide transcript and quick messages in centered mode
+        centeredConstraintSet.setVisibility(R.id.transcriptionRecyclerView, View.GONE)
+        centeredConstraintSet.setVisibility(R.id.quickMessageScrollView, View.GONE)
+    }
+
+    /**
+     * Animate one-time transition from centered to top-aligned layout.
+     * Called only on first chat activation.
+     */
+    private fun transitionToTopAlignedLayout() {
+        if (hasTransitionedToTop) {
+            return
+        }
+
+        hasTransitionedToTop = true
+        viewModel.markHasChatted()
+
+        // Make transcript visible before transition
+        transcriptionRecyclerView.visibility = View.VISIBLE
+
+        // Create smooth transition with bounds change and fade
+        val transitionSet = TransitionSet().apply {
+            addTransition(ChangeBounds().apply {
+                duration = 400
+            })
+            addTransition(Fade(Fade.IN).apply {
+                duration = 300
+                addTarget(transcriptionRecyclerView)
+            })
+        }
+
+        TransitionManager.beginDelayedTransition(mainConstraintLayout, transitionSet)
+        topAlignedConstraintSet.applyTo(mainConstraintLayout)
     }
 
     // Activity Result Launcher for the file picker
@@ -122,6 +211,20 @@ class MainActivity : AppCompatActivity() {
         checkConfigurationAndLaunch()
 
         setContentView(R.layout.activity_main)
+
+        // Get reference to main constraint layout for transitions
+        mainConstraintLayout = findViewById(R.id.mainConstraintLayout)
+        setupConstraintSets()
+
+        // Apply initial layout based on whether user has ever chatted
+        if (viewModel.hasEverChatted.value) {
+            // Already chatted before (e.g., after rotation) - use top layout immediately
+            topAlignedConstraintSet.applyTo(mainConstraintLayout)
+            hasTransitionedToTop = true
+        } else {
+            // Never chatted - start with centered layout
+            centeredConstraintSet.applyTo(mainConstraintLayout)
+        }
 
         toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
@@ -316,6 +419,11 @@ class MainActivity : AppCompatActivity() {
 
                 // Populate quick message chips (visibility handled inside)
                 populateQuickMessageChips()
+
+                // Animate one-time layout transition to top-aligned mode (if first chat)
+                if (!viewModel.hasEverChatted.value) {
+                    transitionToTopAlignedLayout()
+                }
                 // Listener is already active
             }
             is UiState.ExecutingAction -> {
