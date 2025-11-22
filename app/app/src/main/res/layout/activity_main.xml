@@ -52,6 +52,15 @@
             android:text="Retry"
             android:visibility="gone"
             android:layout_marginStart="8dp" />
+
+        <Button
+            android:id="@+id/clearButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="?attr/materialButtonOutlinedStyle"
+            android:text="Clear"
+            android:visibility="gone"
+            android:layout_marginStart="8dp" />
     </LinearLayout>
 
     <uk.co.mrsheep.halive.ui.AudioVisualizerView

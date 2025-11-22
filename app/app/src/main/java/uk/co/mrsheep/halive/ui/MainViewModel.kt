@@ -460,6 +460,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     }
 
     /**
+     * Clear all transcription logs
+     */
+    fun clearTranscriptionLogs() {
+        _transcriptionLogs.value = emptyList()
+    }
+
+    /**
      * Switch to a different profile
      */
     fun switchProfile(profileId: String) {

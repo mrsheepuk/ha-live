@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var quickMessageScrollView: View
     private lateinit var quickMessageChipGroup: ChipGroup
+    private lateinit var clearButton: Button
 
     // Layout transition support
     private lateinit var mainConstraintLayout: ConstraintLayout
@@ -238,6 +239,7 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         mainButton = findViewById(R.id.mainButton)
         retryButton = findViewById(R.id.retryButton)
+        clearButton = findViewById(R.id.clearButton)
         audioVisualizer = findViewById(R.id.audioVisualizer)
         wakeWordChip = findViewById(R.id.wakeWordChip)
 
@@ -255,6 +257,10 @@ class MainActivity : AppCompatActivity() {
 
         retryButton.setOnClickListener {
             viewModel.retryInitialization()
+        }
+
+        clearButton.setOnClickListener {
+            clearTranscriptionAndReset()
         }
 
         // Observe wake word state from ViewModel and update chip appearance
@@ -365,6 +371,7 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
+                clearButton.visibility = View.GONE
             }
             UiState.ProviderConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -375,6 +382,7 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
+                clearButton.visibility = View.GONE
             }
             UiState.HAConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -385,6 +393,7 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
+                clearButton.visibility = View.GONE
             }
             UiState.Initializing -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -395,6 +404,7 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
+                clearButton.visibility = View.GONE
             }
             UiState.ReadyToTalk -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -412,6 +422,8 @@ class MainActivity : AppCompatActivity() {
                 mainButton.setOnTouchListener(null) // Remove touch listener
                 mainButton.setOnClickListener(chatButtonClickListener)
                 quickMessageScrollView.visibility = View.GONE
+                // Show clear button if we have transcription logs from previous chats
+                clearButton.visibility = if (viewModel.transcriptionLogs.value.isNotEmpty()) View.VISIBLE else View.GONE
             }
             UiState.ChatActive -> {
                 audioVisualizer.setState(VisualizerState.ACTIVE)
@@ -422,6 +434,7 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "Chat active - listening..."
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
+                clearButton.visibility = View.GONE
 
                 // Animate one-time layout transition to top-aligned mode (if first chat)
                 if (!viewModel.hasEverChatted.value) {
@@ -443,6 +456,7 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
+                clearButton.visibility = View.GONE
             }
             is UiState.Error -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -453,6 +467,7 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.visibility = View.VISIBLE
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
+                clearButton.visibility = View.GONE
             }
         }
     }
@@ -628,6 +643,36 @@ class MainActivity : AppCompatActivity() {
             }
             quickMessageChipGroup.addView(chip)
         }
+    }
+
+    private fun clearTranscriptionAndReset() {
+        // Clear transcription logs from ViewModel
+        viewModel.clearTranscriptionLogs()
+
+        // Hide transcription view and quick messages
+        transcriptionRecyclerView.visibility = View.GONE
+        quickMessageScrollView.visibility = View.GONE
+
+        // Transition back to centered layout
+        hasTransitionedToTop = false
+        val transitionSet = TransitionSet().apply {
+            addTransition(ChangeBounds().apply {
+                duration = 400
+            })
+            addTransition(Fade(Fade.OUT).apply {
+                duration = 300
+                addTarget(transcriptionRecyclerView)
+            })
+        }
+
+        TransitionManager.beginDelayedTransition(mainConstraintLayout, transitionSet)
+        centeredConstraintSet.applyTo(mainConstraintLayout)
+
+        // Hide the clear button
+        clearButton.visibility = View.GONE
+
+        // Update status text
+        statusText.text = "Ready to chat"
     }
 
     fun provideViewModel(): MainViewModel = viewModel
