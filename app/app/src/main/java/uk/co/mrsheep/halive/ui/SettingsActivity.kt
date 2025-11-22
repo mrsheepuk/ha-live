@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
@@ -14,6 +15,7 @@ import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -28,6 +30,8 @@ import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.OptimizationLevel
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.core.WakeWordSettings
+import uk.co.mrsheep.halive.core.WakeWordModelManager
+import uk.co.mrsheep.halive.core.WakeWordModelConfig
 import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.pm.PackageManager
@@ -75,6 +79,7 @@ class SettingsActivity : AppCompatActivity() {
 
     // Wake word section
     private lateinit var wakeWordStatusText: TextView
+    private lateinit var wakeWordModelText: TextView
     private lateinit var wakeWordDetailsText: TextView
     private lateinit var wakeWordConfigButton: Button
 
@@ -86,6 +91,10 @@ class SettingsActivity : AppCompatActivity() {
     // Test mode service
     private var testWakeWordService: WakeWordService? = null
 
+    // Wake word config dialog references (for refreshing after import)
+    private var currentConfigDialog: AlertDialog? = null
+    private var currentModelSpinner: Spinner? = null
+
     // Read-only overlay
     private lateinit var readOnlyOverlay: View
     private lateinit var readOnlyMessage: TextView
@@ -94,6 +103,10 @@ class SettingsActivity : AppCompatActivity() {
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let { viewModel.changeFirebaseConfig(it) }
+    }
+
+    private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { handleOnnxImport(it) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -173,6 +186,7 @@ class SettingsActivity : AppCompatActivity() {
 
         // Wake word section
         wakeWordStatusText = findViewById(R.id.wakeWordStatusText)
+        wakeWordModelText = findViewById(R.id.wakeWordModelText)
         wakeWordDetailsText = findViewById(R.id.wakeWordDetailsText)
         wakeWordConfigButton = findViewById(R.id.wakeWordConfigButton)
 
@@ -243,7 +257,14 @@ class SettingsActivity : AppCompatActivity() {
 
                 // Update wake word display
                 wakeWordStatusText.text = if (state.wakeWordEnabled) "Enabled" else "Disabled"
+
+                // Get the selected model and update model text
+                WakeWordModelManager.ensureInitialized(this@SettingsActivity)
+                val selectedModelId = WakeWordConfig.getSelectedModelId(this@SettingsActivity)
+                val selectedModel = WakeWordModelManager.getModel(this@SettingsActivity, selectedModelId)
+                wakeWordModelText.text = selectedModel?.displayName ?: "Unknown"
                 wakeWordDetailsText.text = state.wakeWordDetails
+
                 wakeWordConfigButton.isEnabled = !state.isReadOnly
 
                 // Enable/disable buttons based on read-only state
@@ -393,8 +414,12 @@ class SettingsActivity : AppCompatActivity() {
     private fun showWakeWordConfigDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_wake_word_config, null)
 
+        // Ensure WakeWordModelManager is initialized
+        WakeWordModelManager.ensureInitialized(this)
+
         // Load current settings
         val currentSettings = WakeWordConfig.getSettings(this)
+        val currentModelId = WakeWordConfig.getSelectedModelId(this)
 
         // Threshold seekbar
         val thresholdSeekBar = dialogView.findViewById<SeekBar>(R.id.thresholdSeekBar)
@@ -418,6 +443,56 @@ class SettingsActivity : AppCompatActivity() {
         }
         val currentThreadCount = currentSettings.threadCount
         threadCountSpinner.setSelection(threadOptions.indexOf(currentThreadCount.toString()).coerceAtLeast(0))
+
+        // Wake word model spinner
+        val modelSpinner = dialogView.findViewById<Spinner>(R.id.wakeWordModelSpinner)
+        val importButton = dialogView.findViewById<Button>(R.id.importModelButton)
+        val deleteButton = dialogView.findViewById<Button>(R.id.deleteModelButton)
+
+        // Store spinner reference for refreshing after import
+        currentModelSpinner = modelSpinner
+
+        // Load all available models and setup spinner
+        refreshModelSpinner(modelSpinner, currentModelId)
+
+        // Handle model selection changes
+        var selectedModelId = currentModelId
+        modelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val selectedModel = WakeWordModelManager.getAllModels(this@SettingsActivity).getOrNull(position)
+                selectedModelId = selectedModel?.id ?: currentModelId
+                // Enable delete button only for non-built-in models
+                deleteButton.isEnabled = selectedModel?.isBuiltIn == false
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                deleteButton.isEnabled = false
+            }
+        }
+
+        // Import button listener
+        importButton.setOnClickListener {
+            filePickerLauncher.launch(arrayOf("application/octet-stream"))
+        }
+
+        // Delete button listener
+        deleteButton.setOnClickListener {
+            val selectedModel = WakeWordModelManager.getAllModels(this@SettingsActivity).find { it.id == selectedModelId }
+            if (selectedModel != null && !selectedModel.isBuiltIn) {
+                showDeleteModelConfirmation(selectedModel) { confirmed ->
+                    if (confirmed) {
+                        // If deleting the currently selected model, switch to built-in
+                        val needsReload = selectedModelId == currentModelId
+                        if (needsReload) {
+                            WakeWordConfig.setSelectedModelId(this@SettingsActivity, "ok_computer")
+                            // Reload settings to update main UI
+                            viewModel.loadSettings()
+                        }
+                        refreshModelSpinner(modelSpinner, if (needsReload) "ok_computer" else selectedModelId)
+                    }
+                }
+            }
+        }
 
         // Execution mode radio buttons
         val radioExecutionSequential = dialogView.findViewById<RadioButton>(R.id.radioExecutionSequential)
@@ -449,6 +524,9 @@ class SettingsActivity : AppCompatActivity() {
             .setNegativeButton("Cancel", null)
             .create()
 
+        // Store dialog reference
+        currentConfigDialog = dialog
+
         dialog.setOnShowListener {
             val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             saveButton.setOnClickListener {
@@ -476,9 +554,22 @@ class SettingsActivity : AppCompatActivity() {
                     optimizationLevel = optimizationLevel
                 )
 
+                // Save selected model ID
+                WakeWordConfig.setSelectedModelId(this@SettingsActivity, selectedModelId)
+
                 viewModel.saveWakeWordSettings(newSettings)
+
+                // Reload settings to update main UI with new model selection
+                viewModel.loadSettings()
+
                 dialog.dismiss()
             }
+        }
+
+        // Clear references when dialog is dismissed
+        dialog.setOnDismissListener {
+            currentConfigDialog = null
+            currentModelSpinner = null
         }
 
         dialog.show()
@@ -762,6 +853,139 @@ class SettingsActivity : AppCompatActivity() {
     override fun onSupportNavigateUp(): Boolean {
         finish()
         return true
+    }
+
+    /**
+     * Handle ONNX file import from file picker.
+     * Prompts user for model name, then imports the model.
+     */
+    private fun handleOnnxImport(uri: Uri) {
+        showModelNameDialog(uri)
+    }
+
+    /**
+     * Show dialog prompting user for model name.
+     * After user enters name, attempts to import the model.
+     */
+    private fun showModelNameDialog(uri: Uri) {
+        val input = android.widget.EditText(this)
+        input.hint = "Enter model name (e.g., 'Custom Wake Word')"
+        input.inputType = android.text.InputType.TYPE_CLASS_TEXT
+
+        AlertDialog.Builder(this)
+            .setTitle("Name for new model")
+            .setView(input)
+            .setPositiveButton("Import", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+            .apply {
+                setOnShowListener {
+                    val button = getButton(AlertDialog.BUTTON_POSITIVE)
+                    button.setOnClickListener {
+                        val modelName = input.text.toString().trim()
+
+                        if (modelName.isBlank()) {
+                            input.error = "Model name is required"
+                            return@setOnClickListener
+                        }
+
+                        // Attempt to import model
+                        try {
+                            val result = WakeWordModelManager.importModel(this@SettingsActivity, uri, modelName)
+                            result.onSuccess { importedModel ->
+                                Toast.makeText(
+                                    this@SettingsActivity,
+                                    "Model imported successfully: ${importedModel.displayName}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+
+                                // Refresh the spinner in the wake word config dialog
+                                currentModelSpinner?.let { spinner ->
+                                    refreshModelSpinner(spinner, importedModel.id)
+                                }
+
+                                dismiss()
+                            }
+                            result.onFailure { error ->
+                                Toast.makeText(
+                                    this@SettingsActivity,
+                                    "Error importing model: ${error.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(
+                                this@SettingsActivity,
+                                "Error importing model: ${e.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                }
+            }
+            .show()
+    }
+
+    /**
+     * Show confirmation dialog for deleting a model.
+     * Calls the callback with true if user confirms deletion.
+     */
+    private fun showDeleteModelConfirmation(model: WakeWordModelConfig, callback: (Boolean) -> Unit) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete model?")
+            .setMessage("Are you sure you want to delete '${model.displayName}' (${model.getFileSizeFormatted()})? This cannot be undone.")
+            .setPositiveButton("Delete") { _, _ ->
+                try {
+                    val deleted = WakeWordModelManager.deleteModel(this, model.id)
+                    if (deleted) {
+                        Toast.makeText(
+                            this,
+                            "Model deleted successfully",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        callback(true)
+                    } else {
+                        Toast.makeText(
+                            this,
+                            "Failed to delete model",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        callback(false)
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        this,
+                        "Error deleting model: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    callback(false)
+                }
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                callback(false)
+            }
+            .show()
+    }
+
+    /**
+     * Refresh the model spinner with current models and select the specified model.
+     * Useful after importing or deleting a model.
+     */
+    private fun refreshModelSpinner(spinner: Spinner, selectModelId: String?) {
+        val models = WakeWordModelManager.getAllModels(this)
+        // Show model name with file size (e.g., "OK Computer (206 KB)")
+        val modelDisplayNames = models.map { "${it.displayName} (${it.getFileSizeFormatted()})" }
+
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, modelDisplayNames).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+
+        // Find and select the specified model
+        val modelToSelect = selectModelId ?: WakeWordConfig.getSelectedModelId(this)
+        val selectedIndex = models.indexOfFirst { it.id == modelToSelect }
+        if (selectedIndex >= 0) {
+            spinner.setSelection(selectedIndex)
+        }
     }
 }
 
