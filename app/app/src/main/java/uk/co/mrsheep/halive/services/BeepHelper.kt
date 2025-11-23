@@ -99,8 +99,8 @@ object BeepHelper {
     private suspend fun playBeep() {
         val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
         try {
-            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP2, 300)
-            delay(300) 
+            toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 400)
+            delay(400) 
         } finally {
             // Ensure ToneGenerator is always released to prevent resource leaks
             toneGenerator.release()
@@ -167,6 +167,7 @@ object BeepHelper {
         }
     }
 }
+
 
 
 
