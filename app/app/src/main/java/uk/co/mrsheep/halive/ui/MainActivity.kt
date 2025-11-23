@@ -24,7 +24,9 @@ import androidx.appcompat.widget.Toolbar
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.transition.ChangeBounds
@@ -263,46 +265,52 @@ class MainActivity : AppCompatActivity() {
             clearTranscriptionAndReset()
         }
 
-        // Observe wake word state from ViewModel and update chip appearance
+        // Observe flows and update UI - only when activity is in STARTED state
         lifecycleScope.launch {
-            viewModel.wakeWordEnabled.collect { enabled ->
-                updateWakeWordChipAppearance(enabled)
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Observe wake word state from ViewModel and update chip appearance
+                launch {
+                    viewModel.wakeWordEnabled.collect { enabled ->
+                        updateWakeWordChipAppearance(enabled)
+                    }
+                }
+
+                // Observe the UI state from the ViewModel
+                launch {
+                    viewModel.uiState.collect { state ->
+                        updateUiForState(state)
+                    }
+                }
+
+                // Observe transcription logs
+                launch {
+                    viewModel.transcriptionLogs.collect { logs ->
+                        updateTranscriptionLogs(logs)
+                    }
+                }
+
+                // Observe audio level from ViewModel
+                launch {
+                    viewModel.audioLevel.collect { level ->
+                        audioVisualizer.setAudioLevel(level)
+                    }
+                }
+
+                // Observe auto-start intent
+                launch {
+                    viewModel.shouldAttemptAutoStart.collect { shouldAutoStart ->
+                        if (shouldAutoStart) {
+                            handleAutoStart()
+                            viewModel.consumeAutoStartIntent()
+                        }
+                    }
+                }
             }
         }
 
         // Handle user clicking the wake word chip
         wakeWordChip.setOnClickListener {
             viewModel.toggleWakeWord(!viewModel.wakeWordEnabled.value)
-        }
-
-        // Observe the UI state from the ViewModel
-        lifecycleScope.launch {
-            viewModel.uiState.collect { state ->
-                updateUiForState(state)
-            }
-        }
-
-        lifecycleScope.launch {
-            viewModel.transcriptionLogs.collect { logs ->
-                updateTranscriptionLogs(logs)
-            }
-        }
-
-        // Observe audio level from ViewModel
-        lifecycleScope.launch {
-            viewModel.audioLevel.collect { level ->
-                audioVisualizer.setAudioLevel(level)
-            }
-        }
-
-        // Observe auto-start intent
-        lifecycleScope.launch {
-            viewModel.shouldAttemptAutoStart.collect { shouldAutoStart ->
-                if (shouldAutoStart) {
-                    handleAutoStart()
-                    viewModel.consumeAutoStartIntent()
-                }
-            }
         }
 
         // Handle widget auto-start intent

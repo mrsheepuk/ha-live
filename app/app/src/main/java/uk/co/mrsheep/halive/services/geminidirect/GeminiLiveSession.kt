@@ -490,8 +490,10 @@ class GeminiLiveSession(
      * 1. Marks session as inactive (stops loops)
      * 2. Closes playback channel
      * 3. Cleans up audio manager (stops recording/playback)
-     * 4. Closes WebSocket connection
-     * 5. Cancels all session coroutines
+     * 4. Closes WebSocket connection in a separate scope (so it isn't cancelled)
+     * 5. Shuts down the client scope
+     * 6. Shuts down the audio dispatcher thread pool
+     * 7. Cancels all session coroutines
      *
      * Safe to call multiple times.
      */
@@ -500,28 +502,33 @@ class GeminiLiveSession(
 
         isSessionActive = false
 
-
         audioScope.cancel()
         playBackQueue.close()
 
         audioHelper?.release()
         audioHelper = null
 
-        // Close WebSocket (non-blocking)
-        sessionScope.launch {
+        // Fix: Launch close in a separate scope so it isn't cancelled by sessionScope.cancel()
+        CoroutineScope(Dispatchers.IO).launch {
             try {
                 client.close()
-                Log.d(TAG, "GeminiLiveClient closed")
+                // Fix: Clean up client scope
+                client.shutdown()
+                Log.d(TAG, "GeminiLiveClient closed and shut down")
             } catch (e: Exception) {
                 Log.e(TAG, "Error closing GeminiLiveClient", e)
             }
         }
 
-        // Cancel all coroutines in session scope
-        sessionScope.cancel()
-        Log.d(TAG, "Session scope cancelled")
+        // Fix: Shut down the thread pool
+        try {
+            (audioDispatcher as? java.io.Closeable)?.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing audioDispatcher", e)
+        }
 
-        Log.i(TAG, "Session closed")
+        sessionScope.cancel()
+        Log.d(TAG, "Session closed and resources released")
     }
 }
 
