@@ -105,20 +105,6 @@ class LiveSessionService : Service(), AppLogger {
     }
 
     /**
-     * Extracts initials from a profile name.
-     * Takes the first letter of each word.
-     * Example: "House Lizard" -> "HL"
-     */
-    private fun getProfileInitials(profileName: String): String {
-        return profileName
-            .split(" ")
-            .filter { it.isNotBlank() }
-            .mapNotNull { it.firstOrNull()?.uppercaseChar() }
-            .joinToString("")
-            .take(3) // Limit to 3 characters max for readability
-    }
-
-    /**
      * Creates a notification for the foreground service.
      * Uses Notification.CallStyle for API >= 31, standard notification otherwise.
      * Optionally includes profile information if available.
@@ -144,15 +130,14 @@ class LiveSessionService : Service(), AppLogger {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Determine display name and initials from profile
-        val displayName = profile?.let { getProfileInitials(it.name) } ?: "VA"
-        val fullProfileName = profile?.name ?: "Voice Assistant"
+        // Use full profile name - Android automatically extracts initials for the letter bubble
+        val displayName = profile?.name ?: "Voice Assistant"
         val notificationTitle = if (profile != null) "${profile.name} Active" else "Voice Assistant Active"
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // API 31+: Use CallStyle notification with profile initials
+            // API 31+: Use CallStyle notification - Android extracts initials automatically
             val person = android.app.Person.Builder()
-                .setName(displayName) // This shows as the letter bubble (e.g., "HL" for "House Lizard")
+                .setName(displayName) // Android shows initials in letter bubble (e.g., "House Lizard" -> "HL")
                 .setImportant(true)
                 .build()
 
