@@ -292,24 +292,30 @@ class SessionPreparer(
 <background_info>
 $renderedBgInfo
 </background_info>
+
 """.trimIndent()
         }
         if (profile.includeLiveContext && liveContext.isNotEmpty()) {
             prompt += """
 <live_context>
 $liveContext
-</live_context>""".trimIndent()
+</live_context>
+
+""".trimIndent()
         }
 
         if (renderedPersonality.isNotEmpty()) {
             prompt += """
 <personality>
 $renderedPersonality
-</personality>""".trimIndent()
+</personality>
+
+""".trimIndent()
         }
 
         if (renderedSystemPrompt.isNotEmpty()) {
             prompt += """
+
 $renderedSystemPrompt
 """.trimIndent()
         }
