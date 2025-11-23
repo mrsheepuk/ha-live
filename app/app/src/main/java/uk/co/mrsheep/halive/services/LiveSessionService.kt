@@ -67,6 +67,7 @@ class LiveSessionService : Service(), AppLogger {
     private var conversationService: ConversationService? = null
     private var mcpClient: McpClientManager? = null
     private var toolExecutor: ToolExecutor? = null
+    private var currentProfile: Profile? = null
 
     // State flows
     private val _transcriptionLogs = MutableStateFlow<List<TranscriptionEntry>>(emptyList())
@@ -104,10 +105,25 @@ class LiveSessionService : Service(), AppLogger {
     }
 
     /**
+     * Extracts initials from a profile name.
+     * Takes the first letter of each word.
+     * Example: "House Lizard" -> "HL"
+     */
+    private fun getProfileInitials(profileName: String): String {
+        return profileName
+            .split(" ")
+            .filter { it.isNotBlank() }
+            .mapNotNull { it.firstOrNull()?.uppercaseChar() }
+            .joinToString("")
+            .take(3) // Limit to 3 characters max for readability
+    }
+
+    /**
      * Creates a notification for the foreground service.
      * Uses Notification.CallStyle for API >= 31, standard notification otherwise.
+     * Optionally includes profile information if available.
      */
-    private fun createNotification(): Notification {
+    private fun createNotification(profile: Profile? = currentProfile): Notification {
         createNotificationChannel()
 
         val notificationIntent = Intent(this, MainActivity::class.java)
@@ -128,15 +144,20 @@ class LiveSessionService : Service(), AppLogger {
             PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Determine display name and initials from profile
+        val displayName = profile?.let { getProfileInitials(it.name) } ?: "VA"
+        val fullProfileName = profile?.name ?: "Voice Assistant"
+        val notificationTitle = if (profile != null) "${profile.name} Active" else "Voice Assistant Active"
+
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // API 31+: Use CallStyle notification
+            // API 31+: Use CallStyle notification with profile initials
             val person = android.app.Person.Builder()
-                .setName("Voice Assistant")
+                .setName(displayName) // This shows as the letter bubble (e.g., "HL" for "House Lizard")
                 .setImportant(true)
                 .build()
 
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("Voice Assistant Active")
+                .setContentTitle(notificationTitle)
                 .setContentText("Listening...")
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setContentIntent(pendingIntent)
@@ -151,7 +172,7 @@ class LiveSessionService : Service(), AppLogger {
         } else {
             // API < 31: Standard notification with Stop action
             NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Voice Assistant Active")
+                .setContentTitle(notificationTitle)
                 .setContentText("Listening...")
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setContentIntent(pendingIntent)
@@ -237,6 +258,13 @@ class LiveSessionService : Service(), AppLogger {
                 )
 
                 sessionPreparer.prepareAndInitialize(profile, conversationService!!)
+
+                // Store current profile for notification
+                currentProfile = profile
+
+                // Update notification with profile information
+                val notificationManager = getSystemService(NotificationManager::class.java)
+                notificationManager.notify(NOTIFICATION_ID, createNotification(profile))
 
                 _isSessionActive.value = true
                 _connectionState.value = UiState.ChatActive
@@ -325,6 +353,9 @@ class LiveSessionService : Service(), AppLogger {
         mcpClient?.shutdown()
         mcpClient = null
 
+        // Clear profile
+        currentProfile = null
+
         // Reset audio level
         _audioLevel.value = 0f
 
@@ -408,6 +439,9 @@ class LiveSessionService : Service(), AppLogger {
         // Clean up MCP connection
         mcpClient?.shutdown()
         mcpClient = null
+
+        // Clear profile
+        currentProfile = null
 
         // Cancel all coroutines
         serviceScope.cancel()
