@@ -161,6 +161,15 @@ class GeminiLiveClient(
     }
 
     /**
+     * Shutdown the client scope and cancel all coroutines.
+     * Call this after close() to ensure the scope is cleaned up.
+     */
+    fun shutdown() {
+        scope.cancel()
+        Log.d(TAG, "Client scope cancelled")
+    }
+
+    /**
      * Check if connected
      */
     fun isConnected(): Boolean = isConnected
