@@ -77,6 +77,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var wakeWordStatusText: TextView
     private lateinit var wakeWordDetailsText: TextView
     private lateinit var wakeWordConfigButton: Button
+    private lateinit var alwaysOnCheckBox: CheckBox
+    private lateinit var startServiceButton: Button
 
     // Quick messages section
     private lateinit var quickMessagesRecyclerView: RecyclerView
@@ -180,6 +182,18 @@ class SettingsActivity : AppCompatActivity() {
             showWakeWordConfigDialog()
         }
 
+        alwaysOnCheckBox = findViewById(R.id.alwaysOnCheckBox)
+        startServiceButton = findViewById(R.id.startServiceButton)
+
+        alwaysOnCheckBox.setOnCheckedChangeListener { _, isChecked ->
+            viewModel.setAlwaysOnMode(isChecked)
+            startServiceButton.visibility = if (isChecked) View.VISIBLE else View.GONE
+        }
+
+        startServiceButton.setOnClickListener {
+            viewModel.startBackgroundService()
+        }
+
         // Quick messages section
         quickMessagesRecyclerView = findViewById(R.id.quickMessagesRecyclerView)
         addQuickMessageButton = findViewById(R.id.addQuickMessageButton)
@@ -245,6 +259,11 @@ class SettingsActivity : AppCompatActivity() {
                 wakeWordStatusText.text = if (state.wakeWordEnabled) "Enabled" else "Disabled"
                 wakeWordDetailsText.text = state.wakeWordDetails
                 wakeWordConfigButton.isEnabled = !state.isReadOnly
+
+                // Update always-on checkbox
+                alwaysOnCheckBox.isChecked = state.wakeWordAlwaysOn
+                alwaysOnCheckBox.isEnabled = !state.isReadOnly
+                startServiceButton.visibility = if (state.wakeWordAlwaysOn && !state.isReadOnly) View.VISIBLE else View.GONE
 
                 // Enable/disable buttons based on read-only state
                 haEditButton.isEnabled = !state.isReadOnly
@@ -553,7 +572,7 @@ class SettingsActivity : AppCompatActivity() {
                     testPeakScore.text = "0.00"
                     testScoreProgress.progress = 0
 
-                    testWakeWordService?.startTestMode { score ->
+                    testWakeWordService?.startTestMode(lifecycleScope) { score ->
                         // Update UI with live score
                         testCurrentScore.text = String.format("%.2f", score)
 
@@ -841,7 +860,8 @@ sealed class SettingsState {
         val canChooseService: Boolean,
         val wakeWordEnabled: Boolean,
         val wakeWordDetails: String,
-        val wakeWordThreshold: Float
+        val wakeWordThreshold: Float,
+        val wakeWordAlwaysOn: Boolean
     ) : SettingsState()
     object TestingConnection : SettingsState()
     data class ConnectionSuccess(val message: String) : SettingsState()

@@ -145,6 +145,13 @@ data class WakeWordSettings(
     val enabled: Boolean = false,
 
     /**
+     * Whether wake word should run as a background service (always-on mode).
+     * When enabled, wake word detection runs 24/7 as a foreground service.
+     * Note: This will show the privacy indicator and consume battery.
+     */
+    val alwaysOn: Boolean = false,
+
+    /**
      * Confidence threshold for wake word detection (range: 0.3-0.8).
      * Higher values = stricter detection, lower false positives.
      * Lower values = more sensitive detection, higher false positives.
@@ -170,6 +177,7 @@ data class WakeWordSettings(
 object WakeWordConfig {
     private const val PREFS_NAME = "wake_word_prefs"
     private const val KEY_ENABLED = "wake_word_enabled"
+    private const val KEY_ALWAYS_ON = "wake_word_always_on"
     private const val KEY_THRESHOLD = "threshold"
     private const val KEY_THREAD_COUNT = "thread_count"
     private const val KEY_EXECUTION_MODE = "execution_mode"
@@ -199,6 +207,7 @@ object WakeWordConfig {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
         val enabled = prefs.getBoolean(KEY_ENABLED, false)
+        val alwaysOn = prefs.getBoolean(KEY_ALWAYS_ON, false)
         val threshold = prefs.getFloat(KEY_THRESHOLD, 0.5f)
         val threadCount = prefs.getInt(KEY_THREAD_COUNT, 1)
 
@@ -218,6 +227,7 @@ object WakeWordConfig {
 
         return WakeWordSettings(
             enabled = enabled,
+            alwaysOn = alwaysOn,
             threshold = threshold,
             threadCount = threadCount,
             executionMode = executionMode,
@@ -232,6 +242,7 @@ object WakeWordConfig {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().apply {
             putBoolean(KEY_ENABLED, settings.enabled)
+            putBoolean(KEY_ALWAYS_ON, settings.alwaysOn)
             putFloat(KEY_THRESHOLD, settings.threshold)
             putInt(KEY_THREAD_COUNT, settings.threadCount)
             putString(KEY_EXECUTION_MODE, settings.executionMode.name)

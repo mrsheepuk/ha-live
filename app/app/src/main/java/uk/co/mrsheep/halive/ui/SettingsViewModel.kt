@@ -1,7 +1,9 @@
 package uk.co.mrsheep.halive.ui
 
 import android.app.Application
+import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
@@ -17,6 +19,8 @@ import uk.co.mrsheep.halive.core.OptimizationLevel
 import uk.co.mrsheep.halive.core.QuickMessage
 import uk.co.mrsheep.halive.core.QuickMessageConfig
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
+import uk.co.mrsheep.halive.services.LiveSessionService
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -25,7 +29,7 @@ import kotlin.system.exitProcess
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _settingsState = MutableStateFlow<SettingsState>(
-        SettingsState.Loaded("", "", "", 0, false, "", "", false, false, "", 0.5f)
+        SettingsState.Loaded("", "", "", 0, false, "", "", false, false, "", 0.5f, false)
     )
     val settingsState: StateFlow<SettingsState> = _settingsState
 
@@ -80,7 +84,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 canChooseService = canChooseService,
                 wakeWordEnabled = wakeWordSettings.enabled,
                 wakeWordDetails = wakeWordDetails,
-                wakeWordThreshold = wakeWordSettings.threshold
+                wakeWordThreshold = wakeWordSettings.threshold,
+                wakeWordAlwaysOn = wakeWordSettings.alwaysOn
             )
         }
     }
@@ -257,6 +262,49 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             } catch (e: Exception) {
                 _settingsState.value = SettingsState.ConnectionFailed("Failed to toggle quick message: ${e.message}")
             }
+        }
+    }
+
+    fun setAlwaysOnMode(enabled: Boolean) {
+        val context = getApplication<HAGeminiApp>()
+        val settings = WakeWordConfig.getSettings(context)
+        val newSettings = settings.copy(alwaysOn = enabled)
+        WakeWordConfig.saveSettings(context, newSettings)
+        loadSettings() // Refresh UI
+    }
+
+    fun startBackgroundService() {
+        val context = getApplication<HAGeminiApp>()
+
+        // Get the active profile to pass to the service
+        val activeProfile = ProfileManager.getActiveProfile()
+        if (activeProfile == null) {
+            _settingsState.value = SettingsState.ConnectionFailed("No active profile found")
+            return
+        }
+
+        val intent = Intent(context, LiveSessionService::class.java).apply {
+            action = LiveSessionService.ACTION_START_ALWAYS_ON
+            putExtra("profile_id", activeProfile.id)
+        }
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+
+            // Show success message
+            _settingsState.value = SettingsState.ConnectionSuccess("Background service started")
+
+            // Reload settings after a delay
+            viewModelScope.launch {
+                delay(500)
+                loadSettings()
+            }
+        } catch (e: Exception) {
+            _settingsState.value = SettingsState.ConnectionFailed("Failed to start service: ${e.message}")
         }
     }
 }

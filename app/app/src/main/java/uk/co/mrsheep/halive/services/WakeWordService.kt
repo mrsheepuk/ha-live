@@ -8,8 +8,6 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.services.wake.OwwModel
 import uk.co.mrsheep.halive.core.WakeWordConfig
@@ -30,7 +28,7 @@ import kotlinx.coroutines.isActive
  */
 class WakeWordService(
     private val context: Context,
-    private val onWakeWordDetected: () -> Unit
+    private var onWakeWordDetected: () -> Unit
 ) {
     companion object {
         private const val TAG = "WakeWordService"
@@ -40,7 +38,6 @@ class WakeWordService(
 
     private var audioRecord: AudioRecord? = null
     private var recordingJob: Job? = null
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isListening = false
     private var currentSettings: WakeWordSettings = WakeWordConfig.getSettings(context)
 
@@ -89,12 +86,14 @@ class WakeWordService(
      * the RECORD_AUDIO permission, which is checked by MainActivity at app startup.
      *
      * The method initializes the model, creates an AudioRecord instance, and launches
-     * a coroutine on Dispatchers.IO to process audio chunks in real-time.
+     * a coroutine on the provided external scope to process audio chunks in real-time.
+     *
+     * @param externalScope CoroutineScope to use for the audio recording job (typically provided by the managing Service)
      *
      * Note: Permission warning is suppressed because MainActivity verifies RECORD_AUDIO
      * permission before calling ViewModel lifecycle methods that trigger this function.
      */
-    fun startListening() {
+    fun startListening(externalScope: CoroutineScope) {
         if (isListening) {
             Log.w(TAG, "Already listening for wake word, ignoring startListening() call")
             return
@@ -152,7 +151,7 @@ class WakeWordService(
                 "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE, threshold=${currentSettings.threshold})"
             )
 
-            recordingJob = scope.launch {
+            recordingJob = externalScope.launch {
                 val audioBuffer = ShortArray(CHUNK_SIZE)
                 val floatBuffer = FloatArray(CHUNK_SIZE)
                 val model = getOrCreateModel()
@@ -257,11 +256,12 @@ class WakeWordService(
      * In test mode, every detection score is reported via the callback.
      * Wake word detection is disabled - this is for testing only.
      *
+     * @param externalScope CoroutineScope to use for the audio recording job
      * @param onScore Callback invoked with each detection score (called on Main dispatcher)
      */
-    fun startTestMode(onScore: (Float) -> Unit) {
+    fun startTestMode(externalScope: CoroutineScope, onScore: (Float) -> Unit) {
         testModeCallback = onScore
-        startListening()
+        startListening(externalScope)
         Log.d(TAG, "Test mode started")
     }
 
@@ -280,10 +280,26 @@ class WakeWordService(
     fun isTestMode(): Boolean = testModeCallback != null
 
     /**
-     * Cleans up audio resources.
+     * Updates the wake word detected callback.
      *
-     * Safely stops and releases AudioRecord. Note: Model is NOT closed here
-     * for battery efficiency - it's reused across listening sessions.
+     * This allows the managing Service to update the callback after the WakeWordService
+     * has been created, enabling flexible callback management.
+     *
+     * @param newCallback The new callback to invoke when wake word is detected
+     */
+    fun updateCallback(newCallback: () -> Unit) {
+        onWakeWordDetected = newCallback
+        Log.d(TAG, "Wake word detected callback updated")
+    }
+
+    /**
+     * Cleans up audio resources immediately.
+     *
+     * Safely stops and releases AudioRecord to free the microphone for other uses.
+     * This cleanup happens synchronously and immediately, ensuring the microphone is
+     * available for the next component (e.g., ConversationService) without delay.
+     *
+     * Note: Model is NOT closed here for battery efficiency - it's reused across listening sessions.
      */
     private fun cleanup() {
         try {
@@ -293,7 +309,7 @@ class WakeWordService(
                     Log.d(TAG, "AudioRecord stopped")
                 }
                 it.release()
-                Log.d(TAG, "AudioRecord released")
+                Log.d(TAG, "AudioRecord released - microphone freed immediately")
             }
             audioRecord = null
         } catch (e: Exception) {
@@ -322,15 +338,16 @@ class WakeWordService(
         }
         owwModel = null
 
-        scope.cancel()
         Log.d(TAG, "WakeWordService destroyed")
     }
 
     /**
      * Reloads wake word settings from SharedPreferences.
      * If currently listening, stops and restarts with new settings.
+     *
+     * @param externalScope CoroutineScope to use for the audio recording job when restarting
      */
-    fun reloadSettings() {
+    fun reloadSettings(externalScope: CoroutineScope) {
         currentSettings = WakeWordConfig.getSettings(context)
 
         if (isListening) {
@@ -347,7 +364,7 @@ class WakeWordService(
             }
             owwModel = null
 
-            startListening()
+            startListening(externalScope)
         }
     }
 

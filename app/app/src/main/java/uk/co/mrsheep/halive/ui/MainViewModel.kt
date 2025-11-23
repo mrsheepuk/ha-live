@@ -220,7 +220,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         val isActive = liveSessionService?.isSessionActive?.value ?: false
         if (!isActive) {
-            wakeWordService.startListening()
+            wakeWordService.startListening(viewModelScope)
         }
     }
 
@@ -476,7 +476,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Called when returning from SettingsActivity to apply configuration changes.
      */
     fun reloadWakeWordSettings() {
-        wakeWordService.reloadSettings()
+        wakeWordService.reloadSettings(viewModelScope)
     }
 
     /**

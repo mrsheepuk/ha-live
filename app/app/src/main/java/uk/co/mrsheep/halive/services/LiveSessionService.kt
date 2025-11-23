@@ -50,11 +50,20 @@ import uk.co.mrsheep.halive.ui.UiState
  */
 class LiveSessionService : Service(), AppLogger {
 
+    enum class ServiceState {
+        IDLE,
+        WAKE_WORD_LISTENING,
+        CONVERSATION_ACTIVE,
+        ERROR
+    }
+
     companion object {
         private const val TAG = "LiveSessionService"
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "live_session_channel"
         private const val ACTION_STOP = "uk.co.mrsheep.halive.STOP_SESSION"
+        const val ACTION_START_ALWAYS_ON = "uk.co.mrsheep.halive.START_ALWAYS_ON"
+        const val ACTION_STOP_ALWAYS_ON = "uk.co.mrsheep.halive.STOP_ALWAYS_ON"
     }
 
     // Binder for activity communication
@@ -68,6 +77,13 @@ class LiveSessionService : Service(), AppLogger {
     private var mcpClient: McpClientManager? = null
     private var toolExecutor: ToolExecutor? = null
     private var currentProfile: Profile? = null
+
+    // Wake word and state management
+    private val _serviceState = MutableStateFlow(ServiceState.IDLE)
+    val serviceState: StateFlow<ServiceState> = _serviceState.asStateFlow()
+
+    private var wakeWordService: WakeWordService? = null
+    private var isAlwaysOnMode = false
 
     // State flows
     private val _transcriptionLogs = MutableStateFlow<List<TranscriptionEntry>>(emptyList())
@@ -94,14 +110,49 @@ class LiveSessionService : Service(), AppLogger {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopSession()
-            return START_NOT_STICKY
-        }
+        when (intent?.action) {
+            ACTION_STOP -> {
+                stopSession()
+                return START_NOT_STICKY
+            }
+            ACTION_START_ALWAYS_ON -> {
+                isAlwaysOnMode = true
 
-        // Start foreground service
-        startForeground(NOTIFICATION_ID, createNotification())
-        return START_STICKY
+                // Load profile from intent
+                val profileId = intent?.getStringExtra("profile_id")
+                if (profileId != null) {
+                    currentProfile = uk.co.mrsheep.halive.core.ProfileManager.getProfileById(profileId)
+                    if (currentProfile == null) {
+                        Log.e(TAG, "Failed to load profile with ID: $profileId")
+                        _serviceState.value = ServiceState.ERROR
+                        _connectionState.value = UiState.Error("Profile not found")
+                        stopSelf()
+                        return START_NOT_STICKY
+                    }
+                } else {
+                    Log.e(TAG, "No profile ID provided for always-on mode")
+                    _serviceState.value = ServiceState.ERROR
+                    _connectionState.value = UiState.Error("No profile specified")
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+
+                startForeground(NOTIFICATION_ID, createNotification())
+                startWakeWordListening()
+                return START_STICKY
+            }
+            ACTION_STOP_ALWAYS_ON -> {
+                stopWakeWordListening()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            else -> {
+                // Default behavior - start foreground service
+                startForeground(NOTIFICATION_ID, createNotification())
+                return START_STICKY
+            }
+        }
     }
 
     /**
@@ -120,8 +171,22 @@ class LiveSessionService : Service(), AppLogger {
             PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Determine notification content based on state
+        val (title, text) = when (_serviceState.value) {
+            ServiceState.WAKE_WORD_LISTENING -> {
+                "Wake Word Active" to "Listening for 'Okay Computer'..."
+            }
+            ServiceState.CONVERSATION_ACTIVE -> {
+                val profileName = profile?.name ?: "Voice Assistant"
+                "$profileName Active" to "Listening..."
+            }
+            else -> {
+                "Voice Assistant" to "Active"
+            }
+        }
+
         val stopIntent = Intent(this, LiveSessionService::class.java).apply {
-            action = ACTION_STOP
+            action = if (isAlwaysOnMode) ACTION_STOP_ALWAYS_ON else ACTION_STOP
         }
         val stopPendingIntent = PendingIntent.getService(
             this,
@@ -130,20 +195,15 @@ class LiveSessionService : Service(), AppLogger {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Use full profile name - Android automatically extracts initials for the letter bubble
-        val displayName = profile?.name ?: "Voice Assistant"
-        val notificationTitle = if (profile != null) "${profile.name} Active" else "Voice Assistant Active"
-
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // API 31+: Use CallStyle notification - Android extracts initials automatically
             val person = android.app.Person.Builder()
-                .setName(displayName) // Android shows initials in letter bubble (e.g., "House Lizard" -> "HL")
+                .setName(profile?.name ?: "HA Live")
                 .setImportant(true)
                 .build()
 
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle(notificationTitle)
-                .setContentText("Listening...")
+                .setContentTitle(title)
+                .setContentText(text)
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
@@ -155,10 +215,9 @@ class LiveSessionService : Service(), AppLogger {
                 )
                 .build()
         } else {
-            // API < 31: Standard notification with Stop action
             NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle(notificationTitle)
-                .setContentText("Listening...")
+                .setContentTitle(title)
+                .setContentText(text)
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
@@ -338,18 +397,21 @@ class LiveSessionService : Service(), AppLogger {
         mcpClient?.shutdown()
         mcpClient = null
 
-        // Clear profile
-        currentProfile = null
-
         // Reset audio level
         _audioLevel.value = 0f
 
         _isSessionActive.value = false
         _connectionState.value = UiState.ReadyToTalk
 
-        // Stop the foreground service
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        // Check if we should restart wake word listening
+        if (isAlwaysOnMode) {
+            Log.d(TAG, "Always-on mode: restarting wake word listening")
+            startWakeWordListening()
+        } else {
+            // Stop the foreground service
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
     }
 
     /**
@@ -417,6 +479,10 @@ class LiveSessionService : Service(), AppLogger {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        // Clean up wake word service
+        stopWakeWordListening()
+
         // Clean up conversation service
         conversationService?.cleanup()
         conversationService = null
@@ -430,6 +496,67 @@ class LiveSessionService : Service(), AppLogger {
 
         // Cancel all coroutines
         serviceScope.cancel()
+    }
+
+    /**
+     * Starts listening for wake word in background service mode.
+     */
+    private fun startWakeWordListening() {
+        if (_serviceState.value == ServiceState.WAKE_WORD_LISTENING) {
+            Log.w(TAG, "Already listening for wake word")
+            return
+        }
+
+        try {
+            wakeWordService = WakeWordService(this) {
+                onWakeWordDetected()
+            }
+            wakeWordService?.startListening(serviceScope)
+            _serviceState.value = ServiceState.WAKE_WORD_LISTENING
+
+            // Update notification
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.notify(NOTIFICATION_ID, createNotification())
+
+            Log.d(TAG, "Started wake word listening in background service")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start wake word listening: ${e.message}", e)
+            _serviceState.value = ServiceState.ERROR
+            _connectionState.value = UiState.Error("Failed to start wake word: ${e.message}")
+        }
+    }
+
+    /**
+     * Stops listening for wake word.
+     */
+    private fun stopWakeWordListening() {
+        wakeWordService?.stopListening()
+        wakeWordService?.destroy()
+        wakeWordService = null
+        Log.d(TAG, "Stopped wake word listening")
+    }
+
+    /**
+     * Callback when wake word is detected.
+     */
+    private fun onWakeWordDetected() {
+        Log.i(TAG, "Wake word detected in background service!")
+
+        // Stop wake word listening immediately to release microphone
+        stopWakeWordListening()
+        _serviceState.value = ServiceState.CONVERSATION_ACTIVE
+
+        // Play ready beep
+        BeepHelper.playReadyBeep(this)
+
+        // Start conversation session with current profile
+        currentProfile?.let { profile ->
+            startSession(profile)
+        } ?: run {
+            Log.e(TAG, "No profile set for wake word activation")
+            _serviceState.value = ServiceState.ERROR
+            _connectionState.value = UiState.Error("No profile configured")
+        }
     }
 
     /**

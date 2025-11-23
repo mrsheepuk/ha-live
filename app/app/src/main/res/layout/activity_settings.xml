@@ -265,6 +265,29 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Configure Wake Word"
+                android:layout_marginBottom="12dp" />
+
+            <!-- Always-On Mode Section -->
+            <CheckBox
+                android:id="@+id/alwaysOnCheckBox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Enable Always-On Mode (Background Service)"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚠️ Runs wake word detection 24/7 as a foreground service. Will show privacy indicator and consume battery."
+                android:textSize="12sp"
+                android:layout_marginBottom="12dp" />
+
+            <Button
+                android:id="@+id/startServiceButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Start Background Service"
+                android:visibility="gone"
                 android:layout_marginBottom="24dp" />
 
             <!-- Divider -->
