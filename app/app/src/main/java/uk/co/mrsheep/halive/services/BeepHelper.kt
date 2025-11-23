@@ -100,12 +100,10 @@ object BeepHelper {
         val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
         try {
             // 1. Start with a short standard beep (usually mid-frequency)
-            // Duration is very short (40ms) to act as the "ramp up"
-            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 40)
-            delay(50) 
+            toneGenerator.startTone(ToneGenerator.TONE_CDMA_PIP, 100)
+            delay(150) 
 
-            // 2. Cut immediately to the ACK tone (usually higher frequency)
-            // Duration is slightly longer (100ms) to act as the "peak"
+            // 2. Cut to the ACK tone (usually higher frequency)
             toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 100)
             delay(150) // Wait for the tone to finish playing
         } finally {
@@ -174,4 +172,5 @@ object BeepHelper {
         }
     }
 }
+
 
