@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -180,14 +181,23 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Activity Result Launcher for audio permission
-    private val requestAudioPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
+    // Activity Result Launcher for required permissions (RECORD_AUDIO and POST_NOTIFICATIONS on API 33+)
+    private val requestPermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
+        val notificationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions[Manifest.permission.POST_NOTIFICATIONS] ?: false
+        } else {
+            true // Not required on older versions
+        }
+
+        if (audioGranted) {
+            // Audio is granted, proceed even if notification permission is denied
+            // (service can run, just notification might not show in shade)
             viewModel.onChatButtonClicked()
         } else {
-            // Permission denied, show error state
+            // Audio permission is required
             viewModel.onPermissionDenied()
         }
     }
@@ -482,16 +492,33 @@ class MainActivity : AppCompatActivity() {
 
     // Chat button click listener for toggle functionality
     private val chatButtonClickListener = View.OnClickListener {
-        // Check audio permission before starting
-        if (ContextCompat.checkSelfPermission(
+        // Check required permissions before starting
+        val audioGranted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val notificationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
                 this,
-                Manifest.permission.RECORD_AUDIO
+                Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
-        ) {
+        } else {
+            true // Not required on older versions
+        }
+
+        if (audioGranted && notificationGranted) {
             viewModel.onChatButtonClicked()
         } else {
-            // Request permission
-            requestAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            // Request missing permissions
+            val permissionsToRequest = mutableListOf<String>()
+            if (!audioGranted) {
+                permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationGranted) {
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            requestPermissionsLauncher.launch(permissionsToRequest.toTypedArray())
         }
     }
 
@@ -501,12 +528,22 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Check microphone permission
-        if (ContextCompat.checkSelfPermission(
+        // Check required permissions
+        val audioGranted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val notificationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
                 this,
-                Manifest.permission.RECORD_AUDIO
+                Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
-        ) {
+        } else {
+            true // Not required on older versions
+        }
+
+        if (audioGranted && notificationGranted) {
             // Small delay to ensure UI is fully settled
             lifecycleScope.launch {
                 kotlinx.coroutines.delay(300)
@@ -514,9 +551,13 @@ class MainActivity : AppCompatActivity() {
             }
         } else {
             // Don't request permission automatically - just inform user
+            val missingPermissions = mutableListOf<String>()
+            if (!audioGranted) missingPermissions.add("microphone")
+            if (!notificationGranted) missingPermissions.add("notifications")
+
             Toast.makeText(
                 this,
-                "Auto-start requires microphone permission. Please grant permission and restart the app.",
+                "Auto-start requires ${missingPermissions.joinToString(" and ")} permission(s). Please grant and restart.",
                 Toast.LENGTH_LONG
             ).show()
         }

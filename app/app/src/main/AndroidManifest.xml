@@ -4,8 +4,11 @@
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <application
         android:name=".HAGeminiApp"
@@ -46,6 +49,12 @@
             android:exported="false"
             android:parentActivityName=".ui.ProfileManagementActivity"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- LiveSessionService for background audio recording -->
+        <service
+            android:name=".services.LiveSessionService"
+            android:foregroundServiceType="microphone"
+            android:exported="false" />
 
         <!-- FileProvider for sharing crash logs -->
         <provider

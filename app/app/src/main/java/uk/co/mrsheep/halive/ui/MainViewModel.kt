@@ -1,7 +1,12 @@
 package uk.co.mrsheep.halive.ui
 
 import android.app.Application
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.net.Uri
+import android.os.IBinder
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,39 +15,17 @@ import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
-import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.core.WakeWordConfig
-import uk.co.mrsheep.halive.services.BeepHelper
-import uk.co.mrsheep.halive.services.SessionPreparer
-import uk.co.mrsheep.halive.services.mcp.McpClientManager
-import uk.co.mrsheep.halive.services.conversation.ConversationService
-import uk.co.mrsheep.halive.services.conversation.ConversationServiceFactory
+import uk.co.mrsheep.halive.services.LiveSessionService
 import uk.co.mrsheep.halive.services.WakeWordService
-import com.google.firebase.FirebaseApp
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.jsonPrimitive
-import uk.co.mrsheep.halive.core.AppLogger
 import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.core.QuickMessage
 import uk.co.mrsheep.halive.core.QuickMessageConfig
 import uk.co.mrsheep.halive.core.TranscriptionEntry
-import uk.co.mrsheep.halive.core.TranscriptionSpeaker
-import uk.co.mrsheep.halive.services.AppToolExecutor
-import uk.co.mrsheep.halive.services.LocalTool
-import uk.co.mrsheep.halive.services.ToolExecutor
-import uk.co.mrsheep.halive.services.mcp.McpInputSchema
-import uk.co.mrsheep.halive.services.mcp.McpProperty
-import uk.co.mrsheep.halive.services.mcp.McpTool
-import uk.co.mrsheep.halive.services.mcp.ToolCallResult
-import uk.co.mrsheep.halive.services.mcp.ToolContent
-import kotlin.String
-import uk.co.mrsheep.halive.core.DummyToolsConfig
-import uk.co.mrsheep.halive.services.MockToolExecutor
 
 // Define the different states our UI can be in
 sealed class UiState {
@@ -56,7 +39,7 @@ sealed class UiState {
     data class Error(val message: String) : UiState()
 }
 
-class MainViewModel(application: Application) : AndroidViewModel(application), AppLogger {
+class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val TAG = "MainViewModel"
@@ -68,11 +51,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState
 
+    // State flows from LiveSessionService (mirrored here for UI)
     private val _toolLogs = MutableStateFlow<List<LogEntry>>(emptyList())
     val toolLogs: StateFlow<List<LogEntry>> = _toolLogs
 
     private val _transcriptionLogs = MutableStateFlow<List<TranscriptionEntry>>(emptyList())
     val transcriptionLogs: StateFlow<List<TranscriptionEntry>> = _transcriptionLogs
+
+    private val _audioLevel = MutableStateFlow(0f)
+    val audioLevel: StateFlow<Float> = _audioLevel.asStateFlow()
 
     // Auto-start state
     private val _shouldAttemptAutoStart = MutableStateFlow(false)
@@ -81,10 +68,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     // Wake word enabled state
     private val _wakeWordEnabled = MutableStateFlow(false)
     val wakeWordEnabled: StateFlow<Boolean> = _wakeWordEnabled
-
-    // Audio level for visualization
-    private val _audioLevel = MutableStateFlow(0f)
-    val audioLevel: StateFlow<Float> = _audioLevel.asStateFlow()
 
     // Track if user has ever started a chat in this session (for layout transition)
     private val _hasEverChatted = MutableStateFlow(false)
@@ -95,21 +78,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
 
     private val app = application as HAGeminiApp
 
-    private var toolExecutor: ToolExecutor? = null
-    private var mcpClient: McpClientManager? = null
-    private lateinit var conversationService: ConversationService
+    // LiveSessionService and binding
+    private var liveSessionService: LiveSessionService? = null
+    private var serviceBound = false
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as LiveSessionService.LocalBinder
+            liveSessionService = binder.getService()
+            serviceBound = true
+
+            // Start collecting flows from the service
+            collectServiceFlows()
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            liveSessionService = null
+            serviceBound = false
+        }
+    }
 
     // Wake word service for foreground detection
     private val wakeWordService = WakeWordService(application) {
         // Callback invoked when wake word is detected (already on Main thread)
-        if (!isSessionActive) {
+        liveSessionService?.let { service ->
+            if (!service.isSessionActive.value) {
+                Log.d(TAG, "Wake word detected! Auto-starting chat...")
+                onChatButtonClicked()
+            }
+        } ?: run {
             Log.d(TAG, "Wake word detected! Auto-starting chat...")
             onChatButtonClicked()
         }
     }
-
-    // Track whether a chat session is currently active
-    private var isSessionActive = false
 
     init {
         // Load the active profile
@@ -161,6 +162,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     }
 
     /**
+     * Collects flows from the LiveSessionService and mirrors them in local state flows.
+     */
+    private fun collectServiceFlows() {
+        liveSessionService?.let { service ->
+            // Collect transcription logs
+            viewModelScope.launch {
+                service.transcriptionLogs.collect { logs ->
+                    _transcriptionLogs.value = logs
+                }
+            }
+
+            // Collect tool logs
+            viewModelScope.launch {
+                service.toolLogs.collect { logs ->
+                    _toolLogs.value = logs
+                }
+            }
+
+            // Collect audio level
+            viewModelScope.launch {
+                service.audioLevel.collect { level ->
+                    _audioLevel.value = level
+                }
+            }
+
+            // Collect connection state
+            viewModelScope.launch {
+                service.connectionState.collect { state ->
+                    _uiState.value = state
+                }
+            }
+
+            // Collect session active state for wake word coordination
+            viewModelScope.launch {
+                service.isSessionActive.collect { isActive ->
+                    if (!isActive) {
+                        // Session ended, restart wake word if in foreground
+                        startWakeWordListening()
+                    } else {
+                        // Session started, stop wake word
+                        wakeWordService.stopListening()
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Start wake word listening if not in active chat.
      * Permission is checked by MainActivity before calling lifecycle methods.
      */
@@ -169,7 +218,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
             Log.d(TAG, "Wake word disabled, skipping")
             return
         }
-        if (!isSessionActive) {
+        val isActive = liveSessionService?.isSessionActive?.value ?: false
+        if (!isActive) {
             wakeWordService.startListening()
         }
     }
@@ -240,7 +290,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     }
 
     fun onChatButtonClicked() {
-        if (isSessionActive) {
+        val isActive = liveSessionService?.isSessionActive?.value ?: false
+        if (isActive) {
             // Stop the chat session
             stopChat()
         } else {
@@ -249,164 +300,67 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         }
     }
 
-    private fun setUIState(uiState: UiState): Unit {
-        _uiState.value = uiState
-    }
-
     private fun startChat() {
-        // Initialize Gemini with fresh tools and system prompt
+        // Get the profile
         val profile = ProfileManager.getProfileById(currentProfileId)
         if (profile == null) {
             _uiState.value = UiState.Error("No profile set, choose a profile before starting")
             return
         }
+
         viewModelScope.launch {
             try {
                 // Stop wake word listening (release microphone)
                 wakeWordService.stopListening()
 
-                // Set state to Initializing while preparing the model
-                _uiState.value = UiState.Initializing
+                // Start the foreground service
+                val serviceIntent = Intent(getApplication(), LiveSessionService::class.java)
+                getApplication<Application>().startForegroundService(serviceIntent)
 
-                conversationService = ConversationServiceFactory.create(getApplication())
-
-                // Create fresh MCP connection for this session
-                val mcp = McpClientManager(app.haUrl!!, app.haToken!!)
-                mcp.connect()
-                mcpClient = mcp
-
-                val localTools = getLocalTools()
-
-                // Determine base executor (wrap MCP with MockToolExecutor if dummy tools enabled)
-                val baseExecutor: ToolExecutor = if (DummyToolsConfig.isEnabled(getApplication())) {
-                    // Build passthrough tools list: GetDateTime, GetLiveContext, and all local tools
-                    val passthroughTools = buildList {
-                        add("GetDateTime")
-                        add("GetLiveContext")
-                        addAll(localTools.keys)  // All local tool names (e.g., EndConversation)
-                    }
-                    MockToolExecutor(
-                        realExecutor = mcp,
-                        passthroughTools = passthroughTools
-                    )
-                } else {
-                    mcp
-                }
-
-                // Wrap the base executor (which may be mocked) with AppToolExecutor
-                toolExecutor = AppToolExecutor(
-                    toolExecutor = baseExecutor,
-                    logger = this@MainViewModel,
-                    setUIState = { uiState: UiState -> _uiState.value = uiState },
-                    localTools = localTools,
+                // Bind to the service
+                val bindIntent = Intent(getApplication(), LiveSessionService::class.java)
+                getApplication<Application>().bindService(
+                    bindIntent,
+                    serviceConnection,
+                    Context.BIND_AUTO_CREATE
                 )
 
-                // Now sessionPreparer needs to be recreated with the new mcpClient
-                val sessionPreparer = SessionPreparer(
-                    toolExecutor = toolExecutor!!,
-                    haApiClient = app.haApiClient!!,
-                    logger = this@MainViewModel,
-                    localTools = localTools.keys,
-                    onAudioLevel = { level -> _audioLevel.value = level }
-                )
-
-                sessionPreparer.prepareAndInitialize(profile, conversationService)
-
-                isSessionActive = true
-                _uiState.value = UiState.ChatActive
-                conversationService.startSession()
-                // Play ready beep to indicate session is active
-                BeepHelper.playReadyBeep(getApplication())
-
-                // Send initial message to agent if configured
-                profile.initialMessageToAgent.let { initialText ->
-                    if (initialText.isNotBlank()) {
-                        try {
-                            conversationService.sendText(initialText)
-
-                            val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-                                .format(java.util.Date())
-
-                            // Log it to tool logs
-                            addLogEntry(
-                                LogEntry(
-                                    timestamp = timestamp,
-                                    toolName = "System Startup",
-                                    parameters = "Initial Message to Agent",
-                                    success = true,
-                                    result = "Sent: $initialText"
-                                )
-                            )
-                        } catch (e: Exception) {
-                            val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-                                .format(java.util.Date())
-
-                            addLogEntry(
-                                LogEntry(
-                                    timestamp = timestamp,
-                                    toolName = "System Startup",
-                                    parameters = "Initial Message to Agent",
-                                    success = false,
-                                    result = "Failed to send: ${e.message}"
-                                )
-                            )
-                            // Don't fail the session, just log it
-                        }
-                    }
+                // Wait for service to be bound
+                var attempts = 0
+                while (!serviceBound && attempts < 50) {
+                    kotlinx.coroutines.delay(100)
+                    attempts++
                 }
+
+                if (!serviceBound) {
+                    _uiState.value = UiState.Error("Failed to bind to session service")
+                    return@launch
+                }
+
+                // Start the session in the service
+                liveSessionService?.startSession(profile)
+
             } catch (e: Exception) {
-                // Log the full exception details to tool log for debugging
-                val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-                    .format(java.util.Date())
-
-                addLogEntry(
-                    LogEntry(
-                        timestamp = timestamp,
-                        toolName = "Session Start Error",
-                        parameters = "Failed to start conversation session",
-                        success = false,
-                        result = "Exception: ${e.javaClass.simpleName}\n" +
-                                "Message: ${e.message}\n\n" +
-                                "Stack trace:\n${e.stackTraceToString()}"
-                    )
-                )
-
-                // Clean up MCP connection if initialization failed
-                toolExecutor = null
-                mcpClient?.shutdown()
-                mcpClient = null
-
-
-                isSessionActive = false
                 _uiState.value = UiState.Error("Failed to start session: ${e.message}")
-
-                // Restart wake word listening on failure (reacquire microphone)
+                // Restart wake word listening on failure
                 startWakeWordListening()
             }
         }
     }
 
     private fun stopChat() {
-        BeepHelper.playEndBeep(getApplication())
-        try {
-            conversationService.stopSession()
-        } catch (e: Exception) {
-            _uiState.value = UiState.Error("Failed to stop session: ${e.message}")
+        liveSessionService?.stopSession()
+        // Service will stop itself and update flows
+        // Unbind from service
+        if (serviceBound) {
+            try {
+                getApplication<Application>().unbindService(serviceConnection)
+                serviceBound = false
+                liveSessionService = null
+            } catch (e: Exception) {
+                Log.e(TAG, "Error unbinding service: ${e.message}")
+            }
         }
-
-        // Clean up MCP connection
-        toolExecutor = null
-        mcpClient?.shutdown()
-        mcpClient = null
-
-        // Reset audio level
-        _audioLevel.value = 0f
-
-        isSessionActive = false
-        _uiState.value = UiState.ReadyToTalk
-
-        // Restart wake word listening (reacquire microphone)
-        startWakeWordListening()
     }
 
     /**
@@ -449,28 +403,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
         _hasEverChatted.value = false
     }
 
-    override fun addLogEntry(log: LogEntry) {
-        _toolLogs.value += log
-    }
-
-    override fun addModelTranscription(chunk: String, isThought: Boolean) {
-        _transcriptionLogs.value += TranscriptionEntry(
-            spokenBy = if (isThought) TranscriptionSpeaker.MODELTHOUGHT else TranscriptionSpeaker.MODEL,
-            chunk = chunk,
-        )
-    }
-
-    override fun addUserTranscription(chunk: String) {
-        _transcriptionLogs.value += TranscriptionEntry(
-            spokenBy = TranscriptionSpeaker.USER,
-            chunk = chunk,
-        )
-    }
-
     /**
      * Clear all transcription logs
      */
     fun clearTranscriptionLogs() {
+        liveSessionService?.clearTranscriptionLogs()
         _transcriptionLogs.value = emptyList()
     }
 
@@ -478,7 +415,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
      * Switch to a different profile
      */
     fun switchProfile(profileId: String) {
-        if (isSessionActive) {
+        if (isSessionActive()) {
             // Show toast in UI
             return
         }
@@ -491,7 +428,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
     /**
      * Public method to expose session state
      */
-    fun isSessionActive(): Boolean = isSessionActive
+    fun isSessionActive(): Boolean = liveSessionService?.isSessionActive?.value ?: false
 
     /**
      * Check if auto-start chat is enabled and set the flag.
@@ -547,44 +484,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
      * Similar to initial message to agent but triggered by user clicking a quick message chip.
      */
     fun sendQuickMessage(message: String) {
-        if (!isSessionActive) {
+        if (!isSessionActive()) {
             Log.d(TAG, "Attempted to send quick message but session is not active")
             return
         }
 
-        viewModelScope.launch {
-            try {
-                conversationService.sendText(message)
-
-                val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-                    .format(java.util.Date())
-
-                // Log it to tool logs
-                addLogEntry(
-                    LogEntry(
-                        timestamp = timestamp,
-                        toolName = "Quick Message",
-                        parameters = "User Quick Message",
-                        success = true,
-                        result = "Sent: $message"
-                    )
-                )
-            } catch (e: Exception) {
-                val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-                    .format(java.util.Date())
-
-                addLogEntry(
-                    LogEntry(
-                        timestamp = timestamp,
-                        toolName = "Quick Message",
-                        parameters = "User Quick Message",
-                        success = false,
-                        result = "Failed to send: ${e.message}"
-                    )
-                )
-                Log.e(TAG, "Error sending quick message: ${e.message}", e)
-            }
-        }
+        liveSessionService?.sendText(message)
     }
 
     /**
@@ -596,49 +501,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application), A
 
     override fun onCleared() {
         super.onCleared()
-        // Only cleanup if conversationService was initialized
-        if (::conversationService.isInitialized) {
-            conversationService.cleanup()
+        // Unbind from service if still bound
+        if (serviceBound) {
+            try {
+                getApplication<Application>().unbindService(serviceConnection)
+                serviceBound = false
+            } catch (e: Exception) {
+                Log.e(TAG, "Error unbinding service in onCleared: ${e.message}")
+            }
         }
         wakeWordService.destroy()
-    }
-
-    private fun getLocalTools(): Map<String, LocalTool> {
-        return mapOf(
-            "EndConversation" to LocalTool(
-                definition = McpTool(
-                    name = "EndConversation",
-                    description = """
-                    Immediately ends the conversation. 
-                    
-                    Use when the conversation has come to its natural end, for example, if the user says 'thanks' with no obvious follow up. 
-                    
-                    Wish the user goodbye before calling this tool so they know the conversation is finished.
-                    """.trimIndent(),
-                    inputSchema = McpInputSchema(
-                        type = "object",
-                        properties = mapOf("reason" to McpProperty(
-                            description = "Brief reason why this conversation has come to an end"
-                        ))
-                    ),
-                ),
-                execute = { name: String, arguments: Map<String, JsonElement> ->
-                    val reason = arguments["reason"]?.jsonPrimitive?.content ?: "Natural conclusion"
-
-                    viewModelScope.launch {
-                        // Allow conversation service to send the function response
-                        delay(300)
-                        stopChat()
-                    }
-
-                    // Return success response immediately
-                    ToolCallResult(
-                        isError = false,
-                        content = listOf(ToolContent(type = "text", text = "Conversation ended: $reason"))
-                    )
-                }
-            )
-        )
     }
 }
 
