@@ -35,3 +35,6 @@ google-services.json
 
 # Claude AI files
 /.claude/*.local.*
+
+/.vscode
+/hack
