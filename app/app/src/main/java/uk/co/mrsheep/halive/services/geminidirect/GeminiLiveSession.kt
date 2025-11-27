@@ -253,10 +253,7 @@ class GeminiLiveSession(
             recordUserAudio()
             Log.d(TAG, "Recording loop started")
 
-            // Start the playback thread (plays audio from jitter buffer)
-            // Note: decode stage was already started in initializePlaybackPipeline()
-            playbackThread?.start()
-            Log.d(TAG, "Playback thread started")
+            // Note: decode stage and playback thread were already started in initializePlaybackPipeline()
 
             Log.i(TAG, "Gemini Live session started successfully")
 
@@ -351,15 +348,16 @@ class GeminiLiveSession(
         decodeStage = AudioDecodeStage(jitterBuffer!!).also { it.start() }
         Log.d(TAG, "Decode stage created and started")
 
-        // Create playback thread (reads from jitter buffer, writes to AudioTrack)
+        // Create and START playback thread immediately
+        // It will poll for data and start playing once pre-buffer threshold is reached
         playbackThread = AudioPlaybackThread(
             audioTrack = playbackAudioTrack!!,
             jitterBuffer = jitterBuffer!!,
             chunkSizeBytes = PLAYBACK_CHUNK_BYTES,
             onAudioLevel = onAudioLevel,
             onUnderrun = { Log.w(TAG, "Audio playback underrun") }
-        )
-        Log.d(TAG, "Playback thread created with chunk size: ${PLAYBACK_CHUNK_MS}ms")
+        ).also { it.start() }
+        Log.d(TAG, "Playback thread created and started with chunk size: ${PLAYBACK_CHUNK_MS}ms")
     }
 
     /**

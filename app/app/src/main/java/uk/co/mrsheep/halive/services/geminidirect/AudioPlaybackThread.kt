@@ -109,12 +109,18 @@ class AudioPlaybackThread(
                     pendingLevel = sampleRmsLevel(writeBuffer, written)
                 }
             } else {
-                // No data available - potential underrun
+                // No data available - sleep briefly to avoid busy-looping
+                // This is either waiting for pre-buffer or an underrun
                 if (trackStarted) {
                     onUnderrun?.invoke()
-                    Log.w(TAG, "Buffer underrun - jitter buffer empty")
                 }
                 pendingLevel = 0f
+                try {
+                    Thread.sleep(5) // Short sleep to avoid CPU burn
+                } catch (e: InterruptedException) {
+                    // Shutdown requested
+                    break
+                }
             }
         }
 
