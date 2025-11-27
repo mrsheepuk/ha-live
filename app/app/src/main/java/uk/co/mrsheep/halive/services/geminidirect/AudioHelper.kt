@@ -22,6 +22,7 @@ import java.security.InvalidParameterException
 internal class AudioHelper(
     /** AudioRecord for recording from the system microphone. */
     private val recorder: AudioRecord,
+    val sampleRate: Int
 ) {
     private var released: Boolean = false
 
@@ -99,10 +100,10 @@ internal class AudioHelper(
          * permission, and throw exceptions when needed.
          */
         @RequiresPermission(Manifest.permission.RECORD_AUDIO)
-        fun build(): AudioHelper {
+        fun build(sampleRate: Int = 16000): AudioHelper {
             val bufferSize =
                 AudioRecord.getMinBufferSize(
-                    16000,
+                    sampleRate,
                     AudioFormat.CHANNEL_IN_MONO,
                     AudioFormat.ENCODING_PCM_16BIT
                 )
@@ -115,7 +116,7 @@ internal class AudioHelper(
             val recorder =
                 AudioRecord(
                     MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                    16000,
+                    sampleRate,
                     AudioFormat.CHANNEL_IN_MONO,
                     AudioFormat.ENCODING_PCM_16BIT,
                     bufferSize
@@ -131,7 +132,7 @@ internal class AudioHelper(
                 Log.d(TAG, "Acoustic Echo Canceler enabled")
             }
 
-            return AudioHelper(recorder)
+            return AudioHelper(recorder, sampleRate)
         }
     }
 }
