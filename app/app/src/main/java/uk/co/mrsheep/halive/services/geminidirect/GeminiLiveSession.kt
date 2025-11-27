@@ -91,8 +91,10 @@ class GeminiLiveSession(
         private const val PRE_BUFFER_MS = 100
         private val PRE_BUFFER_BYTES = PRE_BUFFER_MS * SAMPLE_RATE * BYTES_PER_SAMPLE / 1000
 
-        // Total jitter buffer capacity: 500ms
-        private const val BUFFER_CAPACITY_MS = 500
+        // Total jitter buffer capacity: 30 seconds
+        // Gemini generates audio faster than real-time, so we need to buffer
+        // an entire response. 30s @ 24kHz 16-bit mono = 1.44MB - acceptable.
+        private const val BUFFER_CAPACITY_MS = 30000
         private val BUFFER_CAPACITY_BYTES = BUFFER_CAPACITY_MS * SAMPLE_RATE * BYTES_PER_SAMPLE / 1000
 
         // Playback chunk size (~20ms of audio)

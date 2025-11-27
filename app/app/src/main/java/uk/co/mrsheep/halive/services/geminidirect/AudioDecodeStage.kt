@@ -30,8 +30,10 @@ class AudioDecodeStage(
         private const val TAG = "AudioDecodeStage"
 
         // Bounded queue to provide backpressure if decode falls behind
-        // 64 chunks at ~100ms each = ~6 seconds of buffered base64 strings
-        private const val DECODE_QUEUE_CAPACITY = 64
+        // Gemini generates audio faster than real-time, so we need a large queue.
+        // 512 chunks at ~100ms each = ~50 seconds of buffered base64 strings
+        // Memory: ~512 * 6KB = ~3MB max - acceptable for smooth playback
+        private const val DECODE_QUEUE_CAPACITY = 512
     }
 
     private val decodeScope = CoroutineScope(
