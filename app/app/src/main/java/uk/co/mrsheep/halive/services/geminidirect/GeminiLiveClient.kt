@@ -191,8 +191,10 @@ class GeminiLiveClient(
         // Parse the JSON and deserialize to ServerMessage
         try {
             val message = json.decodeFromString(ServerMessage.serializer(), text)
-            scope.launch {
-                messageFlow.emit(message)
+            // Use tryEmit for non-suspending emission - no coroutine overhead
+            // This ensures message ordering and reduces latency
+            if (!messageFlow.tryEmit(message)) {
+                Log.w(TAG, "Message flow buffer full, dropping message")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to deserialize message", e)
@@ -209,8 +211,9 @@ class GeminiLiveClient(
             Log.d(TAG, "Received bytes: $str")
             val message = json.decodeFromString(ServerMessage.serializer(), str)
             Log.d(TAG, "Received JSON $message")
-            scope.launch {
-                messageFlow.emit(message)
+            // Use tryEmit for non-suspending emission - no coroutine overhead
+            if (!messageFlow.tryEmit(message)) {
+                Log.w(TAG, "Message flow buffer full, dropping binary message")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to deserialize message", e)

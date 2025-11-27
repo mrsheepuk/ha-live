@@ -17,7 +17,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.channels.Channel
+import android.media.AudioAttributes
+import android.media.AudioManager
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -80,6 +81,23 @@ class GeminiLiveSession(
     companion object {
         private const val TAG = "GeminiLiveSession"
         private const val SETUP_TIMEOUT_MS = 10000L
+
+        // Audio configuration
+        private const val SAMPLE_RATE = 24000
+        private const val BYTES_PER_SAMPLE = 2 // 16-bit mono
+
+        // Pre-buffer 100ms of audio before starting playback
+        // This absorbs network/decode jitter
+        private const val PRE_BUFFER_MS = 100
+        private val PRE_BUFFER_BYTES = PRE_BUFFER_MS * SAMPLE_RATE * BYTES_PER_SAMPLE / 1000
+
+        // Total jitter buffer capacity: 500ms
+        private const val BUFFER_CAPACITY_MS = 500
+        private val BUFFER_CAPACITY_BYTES = BUFFER_CAPACITY_MS * SAMPLE_RATE * BYTES_PER_SAMPLE / 1000
+
+        // Playback chunk size (~20ms of audio)
+        private const val PLAYBACK_CHUNK_MS = 20
+        private val PLAYBACK_CHUNK_BYTES = PLAYBACK_CHUNK_MS * SAMPLE_RATE * BYTES_PER_SAMPLE / 1000
     }
 
     private val client = GeminiLiveClient(apiKey)
@@ -89,7 +107,6 @@ class GeminiLiveSession(
         Executors.newCachedThreadPool(AudioThreadFactory()).asCoroutineDispatcher()
 
     private var sessionScope: CoroutineScope = CoroutineScope(EmptyCoroutineContext).apply { cancel() }
-    private var audioScope: CoroutineScope = CoroutineScope(EmptyCoroutineContext).apply { cancel() }
 
     private val json = Json {
         encodeDefaults = true
@@ -97,13 +114,20 @@ class GeminiLiveSession(
         prettyPrint = false
     }
 
-    private val playBackQueue = Channel<ByteArray>(Channel.UNLIMITED)
     private var isSessionActive = false
+
+    // Recording (microphone input)
     private var audioHelper: AudioHelper? = null
+
+    // New audio pipeline components for playback
+    private var jitterBuffer: JitterBuffer? = null
+    private var decodeStage: AudioDecodeStage? = null
+    private var playbackThread: AudioPlaybackThread? = null
+    private var playbackAudioTrack: AudioTrack? = null
 
     val MIN_BUFFER_SIZE =
         AudioTrack.getMinBufferSize(
-            24000,
+            SAMPLE_RATE,
             AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_16BIT
         )
@@ -138,15 +162,18 @@ class GeminiLiveSession(
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
         onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null
     ) {
-        if (sessionScope.isActive || audioScope.isActive) {
-            throw IllegalStateException("Audio / session scope already active, cannot start")
+        if (sessionScope.isActive) {
+            throw IllegalStateException("Session scope already active, cannot start")
         }
-
 
         sessionScope =
             CoroutineScope(Dispatchers.Default + SupervisorJob() + CoroutineName("LiveSession Network"))
-        audioScope = CoroutineScope(audioDispatcher + CoroutineName("LiveSession Audio"))
+
+        // Initialize recording (microphone)
         audioHelper = AudioHelper.build()
+
+        // Initialize new audio playback pipeline
+        initializePlaybackPipeline()
 
         try {
             Log.d(TAG, "Starting Gemini Live session with model: $model")
@@ -222,10 +249,17 @@ class GeminiLiveSession(
             }
             Log.d(TAG, "Setup completed successfully")
 
+            // Start recording (sends audio to Gemini)
             recordUserAudio()
             Log.d(TAG, "Recording loop started")
-            listenForModelPlayback()
-            Log.d(TAG, "Audio playback started")
+
+            // Start the decode stage (processes incoming audio)
+            decodeStage?.start()
+            Log.d(TAG, "Decode stage started")
+
+            // Start the playback thread (plays audio from jitter buffer)
+            playbackThread?.start()
+            Log.d(TAG, "Playback thread started")
 
             Log.i(TAG, "Gemini Live session started successfully")
 
@@ -271,27 +305,95 @@ class GeminiLiveSession(
         Log.v(TAG, "Sent audio chunk: ${audio.size} bytes")
     }
 
-    private fun calculateRmsLevel(data: ByteArray): Float {
-        if (data.size < 2) return 0f
-        var sum = 0.0
-        for (i in 0 until data.size - 1 step 2) {
-            val sample = (data[i].toInt() and 0xFF) or (data[i + 1].toInt() shl 8)
-            val signedSample = if (sample > 32767) sample - 65536 else sample
-            sum += signedSample * signedSample
-        }
-        val rms = kotlin.math.sqrt(sum / (data.size / 2))
-        return (rms / 32768.0).toFloat().coerceIn(0f, 1f)
+    /**
+     * Initialize the new audio playback pipeline.
+     *
+     * Creates:
+     * - AudioTrack for hardware playback
+     * - JitterBuffer for absorbing network/decode timing variations
+     * - AudioDecodeStage for async Base64 decoding
+     * - AudioPlaybackThread for low-latency playback
+     */
+    private fun initializePlaybackPipeline() {
+        // Create AudioTrack for playback
+        val minBufferSize = AudioTrack.getMinBufferSize(
+            SAMPLE_RATE,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        )
+        // Use 4x minimum buffer for AudioTrack internal buffering
+        val trackBufferSize = minBufferSize * 4
+
+        playbackAudioTrack = AudioTrack(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build(),
+            AudioFormat.Builder()
+                .setSampleRate(SAMPLE_RATE)
+                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                .build(),
+            trackBufferSize,
+            AudioTrack.MODE_STREAM,
+            AudioManager.AUDIO_SESSION_ID_GENERATE
+        )
+        Log.d(TAG, "AudioTrack created with buffer size: $trackBufferSize bytes")
+
+        // Create jitter buffer with pre-buffering
+        jitterBuffer = JitterBuffer(
+            capacity = BUFFER_CAPACITY_BYTES,
+            preBufferThreshold = PRE_BUFFER_BYTES,
+            sampleRate = SAMPLE_RATE,
+            bytesPerSample = BYTES_PER_SAMPLE
+        )
+        Log.d(TAG, "JitterBuffer created: capacity=${BUFFER_CAPACITY_MS}ms, preBuffer=${PRE_BUFFER_MS}ms")
+
+        // Create decode stage (writes decoded audio to jitter buffer)
+        decodeStage = AudioDecodeStage(jitterBuffer!!)
+
+        // Create playback thread (reads from jitter buffer, writes to AudioTrack)
+        playbackThread = AudioPlaybackThread(
+            audioTrack = playbackAudioTrack!!,
+            jitterBuffer = jitterBuffer!!,
+            chunkSizeBytes = PLAYBACK_CHUNK_BYTES,
+            onAudioLevel = onAudioLevel,
+            onUnderrun = { Log.w(TAG, "Audio playback underrun") }
+        )
+        Log.d(TAG, "Playback thread created with chunk size: ${PLAYBACK_CHUNK_MS}ms")
     }
 
-    private fun listenForModelPlayback() {
-        audioScope.launch {
-            Log.d(TAG, "starting audio playback")
-            // Channel iterator automatically suspends when empty (no busy-wait)
-            for (playbackData in playBackQueue) {
-                onAudioLevel?.invoke(calculateRmsLevel(playbackData))
-                audioHelper?.playAudio(playbackData)
-            }
+    /**
+     * Shutdown the audio playback pipeline.
+     */
+    private fun shutdownPlaybackPipeline() {
+        // Stop playback thread first
+        playbackThread?.shutdown()
+        try {
+            playbackThread?.join(1000) // Wait up to 1 second for clean shutdown
+        } catch (e: InterruptedException) {
+            Log.w(TAG, "Interrupted waiting for playback thread")
         }
+        playbackThread = null
+
+        // Shutdown decode stage
+        decodeStage?.shutdown()
+        decodeStage = null
+
+        // Clear and release jitter buffer
+        jitterBuffer?.clear()
+        jitterBuffer = null
+
+        // Release AudioTrack
+        try {
+            playbackAudioTrack?.stop()
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "AudioTrack already stopped")
+        }
+        playbackAudioTrack?.release()
+        playbackAudioTrack = null
+
+        Log.d(TAG, "Playback pipeline shutdown complete")
     }
 
     /**
@@ -354,10 +456,10 @@ class GeminiLiveSession(
      * Handle ServerMessage.Content.
      *
      * Extracts:
-     * - Audio chunks (inlineData with mime_type="audio/pcm") → decode base64, queue for playback
+     * - Audio chunks (inlineData with mime_type="audio/pcm") → queue for async decode
      * - Text parts → transcription callback
      */
-    private suspend fun handleContentMessage(
+    private fun handleContentMessage(
         message: ServerMessage.Content,
         onTranscription: ((String?, String?, Boolean) -> Unit)?
     ) {
@@ -367,13 +469,14 @@ class GeminiLiveSession(
         }
         if (message.serverContent.interrupted == true) {
             Log.d(TAG, "Turn interrupted")
-            // Drain the channel to clear queued audio
-            while (playBackQueue.tryReceive().isSuccess) { /* drain */ }
+            // Clear the jitter buffer to immediately stop playback
+            jitterBuffer?.clear()
         } else {
             for (part in message.serverContent.modelTurn?.parts.orEmpty()) {
                 if (part.inlineData != null && part.inlineData.mimeType.startsWith("audio/pcm")) {
-                    val audioBytes = Base64.decode(part.inlineData.data, Base64.NO_WRAP)
-                    playBackQueue.send(audioBytes)
+                    // Queue for async decode (non-blocking)
+                    // The decode stage will Base64 decode and write to jitter buffer
+                    decodeStage?.queueAudio(part.inlineData.data)
                 }
                 if (part.text != null) {
                     onTranscription?.invoke(null, part.text, true)
@@ -488,8 +591,8 @@ class GeminiLiveSession(
      *
      * This method:
      * 1. Marks session as inactive (stops loops)
-     * 2. Closes playback channel
-     * 3. Cleans up audio manager (stops recording/playback)
+     * 2. Shuts down the new audio playback pipeline
+     * 3. Releases the audio recorder
      * 4. Closes WebSocket connection in a separate scope (so it isn't cancelled)
      * 5. Shuts down the client scope
      * 6. Shuts down the audio dispatcher thread pool
@@ -502,17 +605,17 @@ class GeminiLiveSession(
 
         isSessionActive = false
 
-        audioScope.cancel()
-        playBackQueue.close()
+        // Shutdown the new audio playback pipeline
+        shutdownPlaybackPipeline()
 
+        // Release recording resources
         audioHelper?.release()
         audioHelper = null
 
-        // Fix: Launch close in a separate scope so it isn't cancelled by sessionScope.cancel()
+        // Launch close in a separate scope so it isn't cancelled by sessionScope.cancel()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 client.close()
-                // Fix: Clean up client scope
                 client.shutdown()
                 Log.d(TAG, "GeminiLiveClient closed and shut down")
             } catch (e: Exception) {
@@ -520,7 +623,7 @@ class GeminiLiveSession(
             }
         }
 
-        // Fix: Shut down the thread pool
+        // Shut down the thread pool used for recording
         try {
             (audioDispatcher as? java.io.Closeable)?.close()
         } catch (e: Exception) {

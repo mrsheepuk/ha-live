@@ -1,11 +1,8 @@
 package uk.co.mrsheep.halive.services.geminidirect
 
 import android.Manifest
-import android.media.AudioAttributes
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioRecord
-import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.util.Log
@@ -17,18 +14,19 @@ import kotlinx.coroutines.flow.flow
 import java.security.InvalidParameterException
 
 /**
- * Helper class for recording audio and playing back a separate audio track at the same time.
+ * Helper class for recording audio from the microphone.
+ *
+ * Playback is now handled separately by AudioPlaybackThread + JitterBuffer.
+ * This class is responsible only for capturing microphone input.
  */
 internal class AudioHelper(
-    /** Record for recording the System microphone. */
+    /** AudioRecord for recording from the system microphone. */
     private val recorder: AudioRecord,
-    /** Track for playing back what the model says. */
-    private val playbackTrack: AudioTrack,
 ) {
     private var released: Boolean = false
 
     /**
-     * Release the system resources on the recorder and playback track.
+     * Release the system resources on the recorder.
      *
      * Once an [AudioHelper] has been "released", it can _not_ be used again.
      *
@@ -39,78 +37,13 @@ internal class AudioHelper(
         if (released) return
         released = true
 
+        try {
+            recorder.stop()
+        } catch (e: IllegalStateException) {
+            // Already stopped
+        }
         recorder.release()
-        playbackTrack.release()
-    }
-
-    /**
-     * Play the provided audio data on the playback track.
-     *
-     * This method handles partial writes by looping until all bytes are written,
-     * ensuring zero packet loss during playback.
-     *
-     * Does nothing if this [AudioHelper] has been [released][release].
-     *
-     * @throws IllegalStateException If the playback track was not properly initialized.
-     * @throws IllegalArgumentException If the playback data is invalid.
-     * @throws RuntimeException If we fail to play the audio data for some unknown reason.
-     */
-    fun playAudio(data: ByteArray) {
-        if (released) return
-        if (data.isEmpty()) return
-
-        if (playbackTrack.playState == AudioTrack.PLAYSTATE_STOPPED) {
-            playbackTrack.play()
-        }
-
-        var bytesWritten = 0
-        while (bytesWritten < data.size) {
-            // Check if released during the loop (race condition mitigation)
-            if (released) return
-
-            // Write only the remaining bytes
-            val result = try {
-                playbackTrack.write(
-                    data,
-                    bytesWritten,
-                    data.size - bytesWritten
-                )
-            } catch (e: IllegalStateException) {
-                // AudioTrack was released while we were writing (race condition with close())
-                Log.w(TAG, "AudioTrack released during write, stopping playback")
-                return
-            }
-
-            if (result < 0) {
-                // Handle errors
-                when (result) {
-                    AudioTrack.ERROR_INVALID_OPERATION ->
-                        throw IllegalStateException("The playback track was not properly initialized.")
-                    AudioTrack.ERROR_BAD_VALUE ->
-                        throw IllegalArgumentException("Playback data is somehow invalid.")
-                    AudioTrack.ERROR_DEAD_OBJECT -> {
-                        Log.w(TAG, "Attempted to playback some audio, but the track has been released.")
-                        release() // to ensure `released` is set and `record` is released too
-                        return
-                    }
-                    AudioTrack.ERROR ->
-                        throw RuntimeException("Failed to play the audio data for some unknown reason.")
-                }
-                Log.e(TAG, "AudioTrack write error: $result")
-                return
-            }
-
-            if (result == 0) {
-                // Buffer is full, sleep briefly to avoid busy-wait burning CPU
-                try {
-                    Thread.sleep(1)
-                } catch (e: InterruptedException) {
-                    return
-                }
-            }
-
-            bytesWritten += result
-        }
+        Log.d(TAG, "AudioHelper released")
     }
 
     /**
@@ -119,8 +52,6 @@ internal class AudioHelper(
      * Does nothing if this [AudioHelper] has been [released][release].
      *
      * @see resumeRecording
-     *
-     * @throws IllegalStateException If the playback track was not properly initialized.
      */
     fun pauseRecording() {
         if (released || recorder.recordingState == AudioRecord.RECORDSTATE_STOPPED) return
@@ -129,7 +60,7 @@ internal class AudioHelper(
             recorder.stop()
         } catch (e: IllegalStateException) {
             release()
-            throw IllegalStateException("The playback track was not properly initialized.")
+            throw IllegalStateException("The recorder was not properly initialized.")
         }
     }
 
@@ -162,42 +93,13 @@ internal class AudioHelper(
         private val TAG = AudioHelper::class.simpleName
 
         /**
-         * Creates an instance of [AudioHelper] with the track and record initialized.
+         * Creates an instance of [AudioHelper] with the recorder initialized.
          *
          * A separate build method is necessary so that we can properly propagate the required manifest
          * permission, and throw exceptions when needed.
-         *
-         * It also makes it easier to read, since the long initialization is separate from the
-         * constructor.
          */
         @RequiresPermission(Manifest.permission.RECORD_AUDIO)
         fun build(): AudioHelper {
-            // Calculate minimum buffer size
-            val minBufferSize = AudioTrack.getMinBufferSize(
-                24000,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-
-            // Use 8x minimum buffer size to prevent underruns from network jitter
-            val playbackBufferSize = minBufferSize * 8
-
-            val playbackTrack =
-                AudioTrack(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build(),
-                    AudioFormat.Builder()
-                        .setSampleRate(24000)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .build(),
-                    playbackBufferSize,
-                    AudioTrack.MODE_STREAM,
-                    AudioManager.AUDIO_SESSION_ID_GENERATE
-                )
-
             val bufferSize =
                 AudioRecord.getMinBufferSize(
                     16000,
@@ -223,11 +125,13 @@ internal class AudioHelper(
                     "Audio Record initialization has failed. State: ${recorder.state}"
                 )
 
+            // Enable echo cancellation if available
             if (AcousticEchoCanceler.isAvailable()) {
                 AcousticEchoCanceler.create(recorder.audioSessionId)?.enabled = true
+                Log.d(TAG, "Acoustic Echo Canceler enabled")
             }
 
-            return AudioHelper(recorder, playbackTrack)
+            return AudioHelper(recorder)
         }
     }
 }
