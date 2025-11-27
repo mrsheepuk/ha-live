@@ -109,18 +109,12 @@ class AudioPlaybackThread(
                     pendingLevel = sampleRmsLevel(writeBuffer, written)
                 }
             } else {
-                // No data available - sleep briefly to avoid busy-looping
-                // This is either waiting for pre-buffer or an underrun
+                // No data available - potential underrun
                 if (trackStarted) {
                     onUnderrun?.invoke()
+                    Log.w(TAG, "Buffer underrun - jitter buffer empty")
                 }
                 pendingLevel = 0f
-                try {
-                    Thread.sleep(5) // Short sleep to avoid CPU burn
-                } catch (e: InterruptedException) {
-                    // Shutdown requested
-                    break
-                }
             }
         }
 
@@ -208,10 +202,8 @@ class AudioPlaybackThread(
         // Sample every 16th sample (32 bytes apart for 16-bit audio)
         var i = 0
         while (i < length - 1) {
-            // Convert little-endian 16-bit sample (must mask both bytes to avoid sign extension)
-            val low = data[i].toInt() and 0xFF
-            val high = data[i + 1].toInt() and 0xFF
-            val sample = low or (high shl 8)
+            // Convert little-endian 16-bit sample (mask both bytes to prevent sign extension)
+            val sample = (data[i].toInt() and 0xFF) or ((data[i + 1].toInt() and 0xFF) shl 8)
             // Convert unsigned to signed
             val signedSample = if (sample > 32767) sample - 65536 else sample
             sum += signedSample.toDouble() * signedSample.toDouble()
