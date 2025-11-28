@@ -11,7 +11,57 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onEach
 import java.security.InvalidParameterException
+
+/**
+ * A circular buffer for storing audio data with a fixed capacity.
+ * When full, oldest data is overwritten.
+ */
+internal class CircularAudioBuffer(
+    private val capacityMs: Int,
+    private val sampleRate: Int,
+    private val bytesPerSample: Int = 2
+) {
+    private val capacityBytes = capacityMs * sampleRate * bytesPerSample / 1000
+    private val buffer = ByteArray(capacityBytes)
+    private var writePosition = 0
+    private var totalWritten = 0L
+
+    @Synchronized
+    fun write(data: ByteArray) {
+        for (byte in data) {
+            buffer[writePosition] = byte
+            writePosition = (writePosition + 1) % capacityBytes
+        }
+        totalWritten += data.size
+    }
+
+    @Synchronized
+    fun getAll(): ByteArray {
+        if (totalWritten == 0L) return ByteArray(0)
+
+        val size = minOf(totalWritten, capacityBytes.toLong()).toInt()
+        val result = ByteArray(size)
+
+        if (totalWritten < capacityBytes) {
+            // Buffer not full yet - data starts at 0
+            System.arraycopy(buffer, 0, result, 0, size)
+        } else {
+            // Buffer is full - writePosition is where oldest data starts
+            val firstPartSize = capacityBytes - writePosition
+            System.arraycopy(buffer, writePosition, result, 0, firstPartSize)
+            System.arraycopy(buffer, 0, result, firstPartSize, writePosition)
+        }
+        return result
+    }
+
+    @Synchronized
+    fun clear() {
+        writePosition = 0
+        totalWritten = 0
+    }
+}
 
 /**
  * Helper class for recording audio from the microphone.
@@ -25,6 +75,10 @@ internal class AudioHelper(
     val sampleRate: Int
 ) {
     private var released: Boolean = false
+    private var preBuffer: CircularAudioBuffer? = null
+
+    /** Whether this AudioHelper has been released and can no longer be used. */
+    val isReleased: Boolean get() = released
 
     /**
      * Release the system resources on the recorder.
@@ -79,6 +133,29 @@ internal class AudioHelper(
     }
 
     /**
+     * Enables pre-buffering of audio data.
+     * When enabled, audio is stored in a circular buffer while recording.
+     *
+     * @param capacityMs The buffer capacity in milliseconds (default 1500ms)
+     */
+    fun enablePreBuffering(capacityMs: Int = 1500) {
+        preBuffer = CircularAudioBuffer(capacityMs, sampleRate)
+    }
+
+    /**
+     * Returns all buffered audio data (oldest to newest).
+     * Returns empty array if pre-buffering is not enabled or no data buffered.
+     */
+    fun getBufferedAudio(): ByteArray = preBuffer?.getAll() ?: ByteArray(0)
+
+    /**
+     * Clears the pre-buffer.
+     */
+    fun clearPreBuffer() {
+        preBuffer?.clear()
+    }
+
+    /**
      * Start perpetually recording the system microphone, and return the bytes read in a flow.
      *
      * Returns an empty flow if this [AudioHelper] has been [released][release].
@@ -92,7 +169,9 @@ internal class AudioHelper(
         resumeRecording()
         Log.d(TAG, "listenToRecording: Recording resumed, recordingState=${recorder.recordingState}")
 
-        return recorder.readAsFlow()
+        return recorder.readAsFlow().onEach { chunk ->
+            preBuffer?.write(chunk)
+        }
     }
 
     companion object {

@@ -18,6 +18,7 @@ import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.services.LiveSessionService
 import uk.co.mrsheep.halive.services.WakeWordService
+import uk.co.mrsheep.halive.services.geminidirect.AudioHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -198,8 +199,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 service.isSessionActive.collect { isActive ->
                     if (!isActive) {
-                        // Session ended, restart wake word if in foreground
-                        startWakeWordListening()
+                        // Session ended, handle audio helper handover
+                        val returnedHelper = liveSessionService?.yieldAudioHelper()
+
+                        if (returnedHelper != null) {
+                            Log.d(TAG, "Got AudioHelper back from session, resuming wake word")
+                            wakeWordService.resumeWith(returnedHelper)
+                        } else {
+                            Log.d(TAG, "No AudioHelper from session, starting wake word fresh")
+                            startWakeWordListening()
+                        }
                     } else {
                         // Session started, stop wake word
                         wakeWordService.stopListening()
@@ -310,8 +319,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             try {
-                // Stop wake word listening (release microphone)
-                wakeWordService.stopListening()
+                // Yield AudioHelper from wake word service for seamless handover
+                val audioHelper = wakeWordService.yieldAudioHelper()
+                if (audioHelper != null) {
+                    Log.d(TAG, "Got AudioHelper from wake word service for handover")
+                } else {
+                    Log.d(TAG, "No AudioHelper from wake word service (not listening or unavailable)")
+                }
 
                 // Start the foreground service
                 val serviceIntent = Intent(getApplication(), LiveSessionService::class.java)
@@ -337,8 +351,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                // Start the session in the service
-                liveSessionService?.startSession(profile)
+                // Start the session in the service with audio helper for handover
+                liveSessionService?.startSession(profile, externalAudioHelper = audioHelper)
 
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to start session: ${e.message}")

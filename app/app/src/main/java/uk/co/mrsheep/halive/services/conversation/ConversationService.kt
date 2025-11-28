@@ -1,6 +1,7 @@
 package uk.co.mrsheep.halive.services.conversation
 
 import uk.co.mrsheep.halive.services.ToolExecutor
+import uk.co.mrsheep.halive.services.geminidirect.AudioHelper
 import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
 
@@ -41,8 +42,20 @@ interface ConversationService {
 
     /**
      * Start a conversation session.
+     *
+     * @param audioHelper Optional AudioHelper for stream handover support
      */
-    suspend fun startSession()
+    suspend fun startSession(audioHelper: AudioHelper? = null)
+
+    /**
+     * Yields the AudioHelper for handover to another service.
+     * Returns the AudioHelper if this service supports handover and has one to yield.
+     * Returns null if handover is not supported or no AudioHelper is available.
+     *
+     * After yielding, the service should not release the AudioHelper -
+     * the caller takes ownership.
+     */
+    fun yieldAudioHelper(): AudioHelper?
 
     /**
      * Send a text message to the AI during an active session.
