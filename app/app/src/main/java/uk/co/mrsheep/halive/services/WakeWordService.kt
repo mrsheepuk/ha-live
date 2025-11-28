@@ -345,7 +345,10 @@ class WakeWordService(
 
     /**
      * Enables audio dumping for debugging. When enabled, all audio sent to the
-     * wake word model will be saved to a WAV file in the app's files directory.
+     * wake word model will be saved to a WAV file in the app's external files directory.
+     * This makes the file accessible via file manager or adb pull without root.
+     *
+     * Location: Android/data/uk.co.mrsheep.halive/files/wake_word_debug_*.wav
      *
      * Call this BEFORE startListening() or startTestMode().
      * Call stopAudioDump() after stopping to finalize the WAV file.
@@ -355,7 +358,10 @@ class WakeWordService(
     fun enableAudioDump(): File? {
         try {
             val timestamp = System.currentTimeMillis()
-            audioDumpFile = File(context.filesDir, "wake_word_debug_$timestamp.wav")
+            // Use external files directory for accessibility (same as CrashLogger)
+            val externalDir = context.getExternalFilesDir(null)
+                ?: context.filesDir // Fallback to internal if external not available
+            audioDumpFile = File(externalDir, "wake_word_debug_$timestamp.wav")
             audioDumpStream = FileOutputStream(audioDumpFile)
             audioDumpBytesWritten = 0
 
