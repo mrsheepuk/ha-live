@@ -553,6 +553,7 @@ class SettingsActivity : AppCompatActivity() {
                     testPeakScore.text = "0.00"
                     testScoreProgress.progress = 0
 
+                    // Start test mode
                     testWakeWordService?.startTestMode { score ->
                         // Update UI with live score
                         testCurrentScore.text = String.format("%.2f", score)
