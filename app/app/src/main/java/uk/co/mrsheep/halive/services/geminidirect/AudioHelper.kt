@@ -69,7 +69,7 @@ internal class CircularAudioBuffer(
  * Playback is now handled separately by AudioPlaybackThread + JitterBuffer.
  * This class is responsible only for capturing microphone input.
  */
-internal class AudioHelper(
+class AudioHelper(
     /** AudioRecord for recording from the system microphone. */
     private val recorder: AudioRecord,
     val sampleRate: Int
