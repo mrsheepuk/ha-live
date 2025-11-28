@@ -388,10 +388,16 @@ class WakeWordService(
         if (!audioDumpEnabled) return null
 
         try {
+            // Flush and close the stream to ensure all data is written
+            audioDumpStream?.flush()
             audioDumpStream?.close()
 
             // Update WAV header with actual sizes
             audioDumpFile?.let { file ->
+                val fileSize = file.length()
+                Log.i(TAG, "Audio dump raw file size before header update: $fileSize bytes")
+                Log.i(TAG, "Audio dump bytes written counter: $audioDumpBytesWritten bytes")
+
                 RandomAccessFile(file, "rw").use { raf ->
                     // Update RIFF chunk size (file size - 8)
                     raf.seek(4)
@@ -401,7 +407,12 @@ class WakeWordService(
                     raf.seek(40)
                     raf.write(intToLittleEndianBytes(audioDumpBytesWritten))
                 }
-                Log.i(TAG, "Audio dump finalized: ${file.absolutePath} (${audioDumpBytesWritten} bytes of audio, ${audioDumpBytesWritten / 32000f} seconds)")
+
+                val finalSize = file.length()
+                val durationSeconds = audioDumpBytesWritten / 32000f
+                Log.i(TAG, "Audio dump finalized: ${file.absolutePath}")
+                Log.i(TAG, "  Final file size: $finalSize bytes (header: 44, audio: $audioDumpBytesWritten)")
+                Log.i(TAG, "  Duration: %.2f seconds".format(durationSeconds))
             }
 
             val result = audioDumpFile
@@ -426,6 +437,10 @@ class WakeWordService(
         try {
             audioDumpStream?.write(bytes)
             audioDumpBytesWritten += bytes.size
+            // Log every 100 chunks (~7 seconds at 72ms/chunk) to show progress
+            if ((audioDumpBytesWritten / bytes.size) % 100 == 0) {
+                Log.d(TAG, "Audio dump progress: $audioDumpBytesWritten bytes written (${audioDumpBytesWritten / 32000f} seconds)")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write audio dump: ${e.message}", e)
         }
@@ -444,13 +459,13 @@ class WakeWordService(
 
         // fmt subchunk
         buffer.put("fmt ".toByteArray())
-        buffer.putInt(16)              // Subchunk1Size (16 for PCM)
-        buffer.putShort(1)             // AudioFormat (1 = PCM)
-        buffer.putShort(1)             // NumChannels (1 = mono)
-        buffer.putInt(SAMPLE_RATE)     // SampleRate (16000)
-        buffer.putInt(SAMPLE_RATE * 2) // ByteRate (SampleRate * NumChannels * BitsPerSample/8)
-        buffer.putShort(2)             // BlockAlign (NumChannels * BitsPerSample/8)
-        buffer.putShort(16)            // BitsPerSample
+        buffer.putInt(16)                     // Subchunk1Size (16 for PCM)
+        buffer.putShort(1.toShort())          // AudioFormat (1 = PCM)
+        buffer.putShort(1.toShort())          // NumChannels (1 = mono)
+        buffer.putInt(SAMPLE_RATE)            // SampleRate (16000)
+        buffer.putInt(SAMPLE_RATE * 2)        // ByteRate (SampleRate * NumChannels * BitsPerSample/8)
+        buffer.putShort(2.toShort())          // BlockAlign (NumChannels * BitsPerSample/8)
+        buffer.putShort(16.toShort())         // BitsPerSample
 
         // data subchunk
         buffer.put("data".toByteArray())
