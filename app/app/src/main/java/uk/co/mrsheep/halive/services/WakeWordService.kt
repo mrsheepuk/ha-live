@@ -36,6 +36,11 @@ class WakeWordService(
         private const val TAG = "WakeWordService"
         private const val SAMPLE_RATE = 16000
         private const val CHUNK_SIZE = 1152 // OwwModel.MEL_INPUT_COUNT
+
+        // Number of frames to skip after starting to allow model to warm up.
+        // The ONNX model needs time to fill its accumulators and stabilize.
+        // At 16kHz with 1152-sample chunks, each frame is ~72ms, so 20 frames ≈ 1.4 seconds
+        private const val WARMUP_FRAMES = 20
     }
 
     private var audioHelper: AudioHelper? = null
@@ -43,6 +48,7 @@ class WakeWordService(
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var isListening = false
     private var currentSettings: WakeWordSettings = WakeWordConfig.getSettings(context)
+    private var framesProcessed = 0
 
     /**
      * Test mode callback - if set, every detection score is reported to this callback.
@@ -112,7 +118,8 @@ class WakeWordService(
         try {
             audioHelper = AudioHelper.build(SAMPLE_RATE)
             isListening = true
-            Log.d(TAG, "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE, threshold=${currentSettings.threshold})")
+            framesProcessed = 0  // Reset warm-up counter
+            Log.d(TAG, "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE, threshold=${currentSettings.threshold}, warmup=$WARMUP_FRAMES frames)")
 
             val model = getOrCreateModel()
 
@@ -122,6 +129,7 @@ class WakeWordService(
                 .onEach { floatBuffer ->
                     try {
                         val detectionScore = model.processFrame(floatBuffer)
+                        framesProcessed++
 
                         // Test mode: report every score to callback
                         testModeCallback?.let { callback ->
@@ -130,8 +138,8 @@ class WakeWordService(
                             }
                         }
 
-                        // Normal mode: only trigger on threshold (skip if in test mode)
-                        if (testModeCallback == null && detectionScore > currentSettings.threshold) {
+                        // Normal mode: only trigger on threshold (skip if in test mode or warming up)
+                        if (testModeCallback == null && framesProcessed > WARMUP_FRAMES && detectionScore > currentSettings.threshold) {
                             Log.i(TAG, "Wake word detected! Score: %.4f (threshold: ${currentSettings.threshold})".format(detectionScore))
                             cleanup()
                             withContext(Dispatchers.Main) {
