@@ -174,10 +174,14 @@ class WakeWordService(
                         // Normal mode: only trigger on threshold (skip if in test mode or warming up)
                         if (testModeCallback == null && framesProcessed > WARMUP_FRAMES && detectionScore > currentSettings.threshold) {
                             Log.i(TAG, "Wake word detected! Score: %.4f (threshold: ${currentSettings.threshold})".format(detectionScore))
-                            cleanup()
-                            withContext(Dispatchers.Main) {
+                            // IMPORTANT: Launch callback in a new coroutine BEFORE cleanup,
+                            // because cleanup() cancels this coroutine. Using scope.launch
+                            // creates a new job that won't be cancelled by our cleanup.
+                            scope.launch(Dispatchers.Main) {
                                 onWakeWordDetected()
                             }
+                            cleanup()
+                            return@onEach // Stop processing after detection
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error running ONNX inference: ${e.message}", e)
