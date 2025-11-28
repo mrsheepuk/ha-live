@@ -16,15 +16,10 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import uk.co.mrsheep.halive.services.geminidirect.AudioHelper
 import uk.co.mrsheep.halive.services.geminidirect.toFloatChunks
-import uk.co.mrsheep.halive.services.geminidirect.toFloatChunksWithCapture
 import uk.co.mrsheep.halive.services.wake.OwwModel
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.core.WakeWordSettings
 import java.io.File
-import java.io.FileOutputStream
-import java.io.RandomAccessFile
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /**
  * Manages wake word detection using AudioHelper and ONNX Runtime inference.
@@ -57,12 +52,6 @@ class WakeWordService(
     private var isListening = false
     private var currentSettings: WakeWordSettings = WakeWordConfig.getSettings(context)
     private var framesProcessed = 0
-
-    // Audio dump for debugging - saves raw audio to WAV file
-    private var audioDumpEnabled = false
-    private var audioDumpStream: FileOutputStream? = null
-    private var audioDumpFile: File? = null
-    private var audioDumpBytesWritten = 0
 
     /**
      * Test mode callback - if set, every detection score is reported to this callback.
@@ -137,20 +126,9 @@ class WakeWordService(
 
             val model = getOrCreateModel()
 
-            // Choose flow operator based on whether audio dump is enabled
-            val audioFlow = audioHelper!!.listenToRecording()
-                .onStart { Log.d(TAG, "Audio flow started (upstream -> toFloatChunks)") }
-
-            val floatFlow = if (audioDumpEnabled) {
-                Log.d(TAG, "Audio dump is ENABLED - capturing raw bytes to file")
-                audioFlow.toFloatChunksWithCapture(CHUNK_SIZE) { bytes ->
-                    writeAudioDumpBytes(bytes)
-                }
-            } else {
-                audioFlow.toFloatChunks(CHUNK_SIZE)
-            }
-
-            recordingJob = floatFlow
+            recordingJob = audioHelper!!.listenToRecording()
+                .onStart { Log.d(TAG, "Audio flow started") }
+                .toFloatChunks(CHUNK_SIZE)
                 .onStart { Log.d(TAG, "Float chunks flow started (toFloatChunks -> onEach)") }
                 .onEach { floatBuffer ->
                     try {
@@ -241,29 +219,20 @@ class WakeWordService(
      * Wake word detection is disabled - this is for testing only.
      *
      * @param onScore Callback invoked with each detection score (called on Main dispatcher)
-     * @param withAudioDump If true, also saves audio to a WAV file for debugging
-     * @return The audio dump file if withAudioDump is true, null otherwise
      */
-    fun startTestMode(onScore: (Float) -> Unit, withAudioDump: Boolean = false): File? {
-        val dumpFile = if (withAudioDump) enableAudioDump() else null
+    fun startTestMode(onScore: (Float) -> Unit) {
         testModeCallback = onScore
         startListening()
-        Log.d(TAG, "Test mode started${if (withAudioDump) " with audio dump" else ""}")
-        return dumpFile
+        Log.d(TAG, "Test mode started")
     }
 
     /**
      * Stops test mode and cleans up resources.
-     * If audio dump was enabled, finalizes the WAV file.
-     *
-     * @return The finalized audio dump file if one was active, null otherwise
      */
-    fun stopTestMode(): File? {
+    fun stopTestMode() {
         testModeCallback = null
         stopListening()
-        val dumpFile = stopAudioDump()
-        Log.d(TAG, "Test mode stopped${if (dumpFile != null) ", audio saved to ${dumpFile.absolutePath}" else ""}")
-        return dumpFile
+        Log.d(TAG, "Test mode stopped")
     }
 
     /**
@@ -344,142 +313,5 @@ class WakeWordService(
      */
     private fun loadModelFile(filename: String): File {
         return File(context.filesDir, filename)
-    }
-
-    // ==================== Audio Dump Debug Feature ====================
-
-    /**
-     * Enables audio dumping for debugging. When enabled, all audio sent to the
-     * wake word model will be saved to a WAV file in the app's external files directory.
-     * This makes the file accessible via file manager or adb pull without root.
-     *
-     * Location: Android/data/uk.co.mrsheep.halive/files/wake_word_debug_*.wav
-     *
-     * Call this BEFORE startListening() or startTestMode().
-     * Call stopAudioDump() after stopping to finalize the WAV file.
-     *
-     * @return The File where audio will be saved, or null if failed
-     */
-    fun enableAudioDump(): File? {
-        try {
-            val timestamp = System.currentTimeMillis()
-            // Use external files directory for accessibility (same as CrashLogger)
-            val externalDir = context.getExternalFilesDir(null)
-                ?: context.filesDir // Fallback to internal if external not available
-            audioDumpFile = File(externalDir, "wake_word_debug_$timestamp.wav")
-            audioDumpStream = FileOutputStream(audioDumpFile)
-            audioDumpBytesWritten = 0
-
-            // Write placeholder WAV header (44 bytes) - will update sizes at end
-            writeWavHeader(audioDumpStream!!, 0)
-
-            audioDumpEnabled = true
-            Log.i(TAG, "Audio dump enabled: ${audioDumpFile?.absolutePath}")
-            return audioDumpFile
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to enable audio dump: ${e.message}", e)
-            audioDumpEnabled = false
-            return null
-        }
-    }
-
-    /**
-     * Stops audio dumping and finalizes the WAV file.
-     * The file can then be played back to verify audio capture quality.
-     *
-     * @return The finalized WAV file, or null if no dump was active
-     */
-    fun stopAudioDump(): File? {
-        if (!audioDumpEnabled) return null
-
-        try {
-            // Flush and close the stream to ensure all data is written
-            audioDumpStream?.flush()
-            audioDumpStream?.close()
-
-            // Update WAV header with actual sizes
-            audioDumpFile?.let { file ->
-                val fileSize = file.length()
-                Log.i(TAG, "Audio dump raw file size before header update: $fileSize bytes")
-                Log.i(TAG, "Audio dump bytes written counter: $audioDumpBytesWritten bytes")
-
-                RandomAccessFile(file, "rw").use { raf ->
-                    // Update RIFF chunk size (file size - 8)
-                    raf.seek(4)
-                    raf.write(intToLittleEndianBytes(36 + audioDumpBytesWritten))
-
-                    // Update data chunk size
-                    raf.seek(40)
-                    raf.write(intToLittleEndianBytes(audioDumpBytesWritten))
-                }
-
-                val finalSize = file.length()
-                val durationSeconds = audioDumpBytesWritten / 32000f
-                Log.i(TAG, "Audio dump finalized: ${file.absolutePath}")
-                Log.i(TAG, "  Final file size: $finalSize bytes (header: 44, audio: $audioDumpBytesWritten)")
-                Log.i(TAG, "  Duration: %.2f seconds".format(durationSeconds))
-            }
-
-            val result = audioDumpFile
-            audioDumpEnabled = false
-            audioDumpStream = null
-            audioDumpFile = null
-            audioDumpBytesWritten = 0
-            return result
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to finalize audio dump: ${e.message}", e)
-            audioDumpEnabled = false
-            return null
-        }
-    }
-
-    /**
-     * Writes raw PCM bytes to the audio dump file (if enabled).
-     * Called internally during audio processing.
-     */
-    private fun writeAudioDumpBytes(bytes: ByteArray) {
-        if (!audioDumpEnabled) return
-        try {
-            audioDumpStream?.write(bytes)
-            audioDumpBytesWritten += bytes.size
-            // Log every 100 chunks (~7 seconds at 72ms/chunk) to show progress
-            if ((audioDumpBytesWritten / bytes.size) % 100 == 0) {
-                Log.d(TAG, "Audio dump progress: $audioDumpBytesWritten bytes written (${audioDumpBytesWritten / 32000f} seconds)")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to write audio dump: ${e.message}", e)
-        }
-    }
-
-    /**
-     * Writes a WAV file header for 16-bit mono 16kHz PCM audio.
-     */
-    private fun writeWavHeader(out: FileOutputStream, dataSize: Int) {
-        val buffer = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
-
-        // RIFF header
-        buffer.put("RIFF".toByteArray())
-        buffer.putInt(36 + dataSize)  // File size - 8
-        buffer.put("WAVE".toByteArray())
-
-        // fmt subchunk
-        buffer.put("fmt ".toByteArray())
-        buffer.putInt(16)                     // Subchunk1Size (16 for PCM)
-        buffer.putShort(1.toShort())          // AudioFormat (1 = PCM)
-        buffer.putShort(1.toShort())          // NumChannels (1 = mono)
-        buffer.putInt(SAMPLE_RATE)            // SampleRate (16000)
-        buffer.putInt(SAMPLE_RATE * 2)        // ByteRate (SampleRate * NumChannels * BitsPerSample/8)
-        buffer.putShort(2.toShort())          // BlockAlign (NumChannels * BitsPerSample/8)
-        buffer.putShort(16.toShort())         // BitsPerSample
-
-        // data subchunk
-        buffer.put("data".toByteArray())
-        buffer.putInt(dataSize)        // Subchunk2Size
-
-        out.write(buffer.array())
-    }
-
-    private fun intToLittleEndianBytes(value: Int): ByteArray {
-        return ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(value).array()
     }
 }
