@@ -10,7 +10,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
 import uk.co.mrsheep.halive.services.geminidirect.AudioHelper
 import uk.co.mrsheep.halive.services.geminidirect.toFloatChunks
 import uk.co.mrsheep.halive.services.wake.OwwModel
@@ -125,14 +127,24 @@ class WakeWordService(
 
             recordingJob = audioHelper!!
                 .listenToRecording()
+                .onStart { Log.d(TAG, "Audio flow started (upstream -> toFloatChunks)") }
                 .toFloatChunks(CHUNK_SIZE)
+                .onStart { Log.d(TAG, "Float chunks flow started (toFloatChunks -> onEach)") }
                 .onEach { floatBuffer ->
                     try {
                         val detectionScore = model.processFrame(floatBuffer)
                         framesProcessed++
 
+                        // Log progress periodically (every 10 frames) or always in test mode
+                        val isTestMode = testModeCallback != null
+                        if (isTestMode || framesProcessed % 10 == 0 || framesProcessed <= 5) {
+                            val warmupStatus = if (framesProcessed <= WARMUP_FRAMES) "WARMUP" else "ACTIVE"
+                            Log.d(TAG, "Frame $framesProcessed [$warmupStatus]: score=%.4f, threshold=${currentSettings.threshold}, testMode=$isTestMode".format(detectionScore))
+                        }
+
                         // Test mode: report every score to callback
                         testModeCallback?.let { callback ->
+                            Log.v(TAG, "Invoking test mode callback with score=%.4f".format(detectionScore))
                             withContext(Dispatchers.Main) {
                                 callback(detectionScore)
                             }
@@ -148,6 +160,13 @@ class WakeWordService(
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error running ONNX inference: ${e.message}", e)
+                    }
+                }
+                .onCompletion { cause ->
+                    if (cause != null) {
+                        Log.d(TAG, "Flow completed with exception: ${cause.message}")
+                    } else {
+                        Log.d(TAG, "Flow completed normally (this shouldn't happen - flow is infinite)")
                     }
                 }
                 .catch { e ->

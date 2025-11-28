@@ -1,9 +1,14 @@
 package uk.co.mrsheep.halive.services.geminidirect
 
+import android.util.Log
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onStart
 import java.io.ByteArrayOutputStream
+
+private const val TAG = "AudioFlowExtensions"
 
 /**
  * Flow extensions for audio stream processing.
@@ -20,11 +25,22 @@ import java.io.ByteArrayOutputStream
  * @param size The exact number of bytes per emitted chunk
  */
 fun Flow<ByteArray>.chunkedBytes(size: Int): Flow<ByteArray> = flow {
+    Log.d(TAG, "chunkedBytes($size): Starting collection from upstream")
     val buffer = ByteArrayOutputStream()
+    var chunksReceived = 0
+    var chunksEmitted = 0
     collect { chunk ->
+        chunksReceived++
         buffer.write(chunk)
+        if (chunksReceived <= 3 || chunksReceived % 50 == 0) {
+            Log.d(TAG, "chunkedBytes: Received chunk #$chunksReceived (${chunk.size} bytes), buffer now ${buffer.size()}/$size bytes")
+        }
         while (buffer.size() >= size) {
             val data = buffer.toByteArray()
+            chunksEmitted++
+            if (chunksEmitted <= 3 || chunksEmitted % 50 == 0) {
+                Log.d(TAG, "chunkedBytes: Emitting chunk #$chunksEmitted ($size bytes)")
+            }
             emit(data.copyOf(size))
             buffer.reset()
             if (data.size > size) {
@@ -32,6 +48,7 @@ fun Flow<ByteArray>.chunkedBytes(size: Int): Flow<ByteArray> = flow {
             }
         }
     }
+    Log.d(TAG, "chunkedBytes: Collection completed. Received $chunksReceived chunks, emitted $chunksEmitted chunks")
 }
 
 /**
