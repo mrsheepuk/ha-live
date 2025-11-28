@@ -174,6 +174,7 @@ object WakeWordConfig {
     private const val KEY_THREAD_COUNT = "thread_count"
     private const val KEY_EXECUTION_MODE = "execution_mode"
     private const val KEY_OPTIMIZATION_LEVEL = "optimization_level"
+    private const val KEY_SELECTED_MODEL_ID = "selected_model_id"
 
     /**
      * Check if wake word detection is enabled (backward compatible).
@@ -237,5 +238,22 @@ object WakeWordConfig {
             putString(KEY_EXECUTION_MODE, settings.executionMode.name)
             putString(KEY_OPTIMIZATION_LEVEL, settings.optimizationLevel.name)
         }.apply()
+    }
+
+    /**
+     * Get the currently selected wake word model ID.
+     * Defaults to "ok_computer" (the built-in model).
+     */
+    fun getSelectedModelId(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_SELECTED_MODEL_ID, "ok_computer") ?: "ok_computer"
+    }
+
+    /**
+     * Set the currently selected wake word model ID.
+     */
+    fun setSelectedModelId(context: Context, modelId: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_SELECTED_MODEL_ID, modelId).apply()
     }
 }
