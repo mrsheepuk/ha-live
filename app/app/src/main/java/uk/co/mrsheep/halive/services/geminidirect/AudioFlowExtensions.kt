@@ -77,3 +77,18 @@ fun Flow<ByteArray>.toFloatSamples(): Flow<FloatArray> = map { bytes ->
  */
 fun Flow<ByteArray>.toFloatChunks(sampleCount: Int): Flow<FloatArray> =
     chunkedBytes(sampleCount * 2).toFloatSamples()
+
+/**
+ * Combined operator with byte capture: same as toFloatChunks but also passes
+ * each byte chunk to a callback before conversion. Useful for debugging audio.
+ *
+ * @param sampleCount The exact number of float samples per emitted chunk
+ * @param onBytes Callback invoked with raw PCM bytes before float conversion
+ */
+fun Flow<ByteArray>.toFloatChunksWithCapture(
+    sampleCount: Int,
+    onBytes: (ByteArray) -> Unit
+): Flow<FloatArray> =
+    chunkedBytes(sampleCount * 2)
+        .onEach { bytes -> onBytes(bytes) }
+        .toFloatSamples()

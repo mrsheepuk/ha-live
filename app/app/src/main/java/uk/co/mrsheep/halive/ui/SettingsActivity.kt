@@ -553,7 +553,8 @@ class SettingsActivity : AppCompatActivity() {
                     testPeakScore.text = "0.00"
                     testScoreProgress.progress = 0
 
-                    testWakeWordService?.startTestMode { score ->
+                    // Start test mode WITH audio dump enabled for debugging
+                    val audioDumpFile = testWakeWordService?.startTestMode({ score ->
                         // Update UI with live score
                         testCurrentScore.text = String.format("%.2f", score)
 
@@ -593,34 +594,60 @@ class SettingsActivity : AppCompatActivity() {
                                 testStatusText.text = "Listening..."
                             }
                         }
-                    }
+                    }, withAudioDump = true)  // Enable audio dump for debugging
 
                     isTestActive = true
                     testButton.text = "Stop Test"
-                    testStatusText.text = "Listening..."
+                    testStatusText.text = if (audioDumpFile != null) {
+                        "Listening... (recording to ${audioDumpFile.name})"
+                    } else {
+                        "Listening..."
+                    }
 
                 } catch (e: Exception) {
                     testStatusText.text = "Error: ${e.message}"
                 }
             } else {
                 // Stop test
-                testWakeWordService?.stopTestMode()
+                val savedFile = testWakeWordService?.stopTestMode()
                 testWakeWordService?.destroy()
                 testWakeWordService = null
 
                 isTestActive = false
                 testButton.text = "Start Test"
-                testStatusText.text = "Tap Start to begin testing"
+                testStatusText.text = if (savedFile != null) {
+                    "Audio saved to: ${savedFile.absolutePath}"
+                } else {
+                    "Tap Start to begin testing"
+                }
                 testSection.setBackgroundColor(0x00000000) // Transparent
+
+                // Show toast with file location
+                if (savedFile != null) {
+                    android.widget.Toast.makeText(
+                        this,
+                        "Audio saved: ${savedFile.name}\nPath: ${savedFile.absolutePath}",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
 
         // Clean up test on dialog dismiss
         dialog.setOnDismissListener {
             if (isTestActive) {
-                testWakeWordService?.stopTestMode()
+                val savedFile = testWakeWordService?.stopTestMode()
                 testWakeWordService?.destroy()
                 testWakeWordService = null
+
+                // Show toast if audio was saved
+                if (savedFile != null) {
+                    android.widget.Toast.makeText(
+                        this,
+                        "Audio saved: ${savedFile.absolutePath}",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
     }
