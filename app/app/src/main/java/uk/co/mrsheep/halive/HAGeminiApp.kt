@@ -52,10 +52,15 @@ class HAGeminiApp : Application() {
             // This ensures GeminiConfig.isConfigured() returns true if we have a cached shared key
             // and also restores shared profiles before we check if default profile is needed
             val cachedConfig = sharedConfigCache?.getConfig()
+            Log.d(TAG, "Startup: cachedConfig=${if (cachedConfig != null) "present" else "null"}, " +
+                    "hasApiKey=${cachedConfig?.geminiApiKey != null}, " +
+                    "profileCount=${cachedConfig?.profiles?.size ?: 0}")
             if (cachedConfig != null) {
                 if (cachedConfig.geminiApiKey != null) {
                     GeminiConfig.updateSharedKey(cachedConfig.geminiApiKey)
                     Log.d(TAG, "Restored cached shared Gemini key")
+                } else {
+                    Log.w(TAG, "Cached config exists but has no Gemini API key")
                 }
                 // Restore cached shared profiles to ProfileManager
                 if (cachedConfig.profiles.isNotEmpty()) {
@@ -64,10 +69,18 @@ class HAGeminiApp : Application() {
                     )
                     Log.d(TAG, "Restored ${cachedConfig.profiles.size} cached shared profiles")
                 }
+            } else {
+                Log.d(TAG, "No cached config found on startup")
             }
 
             // Now ensure at least one profile exists (after shared profiles are restored)
             ProfileManager.ensureDefaultProfileExists()
+
+            // Log final configuration state
+            val geminiConfigured = GeminiConfig.isConfigured(this)
+            val haConfigured = homeAssistantAuth?.isAuthenticated() == true
+            Log.d(TAG, "Startup complete: GeminiConfig.isConfigured=$geminiConfigured, " +
+                    "HAConfig.isConfigured=$haConfigured")
 
             // Note: MCP connection is NOT established here
             // It will be established in MainActivity after user configures HA
@@ -138,6 +151,8 @@ class HAGeminiApp : Application() {
         // Fetch config
         val config = repo.getSharedConfig()
         if (config != null) {
+            Log.d(TAG, "Fetched shared config: hasApiKey=${config.geminiApiKey != null}, " +
+                    "profiles=${config.profiles.size}")
             cache.saveConfig(config)
             GeminiConfig.updateSharedKey(config.geminiApiKey)
 
@@ -146,8 +161,8 @@ class HAGeminiApp : Application() {
             ProfileManager.updateCachedSharedProfiles(
                 config.profiles.map { Profile.fromShared(it) }
             )
-
-            Log.d(TAG, "Fetched shared config: ${config.profiles.size} profiles")
+        } else {
+            Log.w(TAG, "getSharedConfig returned null")
         }
 
         return config
