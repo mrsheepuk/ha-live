@@ -169,11 +169,12 @@ class DirectConversationService(private val context: Context) :
 
     /**
      * Stop the current session.
+     * Note: We don't null session here so yieldAudioHelper() can still access it.
+     * The session reference is nulled in cleanup() instead.
      */
     override fun stopSession() {
         try {
             session?.close()
-            session = null
             Log.d(TAG, "Session stopped")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping session", e)
