@@ -1,5 +1,6 @@
 package uk.co.mrsheep.halive.ui
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -10,6 +11,9 @@ import uk.co.mrsheep.halive.core.OAuthConfig
 /**
  * Handles OAuth callback from Home Assistant.
  * This activity receives the halive://oauth/callback deep link.
+ *
+ * It stores the OAuth result in SharedPreferences so any activity
+ * (OnboardingActivity or SettingsActivity) can retrieve it in onResume.
  */
 class OAuthCallbackActivity : AppCompatActivity() {
 
@@ -18,6 +22,39 @@ class OAuthCallbackActivity : AppCompatActivity() {
         const val EXTRA_AUTH_CODE = "auth_code"
         const val EXTRA_ERROR = "error"
         const val EXTRA_STATE = "state"
+
+        private const val PREFS_NAME = "oauth_pending_result"
+        private const val KEY_AUTH_CODE = "pending_auth_code"
+        private const val KEY_STATE = "pending_state"
+        private const val KEY_ERROR = "pending_error"
+
+        /**
+         * Check if there's a pending OAuth result.
+         * Returns a Triple of (authCode, state, error) where all can be null.
+         * Clears the pending result after reading.
+         */
+        fun getPendingResult(context: Context): Triple<String?, String?, String?> {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val authCode = prefs.getString(KEY_AUTH_CODE, null)
+            val state = prefs.getString(KEY_STATE, null)
+            val error = prefs.getString(KEY_ERROR, null)
+
+            // Clear after reading
+            if (authCode != null || error != null) {
+                prefs.edit().clear().apply()
+            }
+
+            return Triple(authCode, state, error)
+        }
+
+        private fun storePendingResult(context: Context, authCode: String?, state: String?, error: String?) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit()
+                .putString(KEY_AUTH_CODE, authCode)
+                .putString(KEY_STATE, state)
+                .putString(KEY_ERROR, error)
+                .apply()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,25 +105,27 @@ class OAuthCallbackActivity : AppCompatActivity() {
 
         Log.d(TAG, "Received auth code, state: $state")
 
-        // Return to OnboardingActivity with the auth code
-        val resultIntent = Intent(this, OnboardingActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra(EXTRA_AUTH_CODE, code)
-            putExtra(EXTRA_STATE, state)
-        }
-        startActivity(resultIntent)
-        finish()
+        // Store result for the calling activity to retrieve
+        storePendingResult(this, code, state, null)
+
+        // Try to return to the calling activity
+        // Use CLEAR_TOP to bring it to front if it's in the stack
+        // Try SettingsActivity first (if it exists in stack), then OnboardingActivity
+        finishAndReturnToCaller()
     }
 
     private fun finishWithError(message: String) {
         Toast.makeText(this, "Authentication failed: $message", Toast.LENGTH_LONG).show()
 
-        // Return to OnboardingActivity with error
-        val resultIntent = Intent(this, OnboardingActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra(EXTRA_ERROR, message)
-        }
-        startActivity(resultIntent)
+        // Store error result
+        storePendingResult(this, null, null, message)
+
+        finishAndReturnToCaller()
+    }
+
+    private fun finishAndReturnToCaller() {
+        // Simply finish - the calling activity will receive onResume and check for pending result
+        // This works because the activity that launched the browser is still in the back stack
         finish()
     }
 }

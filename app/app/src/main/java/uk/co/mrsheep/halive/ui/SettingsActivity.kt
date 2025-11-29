@@ -44,6 +44,9 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView.ViewHolder
 import uk.co.mrsheep.halive.core.QuickMessage
+import uk.co.mrsheep.halive.core.OAuthConfig
+import androidx.browser.customtabs.CustomTabsIntent
+import android.widget.Toast
 import java.util.UUID
 
 class SettingsActivity : AppCompatActivity() {
@@ -54,9 +57,12 @@ class SettingsActivity : AppCompatActivity() {
 
     // HA section
     private lateinit var haUrlText: TextView
-    private lateinit var haTokenText: TextView
+    private lateinit var haAuthMethodText: TextView
     private lateinit var haEditButton: Button
     private lateinit var haTestButton: Button
+
+    // Dialog reference for OAuth callback
+    private var haEditDialog: AlertDialog? = null
 
     // Gemini section
     private lateinit var geminiApiKeyText: TextView
@@ -107,10 +113,30 @@ class SettingsActivity : AppCompatActivity() {
         viewModel.loadQuickMessages()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Check if we returned from OAuth with result
+        checkPendingOAuthResult()
+    }
+
+    private fun checkPendingOAuthResult() {
+        val (code, state, error) = OAuthCallbackActivity.getPendingResult(this)
+
+        if (code != null) {
+            // Dismiss the edit dialog if open
+            haEditDialog?.dismiss()
+            haEditDialog = null
+
+            viewModel.handleOAuthCallback(code, state)
+        } else if (error != null) {
+            viewModel.handleOAuthError(error)
+        }
+    }
+
     private fun initViews() {
         // HA section
         haUrlText = findViewById(R.id.haUrlText)
-        haTokenText = findViewById(R.id.haTokenText)
+        haAuthMethodText = findViewById(R.id.haAuthMethodText)
         haEditButton = findViewById(R.id.haEditButton)
         haTestButton = findViewById(R.id.haTestButton)
 
@@ -201,7 +227,7 @@ class SettingsActivity : AppCompatActivity() {
             is SettingsState.Loaded -> {
                 // Update UI with current config
                 haUrlText.text = state.haUrl
-                haTokenText.text = "••••••••" // Masked token
+                haAuthMethodText.text = state.authMethod
                 geminiApiKeyText.text = if (state.geminiApiKey != "Not configured") "••••••••" else "Not configured"
 
                 // Update conversation service display
@@ -248,22 +274,60 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showHAEditDialog() {
-        // Create custom layout with two EditTexts
+        // Create custom layout with OAuth and legacy token options
         val dialogView = layoutInflater.inflate(R.layout.dialog_ha_config, null)
+
+        // OAuth section
+        val oauthUrlInput = dialogView.findViewById<android.widget.EditText>(R.id.oauthUrlInput)
+        val oauthLoginButton = dialogView.findViewById<Button>(R.id.oauthLoginButton)
+
+        // Legacy token section
         val urlInput = dialogView.findViewById<android.widget.EditText>(R.id.haUrlInput)
         val tokenInput = dialogView.findViewById<android.widget.EditText>(R.id.haTokenInput)
 
-        // Load current config
-        val (currentUrl, currentToken) = uk.co.mrsheep.halive.core.HAConfig.loadConfig(this) ?: Pair("", "")
-        urlInput.setText(currentUrl)
-        tokenInput.setText(currentToken)
+        // Load current config for legacy section
+        val legacyConfig = uk.co.mrsheep.halive.core.HAConfig.loadConfig(this)
+        val oauthUrl = uk.co.mrsheep.halive.core.SecureTokenStorage(this).getHaUrl()
+
+        // Pre-fill OAuth URL with existing URL (OAuth or legacy)
+        oauthUrlInput.setText(oauthUrl ?: legacyConfig?.first ?: "")
+
+        // Pre-fill legacy section
+        urlInput.setText(legacyConfig?.first ?: "")
+        tokenInput.setText(legacyConfig?.second ?: "")
 
         val dialog = AlertDialog.Builder(this)
             .setTitle("Edit Home Assistant Config")
             .setView(dialogView)
-            .setPositiveButton("Test & Save", null) // Set to null, we'll override below
+            .setPositiveButton("Save Token", null) // For legacy token
             .setNegativeButton("Cancel", null)
             .create()
+
+        // Store dialog reference for OAuth callback
+        haEditDialog = dialog
+
+        // OAuth login button handler
+        oauthLoginButton.setOnClickListener {
+            val url = oauthUrlInput.text.toString().trim()
+            if (url.isBlank()) {
+                oauthUrlInput.error = "URL is required"
+                return@setOnClickListener
+            }
+
+            val authUrl = viewModel.startOAuthFlow(url)
+
+            // Open browser for OAuth
+            try {
+                val customTabsIntent = CustomTabsIntent.Builder().build()
+                customTabsIntent.launchUrl(this, Uri.parse(authUrl))
+            } catch (e: Exception) {
+                // Fallback to regular browser
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
+                startActivity(intent)
+            }
+
+            // Keep dialog open - it will be dismissed on OAuth callback
+        }
 
         dialog.setOnShowListener {
             val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
@@ -293,7 +357,12 @@ class SettingsActivity : AppCompatActivity() {
 
                 // Close dialog
                 dialog.dismiss()
+                haEditDialog = null
             }
+        }
+
+        dialog.setOnDismissListener {
+            haEditDialog = null
         }
 
         dialog.show()
@@ -790,7 +859,7 @@ private class QuickMessagesAdapter(
 sealed class SettingsState {
     data class Loaded(
         val haUrl: String,
-        val haToken: String,
+        val authMethod: String,
         val profileCount: Int,
         val isReadOnly: Boolean,
         val geminiApiKey: String,

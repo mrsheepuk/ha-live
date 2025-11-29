@@ -205,26 +205,14 @@ class OnboardingActivity : AppCompatActivity() {
         step3Container.visibility = if (step == 3) View.VISIBLE else View.GONE
     }
 
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        handleOAuthResult(intent)
-    }
-
     override fun onResume() {
         super.onResume()
         // Check if we returned from OAuth with result
-        handleOAuthResult(intent)
+        checkPendingOAuthResult()
     }
 
-    private fun handleOAuthResult(intent: Intent?) {
-        val code = intent?.getStringExtra(OAuthCallbackActivity.EXTRA_AUTH_CODE)
-        val error = intent?.getStringExtra(OAuthCallbackActivity.EXTRA_ERROR)
-        val state = intent?.getStringExtra(OAuthCallbackActivity.EXTRA_STATE)
-
-        // Clear the extras to prevent re-processing
-        intent?.removeExtra(OAuthCallbackActivity.EXTRA_AUTH_CODE)
-        intent?.removeExtra(OAuthCallbackActivity.EXTRA_ERROR)
-        intent?.removeExtra(OAuthCallbackActivity.EXTRA_STATE)
+    private fun checkPendingOAuthResult() {
+        val (code, state, error) = OAuthCallbackActivity.getPendingResult(this)
 
         if (code != null) {
             viewModel.handleOAuthCallback(code, state)
