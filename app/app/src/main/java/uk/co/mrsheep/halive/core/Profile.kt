@@ -115,7 +115,7 @@ data class Profile(
                 enableTranscription = shared.enableTranscription,
                 autoStartChat = shared.autoStartChat,
                 initialMessageToAgent = shared.initialMessage,
-                interruptable = true, // Default for shared profiles
+                interruptable = shared.interruptable,
                 source = ProfileSource.SHARED,
                 lastModified = shared.lastModified,
                 modifiedBy = shared.modifiedBy,

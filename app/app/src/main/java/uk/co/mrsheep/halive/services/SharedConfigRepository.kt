@@ -25,6 +25,7 @@ data class SharedProfile(
     val enableTranscription: Boolean = false,
     val autoStartChat: Boolean = false,
     val initialMessage: String = "",
+    val interruptable: Boolean = true,
     val lastModified: String? = null,
     val modifiedBy: String? = null,
     val schemaVersion: Int = 1

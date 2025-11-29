@@ -28,7 +28,8 @@ upsert_profile:
           "system_prompt": "You are a helpful assistant...",
           "personality": "Friendly and concise",
           "model": "gemini-2.0-flash-exp",
-          "voice": "Aoede"
+          "voice": "Aoede",
+          "interruptable": true
         }
       selector:
         object:
