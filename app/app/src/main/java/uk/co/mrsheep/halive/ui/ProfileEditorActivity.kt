@@ -33,6 +33,7 @@ import com.google.android.material.textfield.TextInputLayout
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.Profile
+import uk.co.mrsheep.halive.core.ProfileSource
 import uk.co.mrsheep.halive.core.ToolFilterMode
 import uk.co.mrsheep.halive.services.ProfileTestManager
 import uk.co.mrsheep.halive.ui.adapters.SelectableTool
@@ -131,6 +132,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
     // Mode tracking
     private var editingProfileId: String? = null
     private var isEditMode: Boolean = false
+    private var targetSource: ProfileSource = ProfileSource.LOCAL
 
     // Permission launcher
     private val micPermissionLauncher = registerForActivityResult(
@@ -310,7 +312,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
             viewModel.saveProfile(
                 name, prompt, personality, backgroundInfo, initialMessageToAgent,
                 model, voice, includeLiveContext, enableTranscription, autoStartChat, interruptable, currentToolFilterMode,
-                selectedToolNames.toSet(), editingProfileId
+                selectedToolNames.toSet(), editingProfileId, targetSource
             )
         }
 
@@ -430,6 +432,10 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
 
                 // Update tool selections in adapter
                 updateToolSelections()
+
+                // Set target source based on loaded profile
+                targetSource = state.profile.source
+
                 saveButton.isEnabled = true
             }
             is ProfileEditorState.Saving -> {

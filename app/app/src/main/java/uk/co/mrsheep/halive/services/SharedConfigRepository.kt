@@ -115,6 +115,43 @@ class SharedConfigRepository(
         }
     }
 
+    /**
+     * Create or update a shared profile.
+     * @return The profile ID if successful, null otherwise.
+     */
+    suspend fun upsertProfile(profile: uk.co.mrsheep.halive.core.Profile): String? {
+        return try {
+            val response = haClient.callService(
+                domain = DOMAIN,
+                service = "upsert_profile",
+                data = mapOf("profile" to profile.toSharedFormat()),
+                returnResponse = true
+            )
+            response?.get("id")?.jsonPrimitive?.content ?: profile.id
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to upsert profile", e)
+            null
+        }
+    }
+
+    /**
+     * Delete a shared profile.
+     */
+    suspend fun deleteProfile(profileId: String): Boolean {
+        return try {
+            haClient.callService(
+                domain = DOMAIN,
+                service = "delete_profile",
+                data = mapOf("profile_id" to profileId)
+            )
+            Log.i(TAG, "Deleted profile: $profileId")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete profile", e)
+            false
+        }
+    }
+
     private fun parseSharedConfig(json: JsonObject?): SharedConfig? {
         if (json == null) return null
         return try {

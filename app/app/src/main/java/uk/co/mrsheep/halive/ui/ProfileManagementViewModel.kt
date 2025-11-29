@@ -9,6 +9,8 @@ import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ProfileExportImport
+import uk.co.mrsheep.halive.core.ProfileSource
+import uk.co.mrsheep.halive.core.ProfileNameConflictException
 
 /**
  * ViewModel for ProfileManagementActivity.
@@ -33,6 +35,9 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
         viewModelScope.launch {
             try {
                 _state.value = ProfileManagementState.Loading
+
+                // Refresh shared profiles first
+                ProfileManager.refreshSharedProfiles()
 
                 // Observe the profiles StateFlow from ProfileManager
                 ProfileManager.profiles.collect { profiles ->
@@ -78,7 +83,22 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
     fun deleteProfile(profileId: String) {
         viewModelScope.launch {
             try {
-                ProfileManager.deleteProfile(profileId)
+                val profile = ProfileManager.getProfileById(profileId)
+                if (profile == null) {
+                    _state.value = ProfileManagementState.Error("Profile not found")
+                    return@launch
+                }
+
+                when (profile.source) {
+                    ProfileSource.LOCAL -> ProfileManager.deleteLocalProfile(profileId)
+                    ProfileSource.SHARED -> {
+                        val success = ProfileManager.deleteSharedProfile(profileId)
+                        if (!success) {
+                            _state.value = ProfileManagementState.Error("Failed to delete shared profile")
+                            return@launch
+                        }
+                    }
+                }
                 // ProfileManager will emit updated list via StateFlow
             } catch (e: IllegalStateException) {
                 // This is the "last profile" error
@@ -166,6 +186,29 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
                 )
             }
         }
+    }
+
+    /**
+     * Uploads a local profile to shared storage.
+     */
+    fun uploadToShared(profile: Profile, deleteLocal: Boolean, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                ProfileManager.uploadToShared(profile, deleteLocal)
+                onSuccess()
+            } catch (e: ProfileNameConflictException) {
+                onError(e.message ?: "Name already exists")
+            } catch (e: Exception) {
+                onError(e.message ?: "Upload failed")
+            }
+        }
+    }
+
+    /**
+     * Downloads a shared profile to local storage.
+     */
+    fun downloadToLocal(profile: Profile): Profile {
+        return ProfileManager.downloadToLocal(profile)
     }
 }
 

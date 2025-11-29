@@ -7,6 +7,12 @@
         android:id="@+id/action_duplicate"
         android:title="@string/profile_duplicate" />
     <item
+        android:id="@+id/action_upload_to_shared"
+        android:title="Upload to Shared..." />
+    <item
+        android:id="@+id/action_download_to_local"
+        android:title="Save as Local Copy" />
+    <item
         android:id="@+id/action_export"
         android:title="@string/profile_export" />
     <item
