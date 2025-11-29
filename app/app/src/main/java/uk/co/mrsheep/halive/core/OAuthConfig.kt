@@ -1,7 +1,7 @@
 package uk.co.mrsheep.halive.core
 
 object OAuthConfig {
-    const val CLIENT_ID = "https://halive.app"
+    const val CLIENT_ID = "https://halive.mrsheep.co.uk"
     const val REDIRECT_URI = "halive://oauth/callback"
     const val REDIRECT_SCHEME = "halive"
     const val REDIRECT_HOST = "oauth"
