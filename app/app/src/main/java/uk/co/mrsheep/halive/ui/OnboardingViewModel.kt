@@ -38,17 +38,10 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
 
     fun startOnboarding() {
         viewModelScope.launch {
-            // Check if Gemini config is already set up
-            val hasGemini = GeminiConfig.isConfigured(getApplication())
-
-            if (hasGemini) {
-                // Skip provider setup, go straight to HA
-                _onboardingState.value = OnboardingState.Step2HomeAssistant
-            } else {
-                // New user, auto-select Gemini Direct and show config
-                ConversationServicePreference.setPreferred(getApplication(), ConversationServicePreference.PreferredService.GEMINI_DIRECT)
-                _onboardingState.value = OnboardingState.Step1GeminiConfig
-            }
+            // Always start with HA OAuth first (reordered flow)
+            // Check for shared Gemini key after HA connection is established
+            ConversationServicePreference.setPreferred(getApplication(), ConversationServicePreference.PreferredService.GEMINI_DIRECT)
+            _onboardingState.value = OnboardingState.Step2HomeAssistant
         }
     }
 

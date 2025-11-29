@@ -69,7 +69,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Step 1: Gemini API Configuration"
+                android:text="Step 3: Gemini API Configuration"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="16dp" />
@@ -121,7 +121,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Step 2: Connect to Home Assistant"
+            android:text="Step 1: Connect to Home Assistant"
             android:textSize="18sp"
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
@@ -198,12 +198,19 @@
         android:layout_marginTop="32dp">
 
         <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Step 2: Configuration Check"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
             android:id="@+id/sharedConfigTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Shared Configuration Found"
-            android:textSize="18sp"
-            android:textStyle="bold"
+            android:textSize="16sp"
             android:layout_marginBottom="16dp" />
 
         <TextView
@@ -263,12 +270,19 @@
         android:layout_marginTop="32dp">
 
         <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Step 2: Configuration Check"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
             android:id="@+id/noIntegrationTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="No Integration Found"
-            android:textSize="18sp"
-            android:textStyle="bold"
+            android:textSize="16sp"
             android:layout_marginBottom="16dp" />
 
         <TextView

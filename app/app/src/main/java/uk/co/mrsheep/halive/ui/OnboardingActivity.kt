@@ -154,8 +154,8 @@ class OnboardingActivity : AppCompatActivity() {
     private fun updateUIForState(state: OnboardingState) {
         when (state) {
             OnboardingState.Step1GeminiConfig -> {
-                progressText.text = "Step 1 of 3"
-                progressBar.progress = 33
+                progressText.text = "Step 3 of 3"
+                progressBar.progress = 85
                 showStep(1)
                 geminiConfigContainer.visibility = View.VISIBLE
             }
@@ -173,27 +173,27 @@ class OnboardingActivity : AppCompatActivity() {
                 geminiApiKeyLayout.error = state.error
             }
             OnboardingState.Step2HomeAssistant -> {
-                progressText.text = "Step 2 of 3"
-                progressBar.progress = 66
+                progressText.text = "Step 1 of 3"
+                progressBar.progress = 33
                 showStep(2)
             }
             is OnboardingState.OAuthError -> {
                 Toast.makeText(this, "OAuth error: ${state.error}", Toast.LENGTH_LONG).show()
             }
             OnboardingState.CheckingSharedConfig -> {
-                progressText.text = "Step 3 of 3"
-                progressBar.progress = 80
+                progressText.text = "Step 2 of 3"
+                progressBar.progress = 66
                 showStep(4)
             }
             is OnboardingState.SharedConfigFound -> {
+                progressBar.progress = if (state.hasApiKey) 95 else 80
                 progressText.text = "Step 3 of 3"
-                progressBar.progress = 90
                 showStep(4)
                 showSharedConfigStep(state.hasApiKey, state.profileCount)
             }
             OnboardingState.NoSharedConfig -> {
-                progressText.text = "Step 3 of 3"
-                progressBar.progress = 90
+                progressText.text = "Step 2 of 3"
+                progressBar.progress = 75
                 showStep(5)
                 showNoIntegrationStep()
             }
