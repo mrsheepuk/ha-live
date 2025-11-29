@@ -1,0 +1,12 @@
+{
+  "domain": "ha_live_config",
+  "name": "HA Live Config",
+  "version": "1.0.0",
+  "documentation": "https://github.com/mrsheepuk/ha-live-config",
+  "issue_tracker": "https://github.com/mrsheepuk/ha-live-config/issues",
+  "dependencies": [],
+  "codeowners": ["@mrsheepuk"],
+  "requirements": [],
+  "iot_class": "local_push",
+  "integration_type": "service"
+}
