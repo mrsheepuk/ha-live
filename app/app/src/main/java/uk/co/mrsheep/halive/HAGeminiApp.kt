@@ -7,6 +7,7 @@ import uk.co.mrsheep.halive.core.CrashLogger
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HomeAssistantAuth
 import uk.co.mrsheep.halive.core.OAuthTokenManager
+import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.SharedConfigCache
 import uk.co.mrsheep.halive.services.HomeAssistantApiClient
@@ -76,6 +77,9 @@ class HAGeminiApp : Application() {
         this.haUrl = haUrl
         haApiClient = HomeAssistantApiClient(haUrl, tokenManager)
         sharedConfigRepo = SharedConfigRepository(haApiClient!!)
+
+        // Set the repository in ProfileManager for profile syncing
+        ProfileManager.setSharedConfigRepository(sharedConfigRepo)
     }
 
     /**
@@ -118,6 +122,13 @@ class HAGeminiApp : Application() {
         if (config != null) {
             cache.saveConfig(config)
             GeminiConfig.updateSharedKey(config.geminiApiKey)
+
+            // Update ProfileManager with shared profiles
+            ProfileManager.setSharedConfigRepository(repo)
+            ProfileManager.updateCachedSharedProfiles(
+                config.profiles.map { Profile.fromShared(it) }
+            )
+
             Log.d(TAG, "Fetched shared config: ${config.profiles.size} profiles")
         }
 

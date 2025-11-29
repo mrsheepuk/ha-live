@@ -4,6 +4,15 @@ import kotlinx.serialization.Serializable
 import java.util.UUID
 
 /**
+ * Where a profile is stored.
+ */
+@Serializable
+enum class ProfileSource {
+    LOCAL,   // Stored only on this device
+    SHARED   // Synced with Home Assistant
+}
+
+/**
  * Defines the mode for filtering tools in a profile.
  */
 @Serializable
@@ -35,8 +44,33 @@ data class Profile(
     val selectedToolNames: Set<String> = emptySet(),
     val enableTranscription: Boolean = SystemPromptConfig.DEFAULT_ENABLE_TRANSCRIPTION,
     val autoStartChat: Boolean = false,
-    val interruptable: Boolean = SystemPromptConfig.DEFAULT_INTERRUPTABLE
+    val interruptable: Boolean = SystemPromptConfig.DEFAULT_INTERRUPTABLE,
+    // Shared config metadata
+    val source: ProfileSource = ProfileSource.LOCAL,
+    val lastModified: String? = null,
+    val modifiedBy: String? = null,
+    val schemaVersion: Int = 1
 ) {
+    /**
+     * Convert to format expected by HA integration.
+     */
+    fun toSharedFormat(): Map<String, Any?> = mapOf(
+        "id" to id,
+        "name" to name,
+        "system_prompt" to systemPrompt,
+        "personality" to personality,
+        "background_info" to backgroundInfo,
+        "model" to model,
+        "voice" to voice,
+        "tool_filter_mode" to toolFilterMode.name,
+        "selected_tools" to selectedToolNames.toList(),
+        "include_live_context" to includeLiveContext,
+        "enable_transcription" to enableTranscription,
+        "auto_start_chat" to autoStartChat,
+        "initial_message" to initialMessageToAgent,
+        "interruptable" to interruptable
+    )
+
     companion object {
         /**
          * Creates a default profile with the standard system prompt.
@@ -56,6 +90,36 @@ data class Profile(
                 enableTranscription = SystemPromptConfig.DEFAULT_ENABLE_TRANSCRIPTION,
                 autoStartChat = false,
                 interruptable = SystemPromptConfig.DEFAULT_INTERRUPTABLE
+            )
+        }
+
+        /**
+         * Create Profile from shared config format.
+         */
+        fun fromShared(shared: uk.co.mrsheep.halive.services.SharedProfile): Profile {
+            return Profile(
+                id = shared.id,
+                name = shared.name,
+                systemPrompt = shared.systemPrompt,
+                personality = shared.personality,
+                backgroundInfo = shared.backgroundInfo,
+                model = shared.model,
+                voice = shared.voice,
+                toolFilterMode = try {
+                    ToolFilterMode.valueOf(shared.toolFilterMode)
+                } catch (e: Exception) {
+                    ToolFilterMode.ALL
+                },
+                selectedToolNames = shared.selectedTools.toSet(),
+                includeLiveContext = shared.includeLiveContext,
+                enableTranscription = shared.enableTranscription,
+                autoStartChat = shared.autoStartChat,
+                initialMessageToAgent = shared.initialMessage,
+                interruptable = true, // Default for shared profiles
+                source = ProfileSource.SHARED,
+                lastModified = shared.lastModified,
+                modifiedBy = shared.modifiedBy,
+                schemaVersion = shared.schemaVersion
             )
         }
     }

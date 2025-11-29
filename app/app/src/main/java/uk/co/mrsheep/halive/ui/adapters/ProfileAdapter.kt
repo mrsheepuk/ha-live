@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
@@ -12,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.Profile
+import uk.co.mrsheep.halive.core.ProfileSource
 
 /**
  * RecyclerView adapter for displaying a list of profiles.
@@ -26,7 +28,9 @@ class ProfileAdapter(
     private val onAddShortcut: (Profile) -> Unit,
     private val onDuplicate: (Profile) -> Unit,
     private val onExport: (Profile) -> Unit,
-    private val onDelete: (Profile) -> Unit
+    private val onDelete: (Profile) -> Unit,
+    private val onUploadToShared: (Profile) -> Unit = {},
+    private val onDownloadToLocal: (Profile) -> Unit = {}
 ) : RecyclerView.Adapter<ProfileAdapter.ProfileViewHolder>() {
 
     private var profiles: List<Profile> = emptyList()
@@ -63,6 +67,8 @@ class ProfileAdapter(
         private val editButton: Button = itemView.findViewById(R.id.editButton)
         private val overflowButton: ImageButton = itemView.findViewById(R.id.overflowButton)
         private val cardView: MaterialCardView = itemView as MaterialCardView
+        private val sourceIcon: ImageView = itemView.findViewById(R.id.sourceIcon)
+        private val subtitleText: TextView = itemView.findViewById(R.id.subtitleText)
 
         fun bind(profile: Profile) {
             profileNameText.text = profile.name
@@ -81,6 +87,30 @@ class ProfileAdapter(
                 cardView.strokeColor = ContextCompat.getColor(itemView.context, R.color.teal_primary)
             } else {
                 cardView.strokeColor = ContextCompat.getColor(itemView.context, R.color.divider_light)
+            }
+
+            // Show source icon
+            val iconRes = if (profile.source == ProfileSource.SHARED) {
+                R.drawable.ic_cloud
+            } else {
+                R.drawable.ic_phone
+            }
+            sourceIcon.setImageResource(iconRes)
+
+            // Show subtitle
+            when {
+                profile.source == ProfileSource.SHARED && profile.modifiedBy != null -> {
+                    subtitleText.visibility = View.VISIBLE
+                    subtitleText.text = "Shared - Modified by ${profile.modifiedBy}"
+                }
+                profile.source == ProfileSource.SHARED -> {
+                    subtitleText.visibility = View.VISIBLE
+                    subtitleText.text = "Shared"
+                }
+                else -> {
+                    subtitleText.visibility = View.VISIBLE
+                    subtitleText.text = "Local only"
+                }
             }
 
             // Item click to set as active
@@ -103,6 +133,12 @@ class ProfileAdapter(
             val popup = PopupMenu(view.context, view)
             popup.menuInflater.inflate(R.menu.profile_overflow_menu, popup.menu)
 
+            // Show/hide upload and download options based on profile source
+            popup.menu.findItem(R.id.action_upload_to_shared)?.isVisible =
+                profile.source == ProfileSource.LOCAL
+            popup.menu.findItem(R.id.action_download_to_local)?.isVisible =
+                profile.source == ProfileSource.SHARED
+
             popup.setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     R.id.action_add_shortcut -> {
@@ -111,6 +147,14 @@ class ProfileAdapter(
                     }
                     R.id.action_duplicate -> {
                         onDuplicate(profile)
+                        true
+                    }
+                    R.id.action_upload_to_shared -> {
+                        onUploadToShared(profile)
+                        true
+                    }
+                    R.id.action_download_to_local -> {
+                        onDownloadToLocal(profile)
                         true
                     }
                     R.id.action_export -> {

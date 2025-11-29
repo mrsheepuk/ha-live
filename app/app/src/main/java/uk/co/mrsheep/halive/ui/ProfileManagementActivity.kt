@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.CheckBox
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -19,8 +20,10 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.launch
+import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.Profile
+import uk.co.mrsheep.halive.core.ProfileSource
 import uk.co.mrsheep.halive.core.ShortcutHelper
 import uk.co.mrsheep.halive.ui.adapters.ProfileAdapter
 import uk.co.mrsheep.halive.util.FileUtils
@@ -137,6 +140,17 @@ class ProfileManagementActivity : AppCompatActivity() {
                 val intent = FileUtils.createExportIntent(fileName)
                 exportSingleLauncher.launch(intent)
             },
+            onUploadToShared = { profile ->
+                if (profile.source == ProfileSource.LOCAL) {
+                    showUploadDialog(profile)
+                }
+            },
+            onDownloadToLocal = { profile ->
+                if (profile.source == ProfileSource.SHARED) {
+                    val localCopy = viewModel.downloadToLocal(profile)
+                    Toast.makeText(this, "Saved as '${localCopy.name}'", Toast.LENGTH_SHORT).show()
+                }
+            },
             onDelete = { profile ->
                 showDeleteConfirmationDialog(profile)
             }
@@ -189,9 +203,15 @@ class ProfileManagementActivity : AppCompatActivity() {
      * Shows a confirmation dialog before deleting a profile.
      */
     private fun showDeleteConfirmationDialog(profile: Profile) {
+        val message = if (profile.source == ProfileSource.SHARED) {
+            "Delete profile \"${profile.name}\" from shared storage?\n\nThis will remove it for all household members. This action cannot be undone."
+        } else {
+            "Delete profile \"${profile.name}\"?\n\nThis action cannot be undone."
+        }
+
         AlertDialog.Builder(this)
             .setTitle("Delete Profile")
-            .setMessage("Delete profile \"${profile.name}\"?\n\nThis action cannot be undone.")
+            .setMessage(message)
             .setPositiveButton("Delete") { _, _ ->
                 viewModel.deleteProfile(profile.id)
             }
@@ -336,6 +356,58 @@ class ProfileManagementActivity : AppCompatActivity() {
                 ).show()
             }
         }
+    }
+
+    /**
+     * Shows the upload to shared dialog.
+     */
+    private fun showUploadDialog(profile: Profile) {
+        val app = application as HAGeminiApp
+        if (!app.isSharedConfigAvailable()) {
+            Toast.makeText(this, "Shared config not available", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val dialogView = layoutInflater.inflate(R.layout.dialog_upload_profile, null)
+        val deleteLocalCheckbox = dialogView.findViewById<CheckBox>(R.id.deleteLocalCheckbox)
+        deleteLocalCheckbox.isChecked = true
+
+        AlertDialog.Builder(this)
+            .setTitle("Upload to Shared Storage")
+            .setMessage("This will share '${profile.name}' with everyone in your household.")
+            .setView(dialogView)
+            .setPositiveButton("Upload") { _, _ ->
+                uploadProfile(profile, deleteLocalCheckbox.isChecked)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /**
+     * Uploads a profile to shared storage.
+     */
+    private fun uploadProfile(profile: Profile, deleteLocal: Boolean) {
+        viewModel.uploadToShared(
+            profile = profile,
+            deleteLocal = deleteLocal,
+            onSuccess = {
+                Toast.makeText(this, "Profile uploaded successfully", Toast.LENGTH_SHORT).show()
+            },
+            onError = { message ->
+                showNameConflictDialog(profile, message)
+            }
+        )
+    }
+
+    /**
+     * Shows a dialog for name conflicts during upload.
+     */
+    private fun showNameConflictDialog(profile: Profile, message: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Name Already Taken")
+            .setMessage(message + "\n\nPlease rename the profile locally before uploading.")
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     /**
