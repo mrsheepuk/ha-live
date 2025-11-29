@@ -4,16 +4,15 @@
 
 HA Live is an open-source Android app that bridges Google's Gemini Live API with Home Assistant's Model Context Protocol (MCP) server, giving you a powerful voice assistant that can control your smart home through natural conversation. Think of it as having a deeply integrated AI assistant that actually understands and can control your entire Home Assistant ecosystem.
 
-## 🎯 What Makes HA Live Special?
+## What Makes HA Live Special?
 
 - **True Streaming Conversations**: Uses Gemini Live's real-time, bidirectional streaming for natural, interruptible conversations—no more waiting for the AI to finish speaking
 - **Direct Home Assistant Integration**: Connects to Home Assistant's MCP server to access all your entities, services, and automations as native AI tools
-- **Flexible Deployment**: Choose between Firebase SDK (using your own google-services.json) or direct Gemini API (using an API key)—no mandatory developer billing accounts
 - **Multiple Personalities**: Create unlimited conversation profiles with different prompts, voices, models, and tool access
 - **Wake Word Detection**: Built-in "Ok Computer" wake word support (foreground only, privacy-first)
 - **Contextual Awareness**: Inject live Home Assistant state and Jinja2 templates into every conversation
 
-## 🏗️ How It Works
+## How It Works
 
 HA Live acts as a bridge between two powerful systems:
 
@@ -35,14 +34,7 @@ When you speak to HA Live:
 
 All of this happens in real-time with sub-second latency, making conversations feel natural and responsive.
 
-## ✨ Key Features
-
-### Dual Provider Architecture
-Choose your preferred Gemini Live connection method:
-- **Firebase SDK**: Use your own `google-services.json` (BYOFP - Bring Your Own Firebase Project)
-- **Direct API**: Connect directly with a Gemini API key (lower-level protocol control)
-
-Both providers offer the same functionality—pick what works best for your setup.
+## Key Features
 
 ### Conversation Profiles
 Create multiple profiles for different use cases:
@@ -72,17 +64,17 @@ Create multiple profiles for different use cases:
 - Clean session lifecycle (no stale state between chats)
 - Graceful error handling (template errors fail fast, context errors degrade gracefully)
 
-## 📋 Requirements
+## Requirements
 
 - **Android Device**: API 26+ (Android 8.0 Oreo or newer)
 - **Home Assistant**:
   - Version with MCP server support
   - MCP SSE endpoint enabled (`/mcp_server/sse`)
   - Long-lived access token
-- **Gemini Access**: Either a Firebase project with Gemini API enabled OR a Gemini API key
+- **Gemini API Key**: Get one from [Google AI Studio](https://aistudio.google.com/apikey)
 - **Network**: Both devices on the same network (or Home Assistant accessible remotely via HTTPS)
 
-## 🚀 Installation
+## Installation
 
 ### 1. Install the App
 
@@ -113,23 +105,7 @@ Create a long-lived access token:
 4. Give it a name (e.g., "HA Live App")
 5. Copy the token immediately (you won't see it again)
 
-### 3. Configure Gemini Access
-
-Choose one of the following methods:
-
-#### Method A: Firebase SDK (BYOFP Pattern)
-
-1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Create a new project (or use existing)
-3. Add an Android app to your project:
-   - Package name: `uk.co.mrsheep.halive`
-   - Register app and download `google-services.json`
-4. In Firebase Console, enable Gemini API:
-   - Navigate to "Build" → "AI" (or search for Firebase AI)
-   - Follow prompts to enable the API
-5. Keep the `google-services.json` file handy for app setup
-
-#### Method B: Direct Gemini API
+### 3. Get a Gemini API Key
 
 1. Go to [Google AI Studio](https://aistudio.google.com/apikey)
 2. Create a new API key (or use existing)
@@ -137,24 +113,20 @@ Choose one of the following methods:
 
 ### 4. First-Run Onboarding
 
-When you first launch HA Live, you'll go through a 4-step setup:
+When you first launch HA Live, you'll go through a 3-step setup:
 
-**Step 1: Choose Provider**
-- Select either "Gemini Direct" or "Firebase SDK"
+**Step 1: Configure Gemini API**
+- Paste your Gemini API key
 
-**Step 2: Configure Provider**
-- **If Firebase**: Tap "Select google-services.json" and choose your downloaded file
-- **If Gemini Direct**: Paste your API key
-
-**Step 3: Connect Home Assistant**
+**Step 2: Connect Home Assistant**
 - Enter your Home Assistant URL (e.g., `http://192.168.1.100:8123` or `https://home.example.com`)
 - Paste your long-lived access token
 - Tap "Test Connection" to verify
 
-**Step 4: Complete**
+**Step 3: Complete**
 - Tap "Start Using HA Live"
 
-## 🎛️ Configuration Guide
+## Configuration Guide
 
 ### Creating Your First Profile
 
@@ -188,14 +160,6 @@ Living room occupied: {{ states('binary_sensor.living_room_motion') }}
 - **ALL**: Grant access to all Home Assistant tools (recommended for general use)
 - **SELECTED**: Whitelist specific tools (useful for restricted profiles, e.g., "kids profile" with limited access)
 
-### Switching Providers
-
-To change between Firebase and Direct API:
-
-1. Settings → Scroll to "Conversation Service" section
-2. If both providers are configured, you'll see a "Switch to..." button
-3. Tap to switch between providers
-
 ### Wake Word Configuration
 
 **Quick Toggle**: Tap the "Wake Word" chip on the main screen to enable/disable detection.
@@ -217,7 +181,7 @@ Note: Models are bundled with the app (~10MB) and copied to device storage on fi
 - **Quick Switch**: Tap the dropdown on the main screen to change active profile
 - **Auto-Start**: Enable in profile settings to start conversations immediately on app launch
 
-## 🔧 Advanced Features
+## Advanced Features
 
 ### Jinja2 Template Support
 
@@ -262,15 +226,14 @@ Model (thought): "I should use the light.turn_on service"
 
 Toggle the header to expand/collapse the transcription view.
 
-## 🏛️ Architecture
+## Architecture
 
 HA Live uses a modular architecture:
 
 ### Core Components
-- **ConversationService Interface**: Abstracts provider implementations
-- **FirebaseConversationService**: Firebase SDK provider
-- **DirectConversationService**: Direct WebSocket-based provider
-- **ConversationServiceFactory**: Selects provider based on user preference
+- **ConversationService Interface**: Abstracts the Gemini Live API connection
+- **DirectConversationService**: WebSocket-based Gemini Live API implementation
+- **ConversationServiceFactory**: Creates the conversation service
 
 ### MCP Integration
 - **McpClientManager**: Server-Sent Events (SSE) client for Home Assistant MCP server
@@ -288,28 +251,25 @@ HA Live uses a modular architecture:
 app/src/main/java/uk/co/mrsheep/halive/
 ├── core/                    # Configuration and data models
 │   ├── HAConfig.kt         # Home Assistant credentials
-│   ├── FirebaseConfig.kt   # Firebase initialization
 │   ├── GeminiConfig.kt     # Gemini API key storage
 │   ├── Profile.kt          # Profile data model
 │   └── ProfileManager.kt   # Profile CRUD operations
 ├── services/
 │   ├── conversation/       # Provider interface
-│   ├── geminifirebase/     # Firebase SDK implementation
-│   ├── geminidirect/       # Direct API implementation
+│   ├── geminidirect/       # Gemini Live API implementation
 │   ├── mcp/                # MCP client
 │   ├── WakeWordService.kt  # Wake word detection
 │   └── SessionPreparer.kt  # Session initialization
 └── ui/                     # Activities and ViewModels
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Areas where help is especially appreciated:
 
 - **Additional wake word models** (beyond "Ok Computer")
 - **UI/UX improvements** for profile management
 - **Background mode support** (Android background restrictions are tricky)
-- **Additional provider implementations** (other Gemini endpoints, other LLMs)
 - **Documentation** and example profiles
 
 ### Development Setup
@@ -318,14 +278,14 @@ Contributions are welcome! Areas where help is especially appreciated:
 2. Open in Android Studio (Hedgehog or newer)
 3. Sync Gradle dependencies
 4. Set up a Home Assistant test instance
-5. Create a test Firebase project or Gemini API key
+5. Create a Gemini API key
 6. Build and run on device or emulator (API 26+)
 
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **Home Assistant**: For the amazing MCP server implementation
 - **Google Gemini Team**: For the Gemini Live API
@@ -333,13 +293,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Claude (Sonnet 4.5)**: For the tireless implementation efforts, marshalling teams of Haiku subagents to build most of the features in this app
 - **The Home Assistant Community**: For inspiration and feedback
 
-## 💬 Community & Support
+## Community & Support
 
 - **Issues**: [GitHub Issues](https://github.com/yourusername/ha-live/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/yourusername/ha-live/discussions)
 - **Home Assistant Forum**: [Coming Soon]
 
-## 🚧 Roadmap
+## Roadmap
 
 - [ ] Background mode support (system-wide wake word)
 - [ ] Custom wake word training
@@ -351,6 +311,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Made with ❤️ for the Home Assistant community**
+**Made with love for the Home Assistant community**
 
 If you find HA Live useful, consider starring the repo and sharing it with other HA enthusiasts!

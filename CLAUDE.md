@@ -3,32 +3,22 @@
 ## Project Overview
 Open-source Android voice assistant for Home Assistant using Gemini Live API. Provides low-latency, streaming, interruptible voice conversations by acting as a bridge between Gemini Live and Home Assistant's MCP server.
 
-**Key Innovation:** Dual provider architecture - users can choose between Firebase SDK (with google-services.json) or direct Gemini Live API (with API key), enabling flexible deployment without mandatory developer billing.
-
 ## Architecture
 
-### Conversation Service Providers
+### Conversation Service
 
-Two implementations of the `ConversationService` interface:
-
-**FirebaseConversationService** (`services/geminifirebase/`)
-- Uses Firebase AI SDK for Gemini Live API access
-- Requires `google-services.json` (BYOFP pattern)
-- Original implementation, stable and well-tested
-- Tool transformation: `FirebaseMCPToolTransformer.kt`
-- Tool execution: `FirebaseMCPToolExecutor.kt`
+The app uses a `ConversationService` interface implemented by `DirectConversationService`:
 
 **DirectConversationService** (`services/geminidirect/`)
 - Direct WebSocket connection to Gemini Live API
 - Requires Gemini API key (stored in `GeminiConfig`)
-- Lower-level protocol control, no SDK constraints
+- Lower-level protocol control for maximum flexibility
 - Tool transformation: `GeminiLiveMCPToolTransformer.kt`
 - Session management: `GeminiLiveSession.kt`, protocol types in `protocol/`
 
 **ConversationServiceFactory**
-- Selects provider based on user preference (`ConversationServicePreference`)
-- Falls back if preferred provider not configured
-- Defaults to Direct API if both available
+- Creates `DirectConversationService` instances
+- Simple factory pattern for potential future extensibility
 
 ### Core Components
 
@@ -50,9 +40,8 @@ Two implementations of the `ConversationService` interface:
 
 **Configuration:**
 - `HAConfig.kt` - Home Assistant URL + token
-- `FirebaseConfig.kt` - Dynamic Firebase initialization from user file
-- `GeminiConfig.kt` - Gemini API key for direct protocol
-- `ConversationServicePreference.kt` - User's provider choice
+- `GeminiConfig.kt` - Gemini API key storage
+- `ConversationServicePreference.kt` - Provider preference (simplified, single provider)
 
 **User Features:**
 - `ProfileManager.kt` - Multiple conversation profiles
@@ -63,7 +52,7 @@ Two implementations of the `ConversationService` interface:
 ### Session Flow
 
 **App Launch:**
-1. Check Firebase config (google-services.json or Gemini API key)
+1. Check Gemini API key configuration
 2. Check Home Assistant config (URL + token)
 3. Initialize `HomeAssistantApiClient` (for template rendering)
 4. State: `ReadyToTalk` (no Gemini initialization yet)
@@ -73,7 +62,7 @@ Two implementations of the `ConversationService` interface:
 1. Stop wake word listening (release microphone)
 2. State: `Initializing`
 3. Create fresh `McpClientManager` for this session
-4. Create `ConversationService` via factory (based on preference)
+4. Create `ConversationService` via factory
 5. `SessionPreparer.prepareAndInitialize()`:
    - Fetch raw MCP tools
    - Apply profile tool filtering (ALL or SELECTED)
@@ -89,7 +78,7 @@ Two implementations of the `ConversationService` interface:
 
 **Tool Call Flow:**
 ```
-User speaks → Gemini Live → FunctionCall (provider-specific format)
+User speaks → Gemini Live → FunctionCall
     ↓
 ConversationService → toolExecutor.callTool(name, args)
     ↓
@@ -169,10 +158,10 @@ interface ToolExecutor {
 }
 ```
 
-**Why:** Enables multiple providers without coupling to Firebase SDK or direct protocol
+**Why:** Clean abstraction allows for potential future provider implementations
 
 ### Separation of Concerns
-- **Transformation:** `*MCPToolTransformer` (stateless, provider-specific)
+- **Transformation:** `GeminiLiveMCPToolTransformer` (stateless)
 - **Execution:** `AppToolExecutor` (logs, UI state, local tools)
 - **Coordination:** `MainViewModel` (session lifecycle, UI state)
 - **Preparation:** `SessionPreparer` (tool fetching, filtering, template rendering)
@@ -195,11 +184,10 @@ suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
 
 ## Important Type Mappings
 
-**MCP → Provider Tool Transformation:**
+**MCP → Gemini Tool Transformation:**
 - `McpTool` (from `mcpClient.getTools()`) has `name`, `description`, `inputSchema`
-- Firebase: Transform to `List<Tool>` via `FirebaseMCPToolTransformer`
-- Direct: Transform to `List<ToolDeclaration>` via `GeminiLiveMCPToolTransformer`
-- **Access tool names from MCP layer** before transformation (provider properties may be internal)
+- Transform to `List<ToolDeclaration>` via `GeminiLiveMCPToolTransformer`
+- **Access tool names from MCP layer** before transformation
 
 **Return Types:**
 - `toolExecutor.getTools()` → `List<McpTool>`
@@ -249,11 +237,6 @@ suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
   }
   ```
 
-### Provider SDK Constraints
-- Firebase AI SDK properties are **internal** - cannot access `Tool.functionDeclarations` or `FunctionDeclaration.name`
-- **Solution:** Access tool information from MCP layer before transformation, or use direct API
-- Always verify property visibility when working with SDK types
-
 ### Error Handling Philosophy
 - Template rendering: **Fail fast** (user needs to know config is wrong)
 - Live context fetching: **Graceful degradation** (continue without it)
@@ -283,20 +266,18 @@ suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
 1. Search for all references to modified/deleted classes
 2. Check return type names match actual definitions
 3. Verify property access patterns (nested properties, nullable chains)
-4. Test with both conversation providers
-5. Check impacts on files not included in the change
+4. Check impacts on files not included in the change
 
 ## File Organization
 
 ```
 app/app/src/main/java/uk/co/mrsheep/halive/
 ├── core/
-│   ├── FirebaseConfig.kt               # BYOFP dynamic initialization
-│   ├── GeminiConfig.kt                 # Direct API key storage
+│   ├── GeminiConfig.kt                 # API key storage
 │   ├── HAConfig.kt                     # HA credentials persistence
 │   ├── Profile.kt                      # Profile data model
 │   ├── ProfileManager.kt               # Profile CRUD + migration
-│   ├── ConversationServicePreference.kt # Provider selection
+│   ├── ConversationServicePreference.kt # Provider preference (simplified)
 │   ├── WakeWordConfig.kt               # Wake word settings
 │   ├── SystemPromptConfig.kt           # Default prompts
 │   ├── ProfileExportImport.kt          # Profile sharing
@@ -304,13 +285,9 @@ app/app/src/main/java/uk/co/mrsheep/halive/
 ├── services/
 │   ├── conversation/
 │   │   ├── ConversationService.kt      # Provider interface
-│   │   └── ConversationServiceFactory.kt # Provider selection
-│   ├── geminifirebase/
-│   │   ├── FirebaseConversationService.kt   # Firebase SDK implementation
-│   │   ├── FirebaseMCPToolTransformer.kt    # MCP → Firebase tools
-│   │   └── FirebaseMCPToolExecutor.kt       # Firebase tool execution
+│   │   └── ConversationServiceFactory.kt # Service creation
 │   ├── geminidirect/
-│   │   ├── DirectConversationService.kt     # Direct API implementation
+│   │   ├── DirectConversationService.kt     # Gemini Live API implementation
 │   │   ├── GeminiLiveSession.kt             # WebSocket session
 │   │   ├── GeminiLiveMCPToolTransformer.kt  # MCP → protocol tools
 │   │   ├── AudioHelper.kt                   # Audio encoding
@@ -344,41 +321,15 @@ app/app/src/main/java/uk/co/mrsheep/halive/
 ## Dependencies
 
 - **Kotlin Coroutines:** Async operations, SSE handling
-- **OkHttp:** SSE connection (MCP), WebSocket (Direct API), HTTP client (template API)
+- **OkHttp:** SSE connection (MCP), WebSocket (Gemini Live API), HTTP client (template API)
 - **kotlinx.serialization:** JSON parsing (MCP, HA API, protocol messages)
-- **Firebase AI SDK:** Gemini Live API access (Firebase provider only)
 - **Material Design:** UI components
 - **AndroidX:** Lifecycle, ViewModel, ConstraintLayout
-- **TensorFlow Lite:** Wake word detection (OpenWakeWord model)
-
-## Recent Architectural Changes
-
-### Dual Provider Architecture
-- **Added** `DirectConversationService` for direct Gemini Live API access
-- **Created** `ConversationService` interface to abstract provider
-- **Implemented** factory pattern for provider selection
-- **Benefit:** No longer dependent on Firebase SDK constraints, users can choose
-
-### Session Lifecycle Refactoring
-- **Moved** MCP connection from app launch to per-session
-- **Extracted** initialization logic to `SessionPreparer`
-- **Benefit:** Fresh tools/context per session, cleaner separation of concerns
-
-### Tool Execution Abstraction
-- **Created** `ToolExecutor` interface
-- **Implemented** `AppToolExecutor` wrapper with logging + local tools
-- **Benefit:** Local tools (EndConversation) execute in-app, unified logging
-
-### Profile Enhancements
-- **Added** tool filtering (ALL vs SELECTED modes)
-- **Added** transcription logging toggle
-- **Added** auto-start chat on app launch
-- **Added** initial message to agent
-- **Added** profile export/import via JSON
+- **ONNX Runtime:** Wake word detection (OpenWakeWord model)
 
 ## Features
 
-- ✅ Dual provider support (Firebase SDK or Direct API)
+- ✅ Gemini Live API via WebSocket
 - ✅ Multiple conversation profiles
 - ✅ Tool filtering (whitelist mode per profile)
 - ✅ Wake word detection (foreground only)
