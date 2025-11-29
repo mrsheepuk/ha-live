@@ -80,6 +80,9 @@ class AudioHelper(
     /** Whether this AudioHelper has been released and can no longer be used. */
     val isReleased: Boolean get() = released
 
+    /** The audio session ID for this AudioHelper's AudioRecord. Used for echo cancellation. */
+    val audioSessionId: Int get() = recorder.audioSessionId
+
     /**
      * Release the system resources on the recorder.
      *

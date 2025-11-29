@@ -347,9 +347,14 @@ class GeminiLiveSession(
         // Use 4x minimum buffer for AudioTrack internal buffering
         val trackBufferSize = minBufferSize * 4
 
+        // Use the same audio session ID as the AudioRecord for proper echo cancellation.
+        // The AcousticEchoCanceler attached to the AudioRecord needs to know what audio
+        // is being played back so it can cancel it from the microphone input.
+        val sessionId = audioHelper?.audioSessionId ?: AudioManager.AUDIO_SESSION_ID_GENERATE
+
         playbackAudioTrack = AudioTrack(
             AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build(),
             AudioFormat.Builder()
@@ -359,9 +364,9 @@ class GeminiLiveSession(
                 .build(),
             trackBufferSize,
             AudioTrack.MODE_STREAM,
-            AudioManager.AUDIO_SESSION_ID_GENERATE
+            sessionId
         )
-        Log.d(TAG, "AudioTrack created with buffer size: $trackBufferSize bytes")
+        Log.d(TAG, "AudioTrack created with buffer size: $trackBufferSize bytes, sessionId: $sessionId")
 
         // Create jitter buffer with pre-buffering
         jitterBuffer = JitterBuffer(
