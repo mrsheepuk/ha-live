@@ -122,7 +122,9 @@ class SharedConfigRepository(
                 data = data,
                 returnResponse = true
             )
-            response?.get("available")?.jsonPrimitive?.boolean ?: true
+            // HA REST API wraps service responses in a "service_response" key
+            val serviceResponse = response?.get("service_response")?.jsonObject ?: response
+            serviceResponse?.get("available")?.jsonPrimitive?.boolean ?: true
         } catch (e: Exception) {
             Log.w(TAG, "Failed to check profile name", e)
             true // Assume available on error
@@ -141,7 +143,9 @@ class SharedConfigRepository(
                 data = mapOf("profile" to profile.toSharedFormat()),
                 returnResponse = true
             )
-            response?.get("id")?.jsonPrimitive?.content ?: profile.id
+            // HA REST API wraps service responses in a "service_response" key
+            val serviceResponse = response?.get("service_response")?.jsonObject ?: response
+            serviceResponse?.get("id")?.jsonPrimitive?.content ?: profile.id
         } catch (e: Exception) {
             Log.e(TAG, "Failed to upsert profile", e)
             null
@@ -172,10 +176,14 @@ class SharedConfigRepository(
             return null
         }
         return try {
-            val apiKey = json["gemini_api_key"]?.jsonPrimitive?.contentOrNull
-            val profilesArray = json["profiles"]?.jsonArray
+            // HA REST API wraps service responses in a "service_response" key
+            val serviceResponse = json["service_response"]?.jsonObject ?: json
             Log.d(TAG, "parseSharedConfig: raw json keys=${json.keys}, " +
-                    "apiKey=${if (apiKey != null) "present(${apiKey.length} chars)" else "null"}, " +
+                    "using serviceResponse keys=${serviceResponse.keys}")
+
+            val apiKey = serviceResponse["gemini_api_key"]?.jsonPrimitive?.contentOrNull
+            val profilesArray = serviceResponse["profiles"]?.jsonArray
+            Log.d(TAG, "parseSharedConfig: apiKey=${if (apiKey != null) "present(${apiKey.length} chars)" else "null"}, " +
                     "profilesArray size=${profilesArray?.size ?: "null"}")
 
             SharedConfig(
