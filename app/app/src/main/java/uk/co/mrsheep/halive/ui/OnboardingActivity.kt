@@ -1,6 +1,7 @@
 package uk.co.mrsheep.halive.ui
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -8,12 +9,15 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import uk.co.mrsheep.halive.R
+import uk.co.mrsheep.halive.ui.OAuthCallbackActivity
 import kotlinx.coroutines.launch
 
 class OnboardingActivity : AppCompatActivity() {
@@ -35,7 +39,13 @@ class OnboardingActivity : AppCompatActivity() {
     private lateinit var geminiApiKeyInput: TextInputEditText
     private lateinit var geminiContinueButton: Button
 
-    // Step 3: HA Config
+    // Step 2: OAuth Flow
+    private lateinit var haUrlOnlyInput: EditText
+    private lateinit var haConnectButton: Button
+    private lateinit var legacyTokenSection: LinearLayout
+    private lateinit var showLegacyTokenLink: TextView
+
+    // Step 3: HA Config (legacy token method)
     private lateinit var haUrlInput: EditText
     private lateinit var haTokenInput: EditText
     private lateinit var haTestButton: Button
@@ -75,7 +85,36 @@ class OnboardingActivity : AppCompatActivity() {
             viewModel.saveGeminiApiKey(apiKey)
         }
 
-        // Step 3: HA Config
+        // Step 2: OAuth Flow
+        haUrlOnlyInput = findViewById(R.id.haUrlOnlyInput)
+        haConnectButton = findViewById(R.id.haConnectButton)
+        legacyTokenSection = findViewById(R.id.legacyTokenSection)
+        showLegacyTokenLink = findViewById(R.id.showLegacyTokenLink)
+
+        haConnectButton.setOnClickListener {
+            val url = haUrlOnlyInput.text.toString()
+            if (url.isBlank()) {
+                Toast.makeText(this, "Please enter your Home Assistant URL", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val authUrl = viewModel.startOAuthFlow(url)
+
+            // Open browser for OAuth
+            try {
+                val customTabsIntent = CustomTabsIntent.Builder().build()
+                customTabsIntent.launchUrl(this, Uri.parse(authUrl))
+            } catch (e: Exception) {
+                // Fallback to regular browser
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
+                startActivity(intent)
+            }
+        }
+
+        showLegacyTokenLink.setOnClickListener {
+            legacyTokenSection.visibility = if (legacyTokenSection.visibility == View.GONE) View.VISIBLE else View.GONE
+        }
+
+        // Step 3: HA Config (legacy token method)
         haUrlInput = findViewById(R.id.haUrlInput)
         haTokenInput = findViewById(R.id.haTokenInput)
         haTestButton = findViewById(R.id.haTestButton)
@@ -164,6 +203,34 @@ class OnboardingActivity : AppCompatActivity() {
         step1Container.visibility = if (step == 1) View.VISIBLE else View.GONE
         step2Container.visibility = if (step == 2) View.VISIBLE else View.GONE
         step3Container.visibility = if (step == 3) View.VISIBLE else View.GONE
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleOAuthResult(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Check if we returned from OAuth with result
+        handleOAuthResult(intent)
+    }
+
+    private fun handleOAuthResult(intent: Intent?) {
+        val code = intent?.getStringExtra(OAuthCallbackActivity.EXTRA_AUTH_CODE)
+        val error = intent?.getStringExtra(OAuthCallbackActivity.EXTRA_ERROR)
+        val state = intent?.getStringExtra(OAuthCallbackActivity.EXTRA_STATE)
+
+        // Clear the extras to prevent re-processing
+        intent?.removeExtra(OAuthCallbackActivity.EXTRA_AUTH_CODE)
+        intent?.removeExtra(OAuthCallbackActivity.EXTRA_ERROR)
+        intent?.removeExtra(OAuthCallbackActivity.EXTRA_STATE)
+
+        if (code != null) {
+            viewModel.handleOAuthCallback(code, state)
+        } else if (error != null) {
+            viewModel.handleOAuthError(error)
+        }
     }
 }
 

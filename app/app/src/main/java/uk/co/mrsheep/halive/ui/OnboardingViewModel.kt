@@ -1,6 +1,7 @@
 package uk.co.mrsheep.halive.ui
 
 import android.app.Application
+import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
@@ -8,10 +9,15 @@ import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ConversationServicePreference
+import uk.co.mrsheep.halive.core.OAuthConfig
+import uk.co.mrsheep.halive.core.SecureTokenStorage
+import uk.co.mrsheep.halive.core.OAuthTokenManager
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
+import uk.co.mrsheep.halive.services.TokenProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.security.SecureRandom
 
 class OnboardingViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -23,6 +29,12 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
     private var selectedProvider: ConversationServicePreference.PreferredService? = null
     private var currentHAUrl: String = ""
     private var currentHAToken: String = ""
+    private var pendingOAuthState: String? = null
+    private lateinit var secureTokenStorage: SecureTokenStorage
+
+    init {
+        secureTokenStorage = SecureTokenStorage(application)
+    }
 
     fun startOnboarding() {
         viewModelScope.launch {
@@ -107,8 +119,11 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
 
     fun saveHAConfigAndContinue() {
         viewModelScope.launch {
-            // Save the validated config
-            HAConfig.saveConfig(getApplication(), currentHAUrl, currentHAToken)
+            // Only save to HAConfig if using legacy token (not OAuth)
+            // OAuth tokens are already saved in SecureTokenStorage
+            if (currentHAToken.isNotEmpty()) {
+                HAConfig.saveConfig(getApplication(), currentHAUrl, currentHAToken)
+            }
 
             // Create default profile (NEW)
             ProfileManager.ensureDefaultProfileExists()
@@ -120,5 +135,53 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
 
     fun completeOnboarding() {
         _onboardingState.value = OnboardingState.Finished
+    }
+
+    fun startOAuthFlow(haUrl: String): String {
+        currentHAUrl = haUrl.trimEnd('/')
+        // Generate random state for CSRF protection
+        val bytes = ByteArray(32)
+        SecureRandom().nextBytes(bytes)
+        pendingOAuthState = Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP)
+        return OAuthConfig.buildAuthUrl(currentHAUrl, pendingOAuthState!!)
+    }
+
+    fun handleOAuthCallback(code: String, state: String?) {
+        viewModelScope.launch {
+            _onboardingState.value = OnboardingState.TestingConnection
+
+            // Validate state to prevent CSRF
+            if (state != pendingOAuthState) {
+                _onboardingState.value = OnboardingState.ConnectionFailed("Invalid OAuth state - possible CSRF attack")
+                return@launch
+            }
+
+            try {
+                val tokenManager = OAuthTokenManager(currentHAUrl, secureTokenStorage)
+                // Exchange code for tokens (tokens are saved internally by exchangeCodeForTokens)
+                tokenManager.exchangeCodeForTokens(code)
+
+                // Initialize app with OAuth token manager
+                app.initializeHomeAssistantWithOAuth(currentHAUrl, tokenManager)
+
+                // Test connection
+                val testMcpClient = McpClientManager(currentHAUrl, TokenProvider.OAuth(tokenManager))
+                testMcpClient.connect()
+                val tools = testMcpClient.getTools()
+                testMcpClient.shutdown()
+
+                if (tools.isNotEmpty()) {
+                    _onboardingState.value = OnboardingState.ConnectionSuccess("Connected successfully!")
+                } else {
+                    _onboardingState.value = OnboardingState.ConnectionFailed("No tools found")
+                }
+            } catch (e: Exception) {
+                _onboardingState.value = OnboardingState.ConnectionFailed(e.message ?: "OAuth failed")
+            }
+        }
+    }
+
+    fun handleOAuthError(error: String) {
+        _onboardingState.value = OnboardingState.ConnectionFailed(error)
     }
 }

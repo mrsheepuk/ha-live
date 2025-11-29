@@ -14,6 +14,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
+import uk.co.mrsheep.halive.services.TokenProvider
 import uk.co.mrsheep.halive.services.ToolExecutor
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -21,8 +22,15 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class McpClientManager(
     private val haBaseUrl: String,
-    private val haToken: String
+    private val tokenProvider: TokenProvider
 ): ToolExecutor {
+    /**
+     * Secondary constructor for backward compatibility with static tokens.
+     * @param haBaseUrl Home Assistant instance base URL
+     * @param haToken Static authentication token
+     */
+    constructor(haBaseUrl: String, haToken: String) : this(haBaseUrl, TokenProvider.Static(haToken))
+
     private val json = Json {
         encodeDefaults = true
         ignoreUnknownKeys = true
@@ -55,9 +63,10 @@ class McpClientManager(
             Log.d(TAG, "Connecting to: \"$haBaseUrl/mcp_server/sse\"")
 
             // 1. Open SSE connection
+            val token = tokenProvider.getToken()
             val request = Request.Builder()
                 .url("$haBaseUrl/mcp_server/sse")
-                .header("Authorization", "Bearer $haToken")
+                .header("Authorization", "Bearer $token")
                 .header("Accept", "text/event-stream")
                 .build()
 
@@ -205,6 +214,7 @@ class McpClientManager(
     /**
      * Send a raw message over the SSE connection.
      * If connection is dead, automatically reconnects first.
+     * Handles 401 responses by triggering reconnection (fresh token).
      * Note: SSE is unidirectional (server -> client), but MCP uses
      * a technique where we POST each request as a separate HTTP call
      * to the same endpoint, and responses come back via SSE.
@@ -231,14 +241,24 @@ class McpClientManager(
         // Now send the message over the (possibly fresh) connection
         try {
             Log.d(TAG, "Sending $message")
+            // Get fresh token for this request
+            val token = tokenProvider.getToken()
             val request = Request.Builder()
                 .url("$haBaseUrl$endpoint")
-                .header("Authorization", "Bearer $haToken")
+                .header("Authorization", "Bearer $token")
                 .header("Content-Type", "application/json")
                 .post(message.toRequestBody("application/json".toMediaType()))
                 .build()
 
             client.newCall(request).execute().use { response ->
+                // Handle 401 Unauthorized - trigger reconnection to get fresh token
+                if (response.code == 401) {
+                    Log.w(TAG, "Received 401 Unauthorized, triggering reconnection for fresh token...")
+                    isConnectionAlive = false
+                    // This will cause automatic reconnection on next message
+                    throw McpException("Unauthorized (401) - will reconnect for fresh token")
+                }
+
                 if (!response.isSuccessful) {
                     Log.e(TAG, "Failed to send message: ${response.code}")
                     throw McpException("Failed to send message: ${response.code}")

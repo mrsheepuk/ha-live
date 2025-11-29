@@ -3,8 +3,13 @@ package uk.co.mrsheep.halive
 import android.app.Application
 import uk.co.mrsheep.halive.core.AssetCopyUtil
 import uk.co.mrsheep.halive.core.CrashLogger
+import uk.co.mrsheep.halive.core.HomeAssistantAuth
+import uk.co.mrsheep.halive.core.AuthMethod
+import uk.co.mrsheep.halive.core.SecureTokenStorage
+import uk.co.mrsheep.halive.core.OAuthTokenManager
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.services.HomeAssistantApiClient
+import uk.co.mrsheep.halive.services.TokenProvider
 import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import uk.co.mrsheep.halive.services.mcp.McpTool
@@ -14,6 +19,8 @@ class HAGeminiApp : Application() {
     var lastAvailableTools: List<String>? = null
     var haUrl: String? = null
     var haToken: String? = null
+    var homeAssistantAuth: HomeAssistantAuth? = null
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -24,6 +31,9 @@ class HAGeminiApp : Application() {
 
             // Clear old crash logs on successful startup (they've already been seen/fixed)
             CrashLogger.clearLog(this)
+
+            // Initialize auth system
+            homeAssistantAuth = HomeAssistantAuth(this)
 
             // Initialize ProfileManager
             ProfileManager.initialize(this)
@@ -53,7 +63,7 @@ class HAGeminiApp : Application() {
     }
 
     /**
-     * Called by MainActivity after user provides HA credentials.
+     * Called by MainActivity after user provides HA credentials (legacy flow).
      * Establishes the MCP SSE connection and performs initialization handshake.
      */
     suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
@@ -61,6 +71,26 @@ class HAGeminiApp : Application() {
         this.haToken = haToken
         haApiClient = HomeAssistantApiClient(haUrl, haToken)
     }
+
+    /**
+     * Initialize Home Assistant using OAuth tokens.
+     * Called after successful OAuth authentication.
+     */
+    suspend fun initializeHomeAssistantWithOAuth(haUrl: String, tokenManager: OAuthTokenManager) {
+        this.haUrl = haUrl
+        this.haToken = null  // Not used with OAuth
+        haApiClient = HomeAssistantApiClient(haUrl, TokenProvider.OAuth(tokenManager))
+    }
+
+    /**
+     * Get the current authentication method.
+     */
+    fun getAuthMethod(): AuthMethod? = homeAssistantAuth?.getAuthMethod()
+
+    /**
+     * Check if Home Assistant is configured and authenticated.
+     */
+    fun isHomeAssistantConfigured(): Boolean = homeAssistantAuth?.isAuthenticated() == true
 
     /**
      * Updates the cache of available tool names.

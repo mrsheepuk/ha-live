@@ -105,7 +105,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Step 2: Home Assistant -->
+    <!-- Step 2: Home Assistant OAuth -->
     <LinearLayout
         android:id="@+id/step2Container"
         android:layout_width="0dp"
@@ -121,7 +121,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Step 2: Home Assistant"
+            android:text="Step 2: Connect to Home Assistant"
             android:textSize="18sp"
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
@@ -129,39 +129,80 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Enter your Home Assistant URL and access token."
+            android:text="Enter your Home Assistant URL to connect.\nYou'll be redirected to log in securely."
             android:textSize="14sp"
             android:layout_marginBottom="16dp" />
 
         <EditText
-            android:id="@+id/haUrlInput"
+            android:id="@+id/haUrlOnlyInput"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Home Assistant URL"
+            android:hint="Home Assistant URL (e.g., https://myha.duckdns.org)"
             android:inputType="textUri"
-            android:layout_marginBottom="8dp" />
-
-        <EditText
-            android:id="@+id/haTokenInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Long-lived access token"
-            android:inputType="text"
             android:layout_marginBottom="16dp" />
 
         <Button
-            android:id="@+id/haTestButton"
+            android:id="@+id/haConnectButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Test Connection"
+            android:text="Connect to Home Assistant"
             android:layout_marginBottom="8dp" />
+
+        <!-- Legacy token section (hidden by default) -->
+        <LinearLayout
+            android:id="@+id/legacyTokenSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Or use a long-lived access token:"
+                android:textSize="14sp"
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/haUrlInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Home Assistant URL"
+                android:inputType="textUri"
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/haTokenInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Long-lived access token"
+                android:inputType="text"
+                android:layout_marginBottom="16dp" />
+
+            <Button
+                android:id="@+id/haTestButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Test Connection"
+                android:layout_marginBottom="8dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/showLegacyTokenLink"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Having trouble? Use legacy token instead"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="12sp"
+            android:layout_marginTop="8dp" />
 
         <Button
             android:id="@+id/haContinueButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Continue"
-            android:enabled="false" />
+            android:enabled="false"
+            android:layout_marginTop="16dp" />
     </LinearLayout>
 
     <!-- Step 3: Complete -->
