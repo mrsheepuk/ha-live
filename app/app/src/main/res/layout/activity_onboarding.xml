@@ -26,7 +26,7 @@
         android:id="@+id/progressText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Step 1 of 4"
+        android:text="Step 1 of 3"
         android:textSize="14sp"
         app:layout_constraintTop_toBottomOf="@id/titleText"
         app:layout_constraintStart_toStartOf="parent"
@@ -38,108 +38,17 @@
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:progress="25"
+        android:progress="33"
         android:max="100"
         app:layout_constraintTop_toBottomOf="@id/progressText"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="8dp" />
 
-    <!-- Step 1: Provider Selection -->
+
+    <!-- Step 1: Gemini Configuration -->
     <LinearLayout
         android:id="@+id/step1Container"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:visibility="visible"
-        app:layout_constraintTop_toBottomOf="@id/progressBar"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        android:layout_marginTop="32dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Step 1: Choose Provider"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="16dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Select how you want to connect to Gemini AI:"
-            android:textSize="14sp"
-            android:layout_marginBottom="24dp" />
-
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/geminiDirectCard"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:clickable="true"
-            android:focusable="true"
-            app:cardCornerRadius="8dp"
-            app:cardElevation="2dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Gemini Direct API (Recommended)"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="• Simpler setup\n• Just need an API key\n• Get key from ai.google.dev"
-                    android:textSize="14sp"
-                    android:layout_marginTop="8dp" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/firebaseCard"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:clickable="true"
-            android:focusable="true"
-            app:cardCornerRadius="8dp"
-            app:cardElevation="2dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Firebase SDK"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="• Use Google Cloud console\n• Import google-services.json\n• More setup steps required"
-                    android:textSize="14sp"
-                    android:layout_marginTop="8dp" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-    </LinearLayout>
-
-    <!-- Step 2: Provider Configuration -->
-    <LinearLayout
-        android:id="@+id/step2Container"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
@@ -150,57 +59,17 @@
         app:layout_constraintBottom_toBottomOf="parent"
         android:layout_marginTop="32dp">
 
-        <!-- Firebase Configuration -->
-        <LinearLayout
-            android:id="@+id/firebaseConfigContainer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Step 2: Firebase Configuration"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="16dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Import your google-services.json file."
-                android:textSize="14sp"
-                android:layout_marginBottom="24dp" />
-
-            <Button
-                android:id="@+id/firebaseButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Import google-services.json" />
-
-            <TextView
-                android:id="@+id/firebaseErrorText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="?attr/colorError"
-                android:textSize="14sp"
-                android:layout_marginTop="8dp"
-                android:visibility="gone" />
-        </LinearLayout>
-
         <!-- Gemini API Key Configuration -->
         <LinearLayout
             android:id="@+id/geminiConfigContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone">
+            android:orientation="vertical">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Step 2: Gemini API Configuration"
+                android:text="Step 1: Gemini API Configuration"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="16dp" />
@@ -236,9 +105,9 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Step 3: Home Assistant -->
+    <!-- Step 2: Home Assistant -->
     <LinearLayout
-        android:id="@+id/step3Container"
+        android:id="@+id/step2Container"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
@@ -252,7 +121,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Step 3: Home Assistant"
+            android:text="Step 2: Home Assistant"
             android:textSize="18sp"
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
@@ -295,9 +164,9 @@
             android:enabled="false" />
     </LinearLayout>
 
-    <!-- Step 4: Complete -->
+    <!-- Step 3: Complete -->
     <LinearLayout
-        android:id="@+id/step4Container"
+        android:id="@+id/step3Container"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"

@@ -5,13 +5,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.net.Uri
 import android.os.IBinder
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
-import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
@@ -31,7 +29,7 @@ import uk.co.mrsheep.halive.core.TranscriptionEntry
 // Define the different states our UI can be in
 sealed class UiState {
     object Loading : UiState()
-    object ProviderConfigNeeded : UiState()  // Need either Firebase or Gemini Direct configured
+    object ProviderConfigNeeded : UiState()  // Need Gemini API key configured
     object HAConfigNeeded : UiState()        // Need HA URL + token
     object ReadyToTalk : UiState()           // Everything initialized, ready to start chat
     object Initializing : UiState()          // Initializing Gemini model when starting chat
@@ -133,11 +131,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
 
-            // Step 1: Check if at least one conversation provider is configured
-            val hasFirebase = FirebaseConfig.isConfigured(getApplication())
-            val hasGemini = GeminiConfig.isConfigured(getApplication())
-
-            if (!hasFirebase && !hasGemini) {
+            // Step 1: Check if Gemini API is configured
+            if (!GeminiConfig.isConfigured(getApplication())) {
                 _uiState.value = UiState.ProviderConfigNeeded
                 return@launch
             }
@@ -247,27 +242,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun consumeAutoStartIntent() {
         _shouldAttemptAutoStart.value = false
-    }
-
-    /**
-     * Called by MainActivity when the user selects a Firebase config file.
-     */
-    fun saveFirebaseConfigFile(uri: Uri) {
-        viewModelScope.launch {
-            try {
-                FirebaseConfig.saveConfigFromUri(getApplication(), uri)
-
-                // Try to initialize Firebase with the new config
-                if (FirebaseConfig.initializeFirebase(getApplication())) {
-                    // Move to next step: HA config
-                    checkConfiguration()
-                } else {
-                    _uiState.value = UiState.Error("Invalid Firebase config file.")
-                }
-            } catch (e: Exception) {
-                _uiState.value = UiState.Error("Failed to read file: ${e.message}")
-            }
-        }
     }
 
     /**

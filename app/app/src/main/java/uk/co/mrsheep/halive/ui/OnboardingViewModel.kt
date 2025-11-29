@@ -1,24 +1,21 @@
 package uk.co.mrsheep.halive.ui
 
 import android.app.Application
-import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
-import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ConversationServicePreference
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
-import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class OnboardingViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _onboardingState = MutableStateFlow<OnboardingState>(OnboardingState.Step1ProviderSelection)
+    private val _onboardingState = MutableStateFlow<OnboardingState>(OnboardingState.Step2ProviderConfig)
     val onboardingState: StateFlow<OnboardingState> = _onboardingState
 
     private val app = application as HAGeminiApp
@@ -29,16 +26,17 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
 
     fun startOnboarding() {
         viewModelScope.launch {
-            // Check if ANY provider is already configured
-            val hasFirebase = FirebaseConfig.isConfigured(getApplication())
+            // Check if Gemini config is already set up
             val hasGemini = GeminiConfig.isConfigured(getApplication())
 
-            if (hasFirebase || hasGemini) {
+            if (hasGemini) {
                 // Skip provider setup, go straight to HA
                 _onboardingState.value = OnboardingState.Step3HomeAssistant
             } else {
-                // New user, start with provider selection
-                _onboardingState.value = OnboardingState.Step1ProviderSelection
+                // New user, auto-select Gemini Direct and show config
+                selectedProvider = ConversationServicePreference.PreferredService.GEMINI_DIRECT
+                ConversationServicePreference.setPreferred(getApplication(), ConversationServicePreference.PreferredService.GEMINI_DIRECT)
+                _onboardingState.value = OnboardingState.Step2ProviderConfig
             }
         }
     }
@@ -69,27 +67,6 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
                 _onboardingState.value = OnboardingState.Step3HomeAssistant
             } catch (e: Exception) {
                 _onboardingState.value = OnboardingState.GeminiKeyInvalid(e.message ?: "Failed to save API key")
-            }
-        }
-    }
-
-    fun saveFirebaseConfig(uri: Uri) {
-        viewModelScope.launch {
-            try {
-                FirebaseConfig.saveConfigFromUri(getApplication(), uri)
-
-                if (FirebaseConfig.initializeFirebase(getApplication())) {
-                    // Success, move to step 3
-                    _onboardingState.value = OnboardingState.Step3HomeAssistant
-                } else {
-                    _onboardingState.value = OnboardingState.FirebaseConfigInvalid(
-                        "Failed to initialize Firebase. Please check your google-services.json file."
-                    )
-                }
-            } catch (e: Exception) {
-                _onboardingState.value = OnboardingState.FirebaseConfigInvalid(
-                    e.message ?: "Invalid google-services.json file"
-                )
             }
         }
     }

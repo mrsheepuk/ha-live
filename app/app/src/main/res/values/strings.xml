@@ -3,8 +3,8 @@
 
     <!-- Onboarding -->
     <string name="onboarding_title">Welcome to HA Gemini</string>
-    <string name="onboarding_step_1_title">Step 1: Firebase Configuration</string>
-    <string name="onboarding_step_1_desc">Import your google-services.json file to enable Gemini AI.</string>
+    <string name="onboarding_step_1_title">Step 1: Gemini API Configuration</string>
+    <string name="onboarding_step_1_desc">Enter your Gemini API key to enable Gemini Live.</string>
     <string name="onboarding_step_2_title">Step 2: Home Assistant</string>
     <string name="onboarding_step_2_desc">Enter your Home Assistant URL and access token.</string>
     <string name="onboarding_step_3_title">Setup Complete!</string>
@@ -14,7 +14,6 @@
     <string name="settings_title">Settings</string>
     <string name="settings_profiles_section">Profiles</string>
     <string name="settings_ha_section">Home Assistant</string>
-    <string name="settings_firebase_section">Firebase</string>
     <string name="settings_read_only_message">Stop chat to modify settings</string>
 
     <!-- Profile Management -->

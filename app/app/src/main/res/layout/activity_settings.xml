@@ -98,49 +98,11 @@
                 android:background="@color/divider_light"
                 android:layout_marginBottom="16dp" />
 
-            <!-- Firebase Section -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Firebase"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Project ID:"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/firebaseProjectIdText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="my-project-123"
-                android:textSize="14sp"
-                android:layout_marginBottom="12dp" />
-
-            <Button
-                android:id="@+id/firebaseChangeButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Change Firebase Config"
-                android:layout_marginBottom="24dp" />
-
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="@color/divider_light"
-                android:layout_marginBottom="16dp" />
-
             <!-- Gemini Section -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Gemini API (Optional)"
+                android:text="Gemini API"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
@@ -163,7 +125,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Use direct Gemini API for latest models. If not set, Firebase SDK is used.\nGet key from: https://aistudio.google.com/apikey"
+                android:text="Get your API key from: https://aistudio.google.com/apikey"
                 android:textSize="14sp"
                 android:layout_marginBottom="12dp" />
 
@@ -202,7 +164,7 @@
                 android:id="@+id/conversationServiceText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Firebase SDK"
+                android:text="Gemini Direct API"
                 android:textSize="14sp"
                 android:layout_marginBottom="8dp" />
 

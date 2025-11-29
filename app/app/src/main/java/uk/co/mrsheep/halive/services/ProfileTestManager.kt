@@ -8,7 +8,6 @@ import uk.co.mrsheep.halive.core.SystemPromptConfig
 import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.conversation.ConversationServiceFactory
 import uk.co.mrsheep.halive.core.AppLogger
-import uk.co.mrsheep.halive.services.geminifirebase.FirebaseMCPToolExecutor
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
 
 /**

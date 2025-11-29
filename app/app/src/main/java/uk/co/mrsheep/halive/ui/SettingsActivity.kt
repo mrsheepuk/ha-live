@@ -58,10 +58,6 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var haEditButton: Button
     private lateinit var haTestButton: Button
 
-    // Firebase section
-    private lateinit var firebaseProjectIdText: TextView
-    private lateinit var firebaseChangeButton: Button
-
     // Gemini section
     private lateinit var geminiApiKeyText: TextView
     private lateinit var geminiEditButton: Button
@@ -89,12 +85,6 @@ class SettingsActivity : AppCompatActivity() {
     // Read-only overlay
     private lateinit var readOnlyOverlay: View
     private lateinit var readOnlyMessage: TextView
-
-    private val selectConfigFileLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.changeFirebaseConfig(it) }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -132,14 +122,6 @@ class SettingsActivity : AppCompatActivity() {
             viewModel.testHAConnection()
         }
 
-        // Firebase section
-        firebaseProjectIdText = findViewById(R.id.firebaseProjectIdText)
-        firebaseChangeButton = findViewById(R.id.firebaseChangeButton)
-
-        firebaseChangeButton.setOnClickListener {
-            showFirebaseChangeDialog()
-        }
-
         // Gemini section
         geminiApiKeyText = findViewById(R.id.geminiApiKeyText)
         geminiEditButton = findViewById(R.id.geminiEditButton)
@@ -155,9 +137,7 @@ class SettingsActivity : AppCompatActivity() {
             showGeminiClearDialog()
         }
 
-        switchServiceButton.setOnClickListener {
-            viewModel.switchConversationService()
-        }
+        // Service switching removed - only Gemini Direct API is supported
 
         // Debug section
         viewCrashLogsButton = findViewById(R.id.viewCrashLogsButton)
@@ -222,24 +202,13 @@ class SettingsActivity : AppCompatActivity() {
                 // Update UI with current config
                 haUrlText.text = state.haUrl
                 haTokenText.text = "••••••••" // Masked token
-                firebaseProjectIdText.text = state.firebaseProjectId
                 geminiApiKeyText.text = if (state.geminiApiKey != "Not configured") "••••••••" else "Not configured"
 
                 // Update conversation service display
                 conversationServiceText.text = state.conversationService
 
-                // Show/hide switch button based on whether both services are available
-                if (state.canChooseService) {
-                    switchServiceButton.visibility = View.VISIBLE
-                    val otherService = if (state.conversationService == "Gemini Direct API") {
-                        "Firebase SDK"
-                    } else {
-                        "Gemini Direct API"
-                    }
-                    switchServiceButton.text = "Switch to $otherService"
-                } else {
-                    switchServiceButton.visibility = View.GONE
-                }
+                // Switch button hidden - only Gemini Direct API is supported
+                switchServiceButton.visibility = View.GONE
 
                 // Update wake word display
                 wakeWordStatusText.text = if (state.wakeWordEnabled) "Enabled" else "Disabled"
@@ -249,7 +218,6 @@ class SettingsActivity : AppCompatActivity() {
                 // Enable/disable buttons based on read-only state
                 haEditButton.isEnabled = !state.isReadOnly
                 haTestButton.isEnabled = !state.isReadOnly
-                firebaseChangeButton.isEnabled = !state.isReadOnly
                 geminiEditButton.isEnabled = !state.isReadOnly
                 geminiClearButton.isEnabled = !state.isReadOnly
                 switchServiceButton.isEnabled = !state.isReadOnly
@@ -331,17 +299,6 @@ class SettingsActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun showFirebaseChangeDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("Change Firebase Config")
-            .setMessage("Changing Firebase config will restart the app. Continue?")
-            .setPositiveButton("Continue") { _, _ ->
-                selectConfigFileLauncher.launch(arrayOf("application/json"))
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
     private fun showGeminiEditDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_gemini_config, null)
         val apiKeyInput = dialogView.findViewById<android.widget.EditText>(R.id.geminiApiKeyInput)
@@ -382,7 +339,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showGeminiClearDialog() {
         AlertDialog.Builder(this)
             .setTitle("Remove Gemini API Key?")
-            .setMessage("Remove Gemini API key? App will use Firebase SDK instead.")
+            .setMessage("Remove Gemini API key from this device?")
             .setPositiveButton("Remove") { _, _ ->
                 viewModel.clearGeminiApiKey()
             }
@@ -834,7 +791,6 @@ sealed class SettingsState {
     data class Loaded(
         val haUrl: String,
         val haToken: String,
-        val firebaseProjectId: String,
         val profileCount: Int,
         val isReadOnly: Boolean,
         val geminiApiKey: String,
