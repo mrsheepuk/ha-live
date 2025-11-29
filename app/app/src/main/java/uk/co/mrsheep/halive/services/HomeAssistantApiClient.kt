@@ -6,8 +6,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -176,12 +179,7 @@ class HomeAssistantApiClient(
                     JsonObject.serializer(),
                     buildJsonObject {
                         data.forEach { (key, value) ->
-                            when (value) {
-                                is String -> put(key, JsonPrimitive(value))
-                                is Number -> put(key, JsonPrimitive(value))
-                                is Boolean -> put(key, JsonPrimitive(value))
-                                else -> put(key, JsonPrimitive(value.toString()))
-                            }
+                            put(key, anyToJsonElement(value))
                         }
                     }
                 ).toRequestBody("application/json".toMediaType())
@@ -224,6 +222,32 @@ class HomeAssistantApiClient(
         }
 
         throw Exception("callService failed after $maxRetries retries")
+    }
+
+    /**
+     * Recursively converts Any value to JsonElement, handling nested maps and lists.
+     */
+    private fun anyToJsonElement(value: Any?): JsonElement {
+        return when (value) {
+            null -> JsonNull
+            is String -> JsonPrimitive(value)
+            is Number -> JsonPrimitive(value)
+            is Boolean -> JsonPrimitive(value)
+            is Map<*, *> -> buildJsonObject {
+                value.forEach { (k, v) ->
+                    if (k is String) {
+                        put(k, anyToJsonElement(v))
+                    }
+                }
+            }
+            is List<*> -> buildJsonArray {
+                value.forEach { add(anyToJsonElement(it)) }
+            }
+            is Set<*> -> buildJsonArray {
+                value.forEach { add(anyToJsonElement(it)) }
+            }
+            else -> JsonPrimitive(value.toString())
+        }
     }
 
     companion object {
