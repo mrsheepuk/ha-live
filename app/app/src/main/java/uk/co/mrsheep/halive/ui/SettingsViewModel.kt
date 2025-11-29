@@ -79,7 +79,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 testMcpClient.shutdown()
 
                 if (tools.isNotEmpty()) {
-                    _settingsState.value = SettingsState.ConnectionSuccess("Connected via OAuth! Found ${tools.size} tools")
+                    // Check for HACS integration now that HA is connected
+                    val sharedConfig = app.fetchSharedConfig()
+                    val integrationMsg = if (sharedConfig != null) {
+                        " HA Live Config integration detected."
+                    } else {
+                        ""
+                    }
+                    _settingsState.value = SettingsState.ConnectionSuccess("Connected via OAuth! Found ${tools.size} tools.$integrationMsg")
                 } else {
                     _settingsState.value = SettingsState.ConnectionFailed("Connected but no tools found")
                 }
