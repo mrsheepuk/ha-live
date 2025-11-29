@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ProfileExportImport
@@ -27,6 +28,9 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
         loadProfiles()
     }
 
+    private val app: HAGeminiApp
+        get() = getApplication()
+
     /**
      * Loads profiles from ProfileManager and observes changes.
      * Also loads the active profile ID and includes it in the state.
@@ -36,8 +40,10 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
             try {
                 _state.value = ProfileManagementState.Loading
 
-                // Refresh shared profiles first
-                ProfileManager.refreshSharedProfiles()
+                // Only refresh shared profiles if the HACS integration is installed
+                if (app.isSharedConfigAvailable()) {
+                    ProfileManager.refreshSharedProfiles()
+                }
 
                 // Observe the profiles StateFlow from ProfileManager
                 ProfileManager.profiles.collect { profiles ->
@@ -214,12 +220,16 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
     /**
      * Refreshes profiles from the backend.
      * Handles errors gracefully and sets offline state if refresh fails.
+     * Skips network call if HACS integration is not installed.
      */
     fun refreshProfiles() {
         viewModelScope.launch {
             // Don't show loading state for refresh
             try {
-                ProfileManager.refreshSharedProfiles()
+                // Only attempt network refresh if HACS integration is installed
+                if (app.isSharedConfigAvailable()) {
+                    ProfileManager.refreshSharedProfiles()
+                }
                 val profiles = ProfileManager.getAllProfiles()
                 val activeId = ProfileManager.getActiveProfile()?.id
                 _state.value = ProfileManagementState.Loaded(
