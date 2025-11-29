@@ -12,6 +12,7 @@ import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
@@ -30,9 +31,11 @@ import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
+import kotlinx.coroutines.delay
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.Profile
+import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ProfileSource
 import uk.co.mrsheep.halive.core.ToolFilterMode
 import uk.co.mrsheep.halive.services.ProfileTestManager
@@ -122,6 +125,16 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
     private var testManager: ProfileTestManager? = null
     private var isTestActive = false
     private val testLogs = mutableListOf<LogEntry>()
+
+    // Sync status UI
+    private lateinit var syncStatusSection: LinearLayout
+    private lateinit var syncProgressBar: ProgressBar
+    private lateinit var syncStatusIcon: ImageView
+    private lateinit var syncStatusText: TextView
+    private lateinit var retryButton: Button
+
+    // Conflict detection
+    private var originalLastModified: String? = null
 
     // Expansion state
     private var isSystemPromptExpanded = true
@@ -298,22 +311,13 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         cancelButton = findViewById(R.id.cancelButton)
 
         saveButton.setOnClickListener {
-            val name = profileNameInput.text?.toString() ?: ""
-            val prompt = systemPromptInput.text?.toString() ?: ""
-            val personality = personalityInput.text?.toString() ?: ""
-            val backgroundInfo = backgroundInfoInput.text?.toString() ?: ""
-            val initialMessageToAgent = initialMessageInput.text?.toString() ?: ""
-            val model = modelInput.text?.toString() ?: ""
-            val voice = voiceInput.text?.toString() ?: ""
-            val includeLiveContext = includeLiveContextCheckbox.isChecked
-            val enableTranscription = enableTranscriptionCheckbox.isChecked
-            val autoStartChat = autoStartChatCheckbox.isChecked
-            val interruptable = interruptableSwitch.isChecked
-            viewModel.saveProfile(
-                name, prompt, personality, backgroundInfo, initialMessageToAgent,
-                model, voice, includeLiveContext, enableTranscription, autoStartChat, interruptable, currentToolFilterMode,
-                selectedToolNames.toSet(), editingProfileId, targetSource
-            )
+            // Show syncing state for shared profiles
+            if (targetSource == ProfileSource.SHARED ||
+                (editingProfileId != null && ProfileManager.getProfileById(editingProfileId!!)?.source == ProfileSource.SHARED)) {
+                showSyncingState()
+            }
+
+            doSaveProfile()
         }
 
         cancelButton.setOnClickListener {
@@ -344,6 +348,17 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
             } else {
                 lifecycleScope.launch { startTest() }
             }
+        }
+
+        // Initialize sync status UI
+        syncStatusSection = findViewById(R.id.syncStatusSection)
+        syncProgressBar = findViewById(R.id.syncProgressBar)
+        syncStatusIcon = findViewById(R.id.syncStatusIcon)
+        syncStatusText = findViewById(R.id.syncStatusText)
+        retryButton = findViewById(R.id.retryButton)
+
+        retryButton.setOnClickListener {
+            saveButton.performClick()
         }
 
         // Setup expansion panels
@@ -414,6 +429,9 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
                 autoStartChatCheckbox.isChecked = state.profile.autoStartChat
                 interruptableSwitch.isChecked = state.profile.interruptable
 
+                // Store original lastModified for conflict detection
+                originalLastModified = state.profile.lastModified
+
                 // Restore tool filter settings
                 currentToolFilterMode = state.profile.toolFilterMode
                 selectedToolNames = state.profile.selectedToolNames.toMutableSet()
@@ -445,28 +463,45 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
                 profileNameLayout.error = null
             }
             is ProfileEditorState.SaveSuccess -> {
-                // Show success and finish
-                Toast.makeText(this, "Profile saved", Toast.LENGTH_SHORT).show()
-                finish()
+                if (targetSource == ProfileSource.SHARED) {
+                    showSyncedState()
+                    // Delay finish to show success
+                    lifecycleScope.launch {
+                        kotlinx.coroutines.delay(500)
+                        Toast.makeText(this@ProfileEditorActivity, "Profile saved", Toast.LENGTH_SHORT).show()
+                        finish()
+                    }
+                } else {
+                    Toast.makeText(this, "Profile saved", Toast.LENGTH_SHORT).show()
+                    finish()
+                }
             }
             is ProfileEditorState.SaveError -> {
                 // Show error
                 saveButton.isEnabled = true
                 saveButton.text = getString(R.string.profile_editor_save)
 
-                // Show error in appropriate field or dialog
-                when {
-                    state.message.contains("blank", ignoreCase = true) -> {
-                        profileNameLayout.error = state.message
-                    }
-                    state.message.contains("already exists", ignoreCase = true) -> {
-                        profileNameLayout.error = state.message
-                    }
-                    else -> {
-                        // Generic error - show in dialog
-                        showErrorDialog(state.message)
+                // Show sync error state if this was a shared profile save attempt
+                if (syncStatusSection.visibility == View.VISIBLE) {
+                    showSyncErrorState(state.message)
+                } else {
+                    // Show error in appropriate field or dialog
+                    when {
+                        state.message.contains("blank", ignoreCase = true) -> {
+                            profileNameLayout.error = state.message
+                        }
+                        state.message.contains("already exists", ignoreCase = true) -> {
+                            profileNameLayout.error = state.message
+                        }
+                        else -> {
+                            // Generic error - show in dialog
+                            showErrorDialog(state.message)
+                        }
                     }
                 }
+            }
+            is ProfileEditorState.ConflictDetected -> {
+                showConflictDialog(state.serverProfile)
             }
         }
     }
@@ -529,6 +564,81 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         val count = selectedToolNames.size
         val plural = if (count == 1) "tool" else "tools"
         toolCountLabel.text = "$count $plural selected"
+    }
+
+    private fun showSyncingState() {
+        syncStatusSection.visibility = View.VISIBLE
+        syncProgressBar.visibility = View.VISIBLE
+        syncStatusIcon.visibility = View.GONE
+        syncStatusText.text = "Saving to Home Assistant..."
+        retryButton.visibility = View.GONE
+        saveButton.isEnabled = false
+    }
+
+    private fun showSyncedState() {
+        syncProgressBar.visibility = View.GONE
+        syncStatusIcon.visibility = View.VISIBLE
+        syncStatusIcon.setImageResource(android.R.drawable.ic_menu_save)
+        syncStatusIcon.setColorFilter(android.graphics.Color.parseColor("#4CAF50"))
+        syncStatusText.text = "Saved!"
+        retryButton.visibility = View.GONE
+    }
+
+    private fun showSyncErrorState(message: String?) {
+        syncProgressBar.visibility = View.GONE
+        syncStatusIcon.visibility = View.VISIBLE
+        syncStatusIcon.setImageResource(android.R.drawable.ic_dialog_alert)
+        syncStatusIcon.setColorFilter(android.graphics.Color.parseColor("#F44336"))
+        syncStatusText.text = "Sync failed: ${message ?: "Unknown error"}"
+        retryButton.visibility = View.VISIBLE
+        saveButton.isEnabled = true
+    }
+
+    private fun showConflictDialog(serverProfile: Profile?) {
+        val modifiedBy = serverProfile?.modifiedBy ?: "someone"
+
+        AlertDialog.Builder(this)
+            .setTitle("Profile Modified")
+            .setMessage("This profile was modified by $modifiedBy while you were editing. What would you like to do?")
+            .setPositiveButton("Overwrite with my changes") { _, _ ->
+                doSaveProfile(forceOverwrite = true)
+            }
+            .setNegativeButton("Discard my changes") { _, _ ->
+                finish()
+            }
+            .setNeutralButton("Save as new profile") { _, _ ->
+                saveAsNewProfile()
+            }
+            .show()
+    }
+
+    private fun saveAsNewProfile() {
+        val name = profileNameInput.text?.toString() ?: ""
+        // Create with new name
+        profileNameInput.setText("$name (My Version)")
+        editingProfileId = null  // Force create mode
+        targetSource = ProfileSource.LOCAL  // Save as local
+        saveButton.performClick()
+    }
+
+    private fun doSaveProfile(forceOverwrite: Boolean = false) {
+        val name = profileNameInput.text?.toString() ?: ""
+        val prompt = systemPromptInput.text?.toString() ?: ""
+        val personality = personalityInput.text?.toString() ?: ""
+        val backgroundInfo = backgroundInfoInput.text?.toString() ?: ""
+        val initialMessageToAgent = initialMessageInput.text?.toString() ?: ""
+        val model = modelInput.text?.toString() ?: ""
+        val voice = voiceInput.text?.toString() ?: ""
+        val includeLiveContext = includeLiveContextCheckbox.isChecked
+        val enableTranscription = enableTranscriptionCheckbox.isChecked
+        val autoStartChat = autoStartChatCheckbox.isChecked
+        val interruptable = interruptableSwitch.isChecked
+        viewModel.saveProfile(
+            name, prompt, personality, backgroundInfo, initialMessageToAgent,
+            model, voice, includeLiveContext, enableTranscription, autoStartChat, interruptable, currentToolFilterMode,
+            selectedToolNames.toSet(), editingProfileId, targetSource,
+            originalLastModified, forceOverwrite
+        )
     }
 
     private fun showErrorDialog(message: String) {

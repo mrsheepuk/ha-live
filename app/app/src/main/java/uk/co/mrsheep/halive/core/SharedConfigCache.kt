@@ -17,12 +17,15 @@ class SharedConfigCache(context: Context) {
         private const val KEY_CONFIG = "cached_config"
         private const val KEY_INTEGRATION_INSTALLED = "integration_installed"
         private const val KEY_LAST_FETCH = "last_fetch_time"
+        private const val KEY_LAST_FETCH_FAILED = "last_fetch_failed"
+        private const val OFFLINE_THRESHOLD_MS = 5 * 60 * 1000L // 5 minutes
     }
 
     fun saveConfig(config: SharedConfig) {
         prefs.edit()
             .putString(KEY_CONFIG, Json.encodeToString(config))
             .putLong(KEY_LAST_FETCH, System.currentTimeMillis())
+            .putBoolean(KEY_LAST_FETCH_FAILED, false)
             .apply()
     }
 
@@ -49,7 +52,26 @@ class SharedConfigCache(context: Context) {
         return prefs.getLong(KEY_LAST_FETCH, 0)
     }
 
+    /**
+     * Consider offline if last successful fetch > 5 minutes ago
+     * and we have cached data.
+     */
+    fun isOffline(): Boolean {
+        val lastFetch = getLastFetchTime()
+        val cacheAge = System.currentTimeMillis() - lastFetch
+        return cacheAge > OFFLINE_THRESHOLD_MS && getConfig() != null
+    }
+
+    fun setLastFetchFailed(failed: Boolean) {
+        prefs.edit().putBoolean(KEY_LAST_FETCH_FAILED, failed).apply()
+    }
+
+    fun didLastFetchFail(): Boolean {
+        return prefs.getBoolean(KEY_LAST_FETCH_FAILED, false)
+    }
+
     fun clear() {
         prefs.edit().clear().apply()
     }
 }
+

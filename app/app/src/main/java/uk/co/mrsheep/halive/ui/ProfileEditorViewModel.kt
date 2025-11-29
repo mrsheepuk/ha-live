@@ -69,6 +69,8 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      * @param selectedToolNames Set of tool names to use if in SELECTED mode
      * @param existingId The ID of existing profile (null for create)
      * @param targetSource The target source for new profiles (default LOCAL)
+     * @param originalLastModified The original lastModified timestamp for conflict detection
+     * @param forceOverwrite Whether to force overwrite in case of conflict (default false)
      */
     fun saveProfile(
         name: String,
@@ -85,7 +87,9 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
         toolFilterMode: ToolFilterMode,
         selectedToolNames: Set<String>,
         existingId: String?,
-        targetSource: ProfileSource = ProfileSource.LOCAL
+        targetSource: ProfileSource = ProfileSource.LOCAL,
+        originalLastModified: String? = null,
+        forceOverwrite: Boolean = false
     ) {
         viewModelScope.launch {
             _editorState.value = ProfileEditorState.Saving
@@ -103,6 +107,16 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                     if (existing == null) {
                         _editorState.value = ProfileEditorState.SaveError("Profile not found")
                         return@launch
+                    }
+
+                    // Check for conflict on shared profiles
+                    if (existing.source == ProfileSource.SHARED && !forceOverwrite) {
+                        // Check if profile has been modified since we loaded it
+                        val currentProfile = ProfileManager.getProfileById(existingId)
+                        if (currentProfile?.lastModified != originalLastModified) {
+                            _editorState.value = ProfileEditorState.ConflictDetected(currentProfile)
+                            return@launch
+                        }
                     }
 
                     val updated = existing.copy(
@@ -180,4 +194,5 @@ sealed class ProfileEditorState {
     object SaveSuccess : ProfileEditorState()
     data class SaveError(val message: String) : ProfileEditorState()
     data class Loaded(val profile: Profile) : ProfileEditorState()
+    data class ConflictDetected(val serverProfile: Profile?) : ProfileEditorState()
 }

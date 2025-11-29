@@ -14,6 +14,7 @@ import com.google.android.material.card.MaterialCardView
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileSource
+import uk.co.mrsheep.halive.core.TimeFormatter
 
 /**
  * RecyclerView adapter for displaying a list of profiles.
@@ -35,13 +36,15 @@ class ProfileAdapter(
 
     private var profiles: List<Profile> = emptyList()
     private var activeProfileId: String? = null
+    private var isOffline: Boolean = false
 
     /**
      * Updates the list of profiles and active profile ID, then refreshes the RecyclerView.
      */
-    fun submitList(newProfiles: List<Profile>, newActiveProfileId: String? = null) {
+    fun submitList(newProfiles: List<Profile>, newActiveProfileId: String? = null, offline: Boolean = false) {
         profiles = newProfiles
         activeProfileId = newActiveProfileId
+        isOffline = offline
         notifyDataSetChanged()
     }
 
@@ -68,6 +71,7 @@ class ProfileAdapter(
         private val overflowButton: ImageButton = itemView.findViewById(R.id.overflowButton)
         private val cardView: MaterialCardView = itemView as MaterialCardView
         private val sourceIcon: ImageView = itemView.findViewById(R.id.sourceIcon)
+        private val syncIcon: ImageView = itemView.findViewById(R.id.syncIcon)
         private val subtitleText: TextView = itemView.findViewById(R.id.subtitleText)
 
         fun bind(profile: Profile) {
@@ -97,15 +101,34 @@ class ProfileAdapter(
             }
             sourceIcon.setImageResource(iconRes)
 
-            // Show subtitle
+            // Show sync status for shared profiles
+            if (profile.source == ProfileSource.SHARED) {
+                if (isOffline) {
+                    syncIcon.visibility = View.VISIBLE
+                    syncIcon.setImageResource(R.drawable.ic_cloud_off)
+                    syncIcon.setColorFilter(
+                        ContextCompat.getColor(itemView.context, android.R.color.holo_orange_dark)
+                    )
+                } else {
+                    syncIcon.visibility = View.GONE
+                }
+            } else {
+                syncIcon.visibility = View.GONE
+            }
+
+            // Show subtitle with relative time for shared profiles
             when {
                 profile.source == ProfileSource.SHARED && profile.modifiedBy != null -> {
                     subtitleText.visibility = View.VISIBLE
-                    subtitleText.text = "Shared - Modified by ${profile.modifiedBy}"
+                    val relativeTime = TimeFormatter.formatRelative(profile.lastModified)
+                    val timeStr = if (relativeTime.isNotEmpty()) " ($relativeTime)" else ""
+                    subtitleText.text = "Shared - Modified by ${profile.modifiedBy}$timeStr"
                 }
                 profile.source == ProfileSource.SHARED -> {
                     subtitleText.visibility = View.VISIBLE
-                    subtitleText.text = "Shared"
+                    val relativeTime = TimeFormatter.formatRelative(profile.lastModified)
+                    val timeStr = if (relativeTime.isNotEmpty()) " - $relativeTime" else ""
+                    subtitleText.text = "Shared$timeStr"
                 }
                 else -> {
                     subtitleText.visibility = View.VISIBLE

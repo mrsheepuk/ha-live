@@ -27,9 +27,18 @@
                 android:id="@+id/sourceIcon"
                 android:layout_width="20dp"
                 android:layout_height="20dp"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="4dp"
                 android:contentDescription="Profile source indicator"
                 android:tint="?attr/colorOnSurface" />
+
+            <!-- Sync Status Icon (for shared profiles) -->
+            <ImageView
+                android:id="@+id/syncIcon"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginEnd="8dp"
+                android:contentDescription="Sync status"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/profileNameText"

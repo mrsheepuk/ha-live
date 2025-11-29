@@ -92,6 +92,13 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var addQuickMessageButton: Button
     private lateinit var quickMessagesAdapter: QuickMessagesAdapter
 
+    // Sync/Cache section
+    private lateinit var syncCacheSection: LinearLayout
+    private lateinit var lastSyncText: TextView
+    private lateinit var forceSyncButton: Button
+    private lateinit var clearCacheButton: Button
+    private lateinit var syncProgressBar: ProgressBar
+
     // Test mode service
     private var testWakeWordService: WakeWordService? = null
 
@@ -228,6 +235,15 @@ class SettingsActivity : AppCompatActivity() {
         addQuickMessageButton.setOnClickListener {
             showAddEditQuickMessageDialog(null)
         }
+
+        // Sync/Cache section
+        syncCacheSection = findViewById(R.id.syncCacheSection)
+        lastSyncText = findViewById(R.id.lastSyncText)
+        forceSyncButton = findViewById(R.id.forceSyncButton)
+        clearCacheButton = findViewById(R.id.clearCacheButton)
+        syncProgressBar = findViewById(R.id.syncProgressBar)
+
+        setupCacheSection()
 
         // Read-only overlay
         readOnlyOverlay = findViewById(R.id.readOnlyOverlay)
@@ -800,6 +816,64 @@ class SettingsActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun setupCacheSection() {
+        val app = application as HAGeminiApp
+        val cache = app.sharedConfigCache
+
+        if (cache != null && cache.isIntegrationInstalled()) {
+            syncCacheSection.visibility = View.VISIBLE
+
+            val lastFetch = cache.getLastFetchTime()
+            if (lastFetch > 0) {
+                lastSyncText.text = uk.co.mrsheep.halive.core.TimeFormatter.formatTime(lastFetch)
+            } else {
+                lastSyncText.text = "Never synced"
+            }
+
+            clearCacheButton.setOnClickListener {
+                AlertDialog.Builder(this)
+                    .setTitle("Clear Cache")
+                    .setMessage("This will clear cached shared profiles. They will be re-fetched from Home Assistant on next launch.")
+                    .setPositiveButton("Clear") { _, _ ->
+                        cache.clear()
+                        Toast.makeText(this, "Cache cleared", Toast.LENGTH_SHORT).show()
+                        lastSyncText.text = "Never synced"
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+
+            forceSyncButton.setOnClickListener {
+                forceSync()
+            }
+        } else {
+            syncCacheSection.visibility = View.GONE
+        }
+    }
+
+    private fun forceSync() {
+        lifecycleScope.launch {
+            forceSyncButton.isEnabled = false
+            syncProgressBar.visibility = View.VISIBLE
+
+            try {
+                val app = application as HAGeminiApp
+                app.fetchSharedConfig()
+                Toast.makeText(this@SettingsActivity, "Sync complete", Toast.LENGTH_SHORT).show()
+                setupCacheSection() // Refresh display
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@SettingsActivity,
+                    uk.co.mrsheep.halive.core.ErrorMessages.forSyncError(e),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
+            forceSyncButton.isEnabled = true
+            syncProgressBar.visibility = View.GONE
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {
