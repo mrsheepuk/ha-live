@@ -119,12 +119,33 @@ object ProfileManager {
     }
 
     /**
-     * Ensures at least one profile exists. Creates default if needed.
+     * Ensures at least one profile exists and an active profile is set.
+     * - If shared profiles exist (from HA), uses the first one as active.
+     * - Otherwise, creates a default local profile.
      * Safe to call multiple times.
      */
     fun ensureDefaultProfileExists() {
-        if (getLocalProfiles().isEmpty() && cachedSharedProfiles.isEmpty()) {
+        val localProfiles = getLocalProfiles()
+        val activeId = prefs.getString(KEY_ACTIVE_PROFILE_ID, null)
+
+        if (localProfiles.isEmpty() && cachedSharedProfiles.isEmpty()) {
+            // No profiles at all - create default local profile
+            Log.d(TAG, "No profiles exist, creating default local profile")
             createLocalProfile(Profile.createDefault())
+        } else if (localProfiles.isEmpty() && cachedSharedProfiles.isNotEmpty()) {
+            // Shared profiles exist but no local - use first shared as active
+            val firstShared = cachedSharedProfiles.first()
+            if (activeId == null || getProfileById(activeId) == null) {
+                Log.d(TAG, "Using first shared profile as active: ${firstShared.name}")
+                prefs.edit().putString(KEY_ACTIVE_PROFILE_ID, firstShared.id).apply()
+            }
+        } else if (activeId == null || getProfileById(activeId) == null) {
+            // Has profiles but no valid active - set first available as active
+            val allProfiles = cachedSharedProfiles + localProfiles
+            if (allProfiles.isNotEmpty()) {
+                Log.d(TAG, "Setting first available profile as active: ${allProfiles.first().name}")
+                prefs.edit().putString(KEY_ACTIVE_PROFILE_ID, allProfiles.first().id).apply()
+            }
         }
     }
 
