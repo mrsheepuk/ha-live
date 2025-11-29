@@ -192,9 +192,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             // Collect session active state for wake word coordination
             viewModelScope.launch {
+                var wasSessionActive = false
                 service.isSessionActive.collect { isActive ->
-                    if (!isActive) {
-                        // Session ended, handle audio helper handover
+                    if (!isActive && wasSessionActive) {
+                        // Session ended (transitioned from active to inactive)
+                        // Handle audio helper handover
                         val returnedHelper = liveSessionService?.yieldAudioHelper()
 
                         if (returnedHelper != null) {
@@ -204,10 +206,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             Log.d(TAG, "No AudioHelper from session, starting wake word fresh")
                             startWakeWordListening()
                         }
-                    } else {
+                    } else if (isActive) {
                         // Session started, stop wake word
                         wakeWordService.stopListening()
                     }
+                    // Update tracking state
+                    wasSessionActive = isActive
                 }
             }
         }
