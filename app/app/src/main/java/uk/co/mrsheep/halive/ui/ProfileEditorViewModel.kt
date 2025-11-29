@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ToolFilterMode
+import uk.co.mrsheep.halive.core.ProfileSource
+import uk.co.mrsheep.halive.core.ProfileNameConflictException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -50,6 +52,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
 
     /**
      * Saves a profile (create or update based on existingId).
+     * Handles both LOCAL and SHARED profiles.
      *
      * @param name The profile name
      * @param systemPrompt The system prompt text
@@ -65,6 +68,9 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      * @param toolFilterMode Whether to use all tools or only selected tools
      * @param selectedToolNames Set of tool names to use if in SELECTED mode
      * @param existingId The ID of existing profile (null for create)
+     * @param targetSource The target source for new profiles (default LOCAL)
+     * @param originalLastModified The original lastModified timestamp for conflict detection
+     * @param forceOverwrite Whether to force overwrite in case of conflict (default false)
      */
     fun saveProfile(
         name: String,
@@ -80,7 +86,10 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
         interruptable: Boolean,
         toolFilterMode: ToolFilterMode,
         selectedToolNames: Set<String>,
-        existingId: String?
+        existingId: String?,
+        targetSource: ProfileSource = ProfileSource.LOCAL,
+        originalLastModified: String? = null,
+        forceOverwrite: Boolean = false
     ) {
         viewModelScope.launch {
             _editorState.value = ProfileEditorState.Saving
@@ -100,6 +109,16 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         return@launch
                     }
 
+                    // Check for conflict on shared profiles
+                    if (existing.source == ProfileSource.SHARED && !forceOverwrite) {
+                        // Check if profile has been modified since we loaded it
+                        val currentProfile = ProfileManager.getProfileById(existingId)
+                        if (currentProfile?.lastModified != originalLastModified) {
+                            _editorState.value = ProfileEditorState.ConflictDetected(currentProfile)
+                            return@launch
+                        }
+                    }
+
                     val updated = existing.copy(
                         name = name.trim(),
                         systemPrompt = systemPrompt,
@@ -116,7 +135,10 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         selectedToolNames = selectedToolNames
                     )
 
-                    ProfileManager.updateProfile(updated)
+                    when (existing.source) {
+                        ProfileSource.LOCAL -> ProfileManager.updateLocalProfile(updated)
+                        ProfileSource.SHARED -> ProfileManager.updateSharedProfile(updated)
+                    }
                 } else {
                     // Create new profile
                     val newProfile = Profile(
@@ -132,17 +154,29 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         interruptable = interruptable,
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,
-                        selectedToolNames = selectedToolNames
+                        selectedToolNames = selectedToolNames,
+                        source = targetSource
                     )
 
-                    ProfileManager.createProfile(newProfile)
+                    when (targetSource) {
+                        ProfileSource.LOCAL -> ProfileManager.createLocalProfile(newProfile)
+                        ProfileSource.SHARED -> ProfileManager.createSharedProfile(newProfile)
+                    }
                 }
 
                 _editorState.value = ProfileEditorState.SaveSuccess
+            } catch (e: ProfileNameConflictException) {
+                _editorState.value = ProfileEditorState.SaveError(
+                    e.message ?: "A profile with this name already exists"
+                )
             } catch (e: IllegalArgumentException) {
                 // Handle duplicate name or other validation errors
                 _editorState.value = ProfileEditorState.SaveError(
                     e.message ?: "Failed to save profile"
+                )
+            } catch (e: IllegalStateException) {
+                _editorState.value = ProfileEditorState.SaveError(
+                    e.message ?: "Shared config not available"
                 )
             } catch (e: Exception) {
                 _editorState.value = ProfileEditorState.SaveError(
@@ -160,4 +194,5 @@ sealed class ProfileEditorState {
     object SaveSuccess : ProfileEditorState()
     data class SaveError(val message: String) : ProfileEditorState()
     data class Loaded(val profile: Profile) : ProfileEditorState()
+    data class ConflictDetected(val serverProfile: Profile?) : ProfileEditorState()
 }

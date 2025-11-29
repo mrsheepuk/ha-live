@@ -6,6 +6,8 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.CheckBox
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -17,10 +19,14 @@ import androidx.appcompat.widget.Toolbar
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.launch
+import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.Profile
+import uk.co.mrsheep.halive.core.ProfileManager
+import uk.co.mrsheep.halive.core.ProfileSource
 import uk.co.mrsheep.halive.core.ShortcutHelper
 import uk.co.mrsheep.halive.ui.adapters.ProfileAdapter
 import uk.co.mrsheep.halive.util.FileUtils
@@ -48,6 +54,10 @@ class ProfileManagementActivity : AppCompatActivity() {
     private lateinit var fabCreateProfile: FloatingActionButton
     private lateinit var loadingIndicator: ProgressBar
     private lateinit var errorText: TextView
+    private lateinit var swipeRefresh: SwipeRefreshLayout
+    private lateinit var offlineBanner: LinearLayout
+    private lateinit var offlineText: TextView
+    private var isOffline = false
 
     private lateinit var profileAdapter: ProfileAdapter
     private var exportingProfileId: String? = null
@@ -104,11 +114,22 @@ class ProfileManagementActivity : AppCompatActivity() {
         fabCreateProfile = findViewById(R.id.fabCreateProfile)
         loadingIndicator = findViewById(R.id.loadingIndicator)
         errorText = findViewById(R.id.errorText)
+        swipeRefresh = findViewById(R.id.swipeRefresh)
+        offlineBanner = findViewById(R.id.offlineBanner)
+        offlineText = findViewById(R.id.offlineText)
+
+        setupSwipeRefresh()
 
         // FAB click listener to create new profile
         fabCreateProfile.setOnClickListener {
             val intent = Intent(this, ProfileEditorActivity::class.java)
             startActivity(intent)
+        }
+    }
+
+    private fun setupSwipeRefresh() {
+        swipeRefresh.setOnRefreshListener {
+            viewModel.refreshProfiles()
         }
     }
 
@@ -119,9 +140,21 @@ class ProfileManagementActivity : AppCompatActivity() {
                 viewModel.setActiveProfile(profile.id)
             },
             onEdit = { profile ->
-                val intent = Intent(this, ProfileEditorActivity::class.java)
-                intent.putExtra(ProfileEditorActivity.EXTRA_PROFILE_ID, profile.id)
-                startActivity(intent)
+                if (profile.source == ProfileSource.SHARED && isOffline) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Offline")
+                        .setMessage("Cannot edit shared profiles while offline. You can save a local copy instead.")
+                        .setPositiveButton("Save Local Copy") { _, _ ->
+                            val localCopy = viewModel.downloadToLocal(profile)
+                            Toast.makeText(this, "Saved as '${localCopy.name}'", Toast.LENGTH_SHORT).show()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                } else {
+                    val intent = Intent(this, ProfileEditorActivity::class.java)
+                    intent.putExtra(ProfileEditorActivity.EXTRA_PROFILE_ID, profile.id)
+                    startActivity(intent)
+                }
             },
             onAddShortcut = { profile ->
                 handleAddShortcut(profile)
@@ -136,6 +169,17 @@ class ProfileManagementActivity : AppCompatActivity() {
                 val fileName = getSuggestedExportFileName(profile.name)
                 val intent = FileUtils.createExportIntent(fileName)
                 exportSingleLauncher.launch(intent)
+            },
+            onUploadToShared = { profile ->
+                if (profile.source == ProfileSource.LOCAL) {
+                    showUploadDialog(profile)
+                }
+            },
+            onDownloadToLocal = { profile ->
+                if (profile.source == ProfileSource.SHARED) {
+                    val localCopy = viewModel.downloadToLocal(profile)
+                    Toast.makeText(this, "Saved as '${localCopy.name}'", Toast.LENGTH_SHORT).show()
+                }
             },
             onDelete = { profile ->
                 showDeleteConfirmationDialog(profile)
@@ -167,6 +211,13 @@ class ProfileManagementActivity : AppCompatActivity() {
                 loadingIndicator.visibility = View.GONE
                 profilesRecyclerView.visibility = View.VISIBLE
                 errorText.visibility = View.GONE
+                swipeRefresh.isRefreshing = false
+                isOffline = state.isOffline
+                if (isOffline) {
+                    offlineBanner.visibility = View.VISIBLE
+                } else {
+                    offlineBanner.visibility = View.GONE
+                }
 
                 // Update the adapter with new profiles and active profile ID
                 profileAdapter.submitList(state.profiles, state.activeProfileId)
@@ -175,6 +226,7 @@ class ProfileManagementActivity : AppCompatActivity() {
                 loadingIndicator.visibility = View.GONE
                 profilesRecyclerView.visibility = View.VISIBLE
                 errorText.visibility = View.GONE
+                swipeRefresh.isRefreshing = false
 
                 // Show error dialog
                 showErrorDialog(state.message)
@@ -189,9 +241,15 @@ class ProfileManagementActivity : AppCompatActivity() {
      * Shows a confirmation dialog before deleting a profile.
      */
     private fun showDeleteConfirmationDialog(profile: Profile) {
+        val message = if (profile.source == ProfileSource.SHARED) {
+            "Delete profile \"${profile.name}\" from shared storage?\n\nThis will remove it for all household members. This action cannot be undone."
+        } else {
+            "Delete profile \"${profile.name}\"?\n\nThis action cannot be undone."
+        }
+
         AlertDialog.Builder(this)
             .setTitle("Delete Profile")
-            .setMessage("Delete profile \"${profile.name}\"?\n\nThis action cannot be undone.")
+            .setMessage(message)
             .setPositiveButton("Delete") { _, _ ->
                 viewModel.deleteProfile(profile.id)
             }
@@ -339,6 +397,58 @@ class ProfileManagementActivity : AppCompatActivity() {
     }
 
     /**
+     * Shows the upload to shared dialog.
+     */
+    private fun showUploadDialog(profile: Profile) {
+        val app = application as HAGeminiApp
+        if (!app.isSharedConfigAvailable()) {
+            Toast.makeText(this, "Shared config not available", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val dialogView = layoutInflater.inflate(R.layout.dialog_upload_profile, null)
+        val deleteLocalCheckbox = dialogView.findViewById<CheckBox>(R.id.deleteLocalCheckbox)
+        deleteLocalCheckbox.isChecked = true
+
+        AlertDialog.Builder(this)
+            .setTitle("Upload to Shared Storage")
+            .setMessage("This will share '${profile.name}' with everyone in your household.")
+            .setView(dialogView)
+            .setPositiveButton("Upload") { _, _ ->
+                uploadProfile(profile, deleteLocalCheckbox.isChecked)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /**
+     * Uploads a profile to shared storage.
+     */
+    private fun uploadProfile(profile: Profile, deleteLocal: Boolean) {
+        viewModel.uploadToShared(
+            profile = profile,
+            deleteLocal = deleteLocal,
+            onSuccess = {
+                Toast.makeText(this, "Profile uploaded successfully", Toast.LENGTH_SHORT).show()
+            },
+            onError = { message ->
+                showNameConflictDialog(profile, message)
+            }
+        )
+    }
+
+    /**
+     * Shows a dialog for name conflicts during upload.
+     */
+    private fun showNameConflictDialog(profile: Profile, message: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Name Already Taken")
+            .setMessage(message + "\n\nPlease rename the profile locally before uploading.")
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
+    /**
      * Generates a suggested filename for profile export.
      * Format: "ha_profiles_YYYY-MM-DD.haprofile" for all profiles
      * Format: "profile_<name>_YYYY-MM-DD.haprofile" for single profiles
@@ -352,6 +462,74 @@ class ProfileManagementActivity : AppCompatActivity() {
             "profile_${sanitized}_$dateString.haprofile"
         } else {
             "ha_profiles_$dateString.haprofile"
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.refreshProfiles()
+        checkForMigrationOpportunity()
+    }
+
+    private fun checkForMigrationOpportunity() {
+        val app = application as HAGeminiApp
+        val prefs = getSharedPreferences("migration", MODE_PRIVATE)
+        val migrationPromptShown = prefs.getBoolean("upload_prompt_shown", false)
+
+        if (!migrationPromptShown && app.isSharedConfigAvailable()) {
+            val localProfiles = ProfileManager.getLocalProfiles()
+            val sharedProfiles = ProfileManager.getSharedProfiles()
+
+            if (localProfiles.isNotEmpty() && sharedProfiles.isEmpty()) {
+                showMigrationDialog(localProfiles)
+            }
+
+            prefs.edit().putBoolean("upload_prompt_shown", true).apply()
+        }
+    }
+
+    private fun showMigrationDialog(localProfiles: List<Profile>) {
+        AlertDialog.Builder(this)
+            .setTitle("Share Your Profiles?")
+            .setMessage(
+                "You have ${localProfiles.size} local profile(s). Would you like to " +
+                "upload them to Home Assistant so other household members can use them?"
+            )
+            .setPositiveButton("Upload All") { _, _ ->
+                uploadAllProfiles(localProfiles)
+            }
+            .setNegativeButton("Choose Profiles") { _, _ ->
+                showProfileSelectionDialog(localProfiles)
+            }
+            .setNeutralButton("Not Now", null)
+            .show()
+    }
+
+    private fun showProfileSelectionDialog(profiles: List<Profile>) {
+        val names = profiles.map { it.name }.toTypedArray()
+        val selected = BooleanArray(profiles.size) { true }
+
+        AlertDialog.Builder(this)
+            .setTitle("Select Profiles to Upload")
+            .setMultiChoiceItems(names, selected) { _, which, isChecked ->
+                selected[which] = isChecked
+            }
+            .setPositiveButton("Upload") { _, _ ->
+                val toUpload = profiles.filterIndexed { index, _ -> selected[index] }
+                uploadAllProfiles(toUpload)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun uploadAllProfiles(profiles: List<Profile>) {
+        viewModel.uploadAllProfiles(profiles) { successCount, failCount ->
+            val message = when {
+                failCount == 0 -> "Uploaded $successCount profile(s) successfully"
+                successCount == 0 -> "Upload failed for all profiles"
+                else -> "Uploaded $successCount, failed $failCount (name conflicts)"
+            }
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         }
     }
 

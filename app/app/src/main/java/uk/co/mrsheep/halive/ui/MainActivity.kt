@@ -74,7 +74,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkConfigurationAndLaunch() {
         // Check if app is configured - need Gemini API key AND Home Assistant
-        if (!GeminiConfig.isConfigured(this) || !HAConfig.isConfigured(this)) {
+        val geminiConfigured = GeminiConfig.isConfigured(this)
+        val haConfigured = HAConfig.isConfigured(this)
+        android.util.Log.d("MainActivity", "checkConfiguration: gemini=$geminiConfigured, ha=$haConfigured")
+
+        if (!geminiConfigured || !haConfigured) {
+            android.util.Log.d("MainActivity", "Launching onboarding: gemini=$geminiConfigured, ha=$haConfigured")
             // Launch onboarding - need Gemini API configuration and HA
             val intent = Intent(this, OnboardingActivity::class.java)
             startActivity(intent)

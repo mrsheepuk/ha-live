@@ -45,6 +45,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView.ViewHolder
 import uk.co.mrsheep.halive.core.QuickMessage
 import uk.co.mrsheep.halive.core.OAuthConfig
+import uk.co.mrsheep.halive.HAGeminiApp
 import androidx.browser.customtabs.CustomTabsIntent
 import android.widget.Toast
 import java.util.UUID
@@ -71,6 +72,13 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var conversationServiceText: TextView
     private lateinit var switchServiceButton: Button
 
+    // Shared key section
+    private lateinit var sharedKeySection: LinearLayout
+    private lateinit var sharedKeyRadio: RadioButton
+    private lateinit var localKeyRadio: RadioButton
+    private lateinit var manageSharedKeyButton: Button
+    private lateinit var apiKeySourceText: TextView
+
     // Debug section
     private lateinit var viewCrashLogsButton: Button
     private lateinit var shareCrashLogsButton: Button
@@ -84,6 +92,13 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var quickMessagesRecyclerView: RecyclerView
     private lateinit var addQuickMessageButton: Button
     private lateinit var quickMessagesAdapter: QuickMessagesAdapter
+
+    // Sync/Cache section
+    private lateinit var syncCacheSection: LinearLayout
+    private lateinit var lastSyncText: TextView
+    private lateinit var forceSyncButton: Button
+    private lateinit var clearCacheButton: Button
+    private lateinit var syncProgressBar: ProgressBar
 
     // Test mode service
     private var testWakeWordService: WakeWordService? = null
@@ -163,6 +178,25 @@ class SettingsActivity : AppCompatActivity() {
             showGeminiClearDialog()
         }
 
+        // Shared key section
+        sharedKeySection = findViewById(R.id.sharedKeySection)
+        sharedKeyRadio = findViewById(R.id.sharedKeyRadio)
+        localKeyRadio = findViewById(R.id.localKeyRadio)
+        manageSharedKeyButton = findViewById(R.id.manageSharedKeyButton)
+        apiKeySourceText = findViewById(R.id.apiKeySourceText)
+
+        sharedKeyRadio.setOnClickListener {
+            viewModel.setUseSharedKey(true)
+        }
+
+        localKeyRadio.setOnClickListener {
+            viewModel.setUseSharedKey(false)
+        }
+
+        manageSharedKeyButton.setOnClickListener {
+            showManageSharedKeyDialog()
+        }
+
         // Service switching removed - only Gemini Direct API is supported
 
         // Debug section
@@ -203,6 +237,15 @@ class SettingsActivity : AppCompatActivity() {
             showAddEditQuickMessageDialog(null)
         }
 
+        // Sync/Cache section
+        syncCacheSection = findViewById(R.id.syncCacheSection)
+        lastSyncText = findViewById(R.id.lastSyncText)
+        forceSyncButton = findViewById(R.id.forceSyncButton)
+        clearCacheButton = findViewById(R.id.clearCacheButton)
+        syncProgressBar = findViewById(R.id.syncProgressBar)
+
+        setupCacheSection()
+
         // Read-only overlay
         readOnlyOverlay = findViewById(R.id.readOnlyOverlay)
         readOnlyMessage = findViewById(R.id.readOnlyMessage)
@@ -235,6 +278,19 @@ class SettingsActivity : AppCompatActivity() {
 
                 // Switch button hidden - only Gemini Direct API is supported
                 switchServiceButton.visibility = View.GONE
+
+                // Update shared key UI
+                if (state.hasSharedKey) {
+                    sharedKeySection.visibility = View.VISIBLE
+                    sharedKeyRadio.isChecked = state.isUsingSharedKey
+                    localKeyRadio.isChecked = !state.isUsingSharedKey
+                    apiKeySourceText.text = if (state.isUsingSharedKey) "Using shared key" else "Using local key"
+                    manageSharedKeyButton.visibility = if (state.sharedConfigAvailable) View.VISIBLE else View.GONE
+                } else {
+                    sharedKeySection.visibility = View.GONE
+                    apiKeySourceText.text = "Using local key"
+                    manageSharedKeyButton.visibility = if (state.sharedConfigAvailable) View.VISIBLE else View.GONE
+                }
 
                 // Update wake word display
                 wakeWordStatusText.text = if (state.wakeWordEnabled) "Enabled" else "Disabled"
@@ -371,6 +427,26 @@ class SettingsActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun showManageSharedKeyDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_gemini_config, null)
+        val apiKeyInput = dialogView.findViewById<EditText>(R.id.geminiApiKeyInput)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Manage Shared Gemini Key")
+            .setMessage("This key will be available to all devices in your household.")
+            .setView(dialogView)
+            .setPositiveButton("Save to Shared") { _, _ ->
+                val apiKey = apiKeyInput.text.toString().trim()
+                if (apiKey.isNotBlank()) {
+                    viewModel.setSharedGeminiKey(apiKey)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.show()
     }
 
     private fun showWakeWordConfigDialog() {
@@ -743,6 +819,64 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun setupCacheSection() {
+        val app = application as HAGeminiApp
+        val cache = app.sharedConfigCache
+
+        if (cache != null && cache.isIntegrationInstalled()) {
+            syncCacheSection.visibility = View.VISIBLE
+
+            val lastFetch = cache.getLastFetchTime()
+            if (lastFetch > 0) {
+                lastSyncText.text = uk.co.mrsheep.halive.core.TimeFormatter.formatTime(lastFetch)
+            } else {
+                lastSyncText.text = "Never synced"
+            }
+
+            clearCacheButton.setOnClickListener {
+                AlertDialog.Builder(this)
+                    .setTitle("Clear Cache")
+                    .setMessage("This will clear cached shared profiles. They will be re-fetched from Home Assistant on next launch.")
+                    .setPositiveButton("Clear") { _, _ ->
+                        cache.clearProfileCache()
+                        Toast.makeText(this, "Cache cleared", Toast.LENGTH_SHORT).show()
+                        lastSyncText.text = "Never synced"
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+
+            forceSyncButton.setOnClickListener {
+                forceSync()
+            }
+        } else {
+            syncCacheSection.visibility = View.GONE
+        }
+    }
+
+    private fun forceSync() {
+        lifecycleScope.launch {
+            forceSyncButton.isEnabled = false
+            syncProgressBar.visibility = View.VISIBLE
+
+            try {
+                val app = application as HAGeminiApp
+                app.fetchSharedConfig()
+                Toast.makeText(this@SettingsActivity, "Sync complete", Toast.LENGTH_SHORT).show()
+                setupCacheSection() // Refresh display
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@SettingsActivity,
+                    uk.co.mrsheep.halive.core.ErrorMessages.forSyncError(e),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
+            forceSyncButton.isEnabled = true
+            syncProgressBar.visibility = View.GONE
+        }
+    }
+
     override fun onSupportNavigateUp(): Boolean {
         finish()
         return true
@@ -824,7 +958,10 @@ sealed class SettingsState {
         val canChooseService: Boolean,
         val wakeWordEnabled: Boolean,
         val wakeWordDetails: String,
-        val wakeWordThreshold: Float
+        val wakeWordThreshold: Float,
+        val hasSharedKey: Boolean,
+        val isUsingSharedKey: Boolean,
+        val sharedConfigAvailable: Boolean
     ) : SettingsState()
     object TestingConnection : SettingsState()
     data class ConnectionSuccess(val message: String) : SettingsState()

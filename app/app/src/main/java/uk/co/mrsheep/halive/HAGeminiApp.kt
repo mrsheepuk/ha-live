@@ -1,12 +1,18 @@
 package uk.co.mrsheep.halive
 
 import android.app.Application
+import android.util.Log
 import uk.co.mrsheep.halive.core.AssetCopyUtil
 import uk.co.mrsheep.halive.core.CrashLogger
+import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HomeAssistantAuth
 import uk.co.mrsheep.halive.core.OAuthTokenManager
+import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
+import uk.co.mrsheep.halive.core.SharedConfigCache
 import uk.co.mrsheep.halive.services.HomeAssistantApiClient
+import uk.co.mrsheep.halive.services.SharedConfig
+import uk.co.mrsheep.halive.services.SharedConfigRepository
 import uk.co.mrsheep.halive.services.mcp.McpTool
 
 class HAGeminiApp : Application() {
@@ -14,6 +20,10 @@ class HAGeminiApp : Application() {
     var lastAvailableTools: List<String>? = null
     var haUrl: String? = null
     var homeAssistantAuth: HomeAssistantAuth? = null
+        private set
+    var sharedConfigRepo: SharedConfigRepository? = null
+        private set
+    var sharedConfigCache: SharedConfigCache? = null
         private set
 
     override fun onCreate() {
@@ -29,14 +39,48 @@ class HAGeminiApp : Application() {
             // Initialize auth system
             homeAssistantAuth = HomeAssistantAuth(this)
 
-            // Initialize ProfileManager
+            // Initialize ProfileManager (but don't create default profile yet)
             ProfileManager.initialize(this)
-
-            // Ensure at least one profile exists
-            ProfileManager.ensureDefaultProfileExists()
 
             // Copy TFLite model files from assets to filesDir for wake word detection
             AssetCopyUtil.copyAssetsToFilesDir(this)
+
+            // Initialize shared config cache
+            sharedConfigCache = SharedConfigCache(this)
+
+            // Restore cached shared config on app restart
+            // This ensures GeminiConfig.isConfigured() returns true if we have a cached shared key
+            // and also restores shared profiles before we check if default profile is needed
+            val cachedConfig = sharedConfigCache?.getConfig()
+            Log.d(TAG, "Startup: cachedConfig=${if (cachedConfig != null) "present" else "null"}, " +
+                    "hasApiKey=${cachedConfig?.geminiApiKey != null}, " +
+                    "profileCount=${cachedConfig?.profiles?.size ?: 0}")
+            if (cachedConfig != null) {
+                if (cachedConfig.geminiApiKey != null) {
+                    GeminiConfig.updateSharedKey(cachedConfig.geminiApiKey)
+                    Log.d(TAG, "Restored cached shared Gemini key")
+                } else {
+                    Log.w(TAG, "Cached config exists but has no Gemini API key")
+                }
+                // Restore cached shared profiles to ProfileManager
+                if (cachedConfig.profiles.isNotEmpty()) {
+                    ProfileManager.updateCachedSharedProfiles(
+                        cachedConfig.profiles.map { Profile.fromShared(it) }
+                    )
+                    Log.d(TAG, "Restored ${cachedConfig.profiles.size} cached shared profiles")
+                }
+            } else {
+                Log.d(TAG, "No cached config found on startup")
+            }
+
+            // Now ensure at least one profile exists (after shared profiles are restored)
+            ProfileManager.ensureDefaultProfileExists()
+
+            // Log final configuration state
+            val geminiConfigured = GeminiConfig.isConfigured(this)
+            val haConfigured = homeAssistantAuth?.isAuthenticated() == true
+            Log.d(TAG, "Startup complete: GeminiConfig.isConfigured=$geminiConfigured, " +
+                    "HAConfig.isConfigured=$haConfigured")
 
             // Note: MCP connection is NOT established here
             // It will be established in MainActivity after user configures HA
@@ -63,6 +107,10 @@ class HAGeminiApp : Application() {
     suspend fun initializeHomeAssistantWithOAuth(haUrl: String, tokenManager: OAuthTokenManager) {
         this.haUrl = haUrl
         haApiClient = HomeAssistantApiClient(haUrl, tokenManager)
+        sharedConfigRepo = SharedConfigRepository(haApiClient!!)
+
+        // Set the repository in ProfileManager for profile syncing
+        ProfileManager.setSharedConfigRepository(sharedConfigRepo)
     }
 
     /**
@@ -81,5 +129,60 @@ class HAGeminiApp : Application() {
      */
     fun updateToolCache(tools: List<McpTool>) {
         lastAvailableTools = tools.map { it.name }.sorted()
+    }
+
+    /**
+     * Check for integration and fetch shared config.
+     * Call this after HA is initialized.
+     */
+    suspend fun fetchSharedConfig(): SharedConfig? {
+        val repo = sharedConfigRepo ?: return null
+        val cache = sharedConfigCache ?: return null
+
+        // Check if integration is installed
+        val installed = repo.isIntegrationInstalled()
+        cache.setIntegrationInstalled(installed)
+
+        if (!installed) {
+            Log.d(TAG, "ha_live_config integration not installed")
+            return null
+        }
+
+        // Fetch config
+        val config = repo.getSharedConfig()
+        if (config != null) {
+            Log.d(TAG, "Fetched shared config: hasApiKey=${config.geminiApiKey != null}, " +
+                    "profiles=${config.profiles.size}")
+            cache.saveConfig(config)
+            GeminiConfig.updateSharedKey(config.geminiApiKey)
+
+            // Update ProfileManager with shared profiles
+            ProfileManager.setSharedConfigRepository(repo)
+            ProfileManager.updateCachedSharedProfiles(
+                config.profiles.map { Profile.fromShared(it) }
+            )
+        } else {
+            Log.w(TAG, "getSharedConfig returned null")
+        }
+
+        return config
+    }
+
+    /**
+     * Get cached shared config (for offline use).
+     */
+    fun getCachedSharedConfig(): SharedConfig? {
+        return sharedConfigCache?.getConfig()
+    }
+
+    /**
+     * Check if integration is installed (from cache).
+     */
+    fun isSharedConfigAvailable(): Boolean {
+        return sharedConfigCache?.isIntegrationInstalled() == true
+    }
+
+    companion object {
+        private const val TAG = "HAGeminiApp"
     }
 }

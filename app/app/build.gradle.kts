@@ -82,6 +82,9 @@ dependencies {
     // ConstraintLayout
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
+    // SwipeRefreshLayout for pull-to-refresh
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+
     // Testing
     testImplementation(libs.junit)
     testImplementation("org.mockito:mockito-core:5.7.0")
