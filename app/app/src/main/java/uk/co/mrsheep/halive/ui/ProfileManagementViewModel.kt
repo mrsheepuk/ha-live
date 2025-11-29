@@ -210,6 +210,62 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
     fun downloadToLocal(profile: Profile): Profile {
         return ProfileManager.downloadToLocal(profile)
     }
+
+    /**
+     * Refreshes profiles from the backend.
+     * Handles errors gracefully and sets offline state if refresh fails.
+     */
+    fun refreshProfiles() {
+        viewModelScope.launch {
+            // Don't show loading state for refresh
+            try {
+                ProfileManager.refreshSharedProfiles()
+                val profiles = ProfileManager.getAllProfiles()
+                val activeId = ProfileManager.getActiveProfile()?.id
+                _state.value = ProfileManagementState.Loaded(
+                    profiles = profiles,
+                    activeProfileId = activeId,
+                    isOffline = false
+                )
+            } catch (e: Exception) {
+                // On error, show cached data but mark as offline
+                val profiles = ProfileManager.getAllProfiles()
+                val activeId = ProfileManager.getActiveProfile()?.id
+                _state.value = ProfileManagementState.Loaded(
+                    profiles = profiles,
+                    activeProfileId = activeId,
+                    isOffline = true
+                )
+            }
+        }
+    }
+
+    /**
+     * Uploads multiple profiles to shared storage.
+     * Called as part of the migration feature.
+     */
+    fun uploadAllProfiles(profiles: List<Profile>, onComplete: (Int, Int) -> Unit) {
+        viewModelScope.launch {
+            var successCount = 0
+            var failCount = 0
+
+            for (profile in profiles) {
+                try {
+                    ProfileManager.uploadToShared(profile, deleteLocal = true)
+                    successCount++
+                } catch (e: ProfileNameConflictException) {
+                    failCount++
+                } catch (e: Exception) {
+                    failCount++
+                }
+            }
+
+            onComplete(successCount, failCount)
+
+            // Refresh the list
+            refreshProfiles()
+        }
+    }
 }
 
 /**
@@ -219,7 +275,8 @@ sealed class ProfileManagementState {
     object Loading : ProfileManagementState()
     data class Loaded(
         val profiles: List<Profile>,
-        val activeProfileId: String? = null
+        val activeProfileId: String? = null,
+        val isOffline: Boolean = false
     ) : ProfileManagementState()
     data class Error(val message: String) : ProfileManagementState()
 }
