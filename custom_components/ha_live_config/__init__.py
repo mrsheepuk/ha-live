@@ -5,6 +5,7 @@ import logging
 import uuid
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
@@ -16,7 +17,13 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the HA Live Config integration."""
+    """Set up the HA Live Config integration from YAML (legacy support)."""
+    # Just return True - actual setup happens in async_setup_entry
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up HA Live Config from a config entry."""
     store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
     data = await store.async_load()
 
@@ -178,4 +185,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
 
     _LOGGER.info("HA Live Config integration loaded successfully")
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
+    # Remove services
+    hass.services.async_remove(DOMAIN, "get_config")
+    hass.services.async_remove(DOMAIN, "set_gemini_key")
+    hass.services.async_remove(DOMAIN, "upsert_profile")
+    hass.services.async_remove(DOMAIN, "delete_profile")
+    hass.services.async_remove(DOMAIN, "check_profile_name")
+
+    # Clean up data
+    hass.data.pop(DOMAIN, None)
+
+    _LOGGER.info("HA Live Config integration unloaded")
     return True
