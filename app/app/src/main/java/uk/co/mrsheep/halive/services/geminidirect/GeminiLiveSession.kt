@@ -120,6 +120,8 @@ class GeminiLiveSession(
 
     // Recording (microphone input)
     private var audioHelper: AudioHelper? = null
+    /** Whether we own the audioHelper and should release it on close */
+    private var ownsAudioHelper: Boolean = true
 
     // New audio pipeline components for playback
     private var jitterBuffer: JitterBuffer? = null
@@ -162,7 +164,8 @@ class GeminiLiveSession(
         voiceName: String,
         interruptable: Boolean = true,
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
-        onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null
+        onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null,
+        externalAudioHelper: AudioHelper? = null
     ) {
         if (sessionScope.isActive) {
             throw IllegalStateException("Session scope already active, cannot start")
@@ -172,7 +175,15 @@ class GeminiLiveSession(
             CoroutineScope(Dispatchers.Default + SupervisorJob() + CoroutineName("LiveSession Network"))
 
         // Initialize recording (microphone)
-        audioHelper = AudioHelper.build()
+        if (externalAudioHelper != null) {
+            audioHelper = externalAudioHelper
+            ownsAudioHelper = false
+            Log.d(TAG, "Using external AudioHelper (handover mode)")
+        } else {
+            audioHelper = AudioHelper.build()
+            ownsAudioHelper = true
+            Log.d(TAG, "Created new AudioHelper")
+        }
 
         // Initialize new audio playback pipeline
         initializePlaybackPipeline()
@@ -250,6 +261,16 @@ class GeminiLiveSession(
                 throw TimeoutException("Setup did not complete within ${SETUP_TIMEOUT_MS}ms")
             }
             Log.d(TAG, "Setup completed successfully")
+
+            // Send any pre-buffered audio from wake word detection
+            if (!ownsAudioHelper) {
+                val preBufferedAudio = audioHelper?.getBufferedAudio()
+                if (preBufferedAudio != null && preBufferedAudio.isNotEmpty()) {
+                    Log.d(TAG, "Sending ${preBufferedAudio.size} bytes of pre-buffered audio to Gemini")
+                    sendAudioRealtime(preBufferedAudio)
+                    audioHelper?.clearPreBuffer()
+                }
+            }
 
             // Start recording (sends audio to Gemini)
             recordUserAudio()
@@ -589,6 +610,31 @@ class GeminiLiveSession(
     }
 
     /**
+     * Yields the AudioHelper back for handover to another service.
+     * Only works if AudioHelper was provided externally (not owned by this session).
+     * Returns null if we created our own AudioHelper or session is not active.
+     *
+     * After calling this, the session will not release the AudioHelper on close.
+     */
+    fun yieldAudioHelper(): AudioHelper? {
+        if (ownsAudioHelper) {
+            Log.d(TAG, "yieldAudioHelper: we own the AudioHelper, cannot yield")
+            return null
+        }
+
+        if (audioHelper == null) {
+            Log.d(TAG, "yieldAudioHelper: no AudioHelper to yield")
+            return null
+        }
+
+        Log.d(TAG, "Yielding AudioHelper back for handover")
+        val helper = audioHelper
+        helper?.pauseRecording()
+        audioHelper = null
+        return helper
+    }
+
+    /**
      * Close the session and clean up all resources.
      *
      * This method:
@@ -610,9 +656,15 @@ class GeminiLiveSession(
         // Shutdown the new audio playback pipeline
         shutdownPlaybackPipeline()
 
-        // Release recording resources
-        audioHelper?.release()
-        audioHelper = null
+        // Release recording resources (only if we own them)
+        if (ownsAudioHelper) {
+            audioHelper?.release()
+            audioHelper = null
+            Log.d(TAG, "Released owned AudioHelper")
+        } else {
+            // Don't null out audioHelper - leave it for yieldAudioHelper() to return
+            Log.d(TAG, "Not releasing AudioHelper (external ownership, available for yield)")
+        }
 
         // Launch close in a separate scope so it isn't cancelled by sessionScope.cancel()
         CoroutineScope(Dispatchers.IO).launch {

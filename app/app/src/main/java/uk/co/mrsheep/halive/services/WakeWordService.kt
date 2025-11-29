@@ -120,71 +120,12 @@ class WakeWordService(
 
         try {
             audioHelper = AudioHelper.build(SAMPLE_RATE)
+            audioHelper?.enablePreBuffering(1500)  // Buffer 1.5 seconds of audio
             isListening = true
             framesProcessed = 0  // Reset warm-up counter
             Log.d(TAG, "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE, threshold=${currentSettings.threshold}, warmup=$WARMUP_FRAMES frames)")
 
-            val model = getOrCreateModel()
-
-            recordingJob = audioHelper!!.listenToRecording()
-                .onStart { Log.d(TAG, "Audio flow started") }
-                .toFloatChunks(CHUNK_SIZE)
-                .onStart { Log.d(TAG, "Float chunks flow started (toFloatChunks -> onEach)") }
-                .onEach { floatBuffer ->
-                    try {
-                        val detectionScore = model.processFrame(floatBuffer)
-                        framesProcessed++
-
-                        // Log progress periodically (every 10 frames) or always in test mode
-                        val isTestMode = testModeCallback != null
-                        if (isTestMode || framesProcessed % 10 == 0 || framesProcessed <= 5) {
-                            val warmupStatus = if (framesProcessed <= WARMUP_FRAMES) "WARMUP" else "ACTIVE"
-                            Log.d(TAG, "Frame $framesProcessed [$warmupStatus]: score=%.4f, threshold=${currentSettings.threshold}, testMode=$isTestMode".format(detectionScore))
-                        }
-
-                        // Test mode: report every score to callback
-                        testModeCallback?.let { callback ->
-                            Log.v(TAG, "Invoking test mode callback with score=%.4f".format(detectionScore))
-                            withContext(Dispatchers.Main) {
-                                callback(detectionScore)
-                            }
-                        }
-
-                        // Normal mode: only trigger on threshold (skip if in test mode or warming up)
-                        if (testModeCallback == null && framesProcessed > WARMUP_FRAMES && detectionScore > currentSettings.threshold) {
-                            Log.i(TAG, "Wake word detected! Score: %.4f (threshold: ${currentSettings.threshold})".format(detectionScore))
-                            // IMPORTANT: Launch callback in a new coroutine BEFORE cleanup,
-                            // because cleanup() cancels this coroutine. Using scope.launch
-                            // creates a new job that won't be cancelled by our cleanup.
-                            scope.launch(Dispatchers.Main) {
-                                onWakeWordDetected()
-                            }
-                            cleanup()
-                            return@onEach // Stop processing after detection
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error running ONNX inference: ${e.message}", e)
-                    }
-                }
-                .onCompletion { cause ->
-                    if (cause != null) {
-                        Log.d(TAG, "Flow completed with exception: ${cause.message}")
-                    } else {
-                        Log.d(TAG, "Flow completed normally (this shouldn't happen - flow is infinite)")
-                    }
-                }
-                .catch { e ->
-                    Log.e(TAG, "Error in audio stream: ${e.message}", e)
-                    // Check if we were intentionally listening before cleanup resets the flag
-                    val shouldRestart = isListening
-                    cleanup()
-                    // Auto-restart listening on error (unless we were stopping intentionally)
-                    if (shouldRestart) {
-                        Log.d(TAG, "Restarting wake word listening after error")
-                        startListening()
-                    }
-                }
-                .launchIn(scope)
+            launchRecordingPipeline()
 
         } catch (e: SecurityException) {
             Log.e(TAG, "No permission to record audio: ${e.message}")
@@ -195,6 +136,75 @@ class WakeWordService(
             isListening = false
             cleanup()
         }
+    }
+
+    /**
+     * Creates and launches the recording pipeline for wake word detection.
+     * Extracted to allow reuse when resuming with an existing AudioHelper.
+     */
+    private fun launchRecordingPipeline() {
+        val helper = audioHelper ?: return
+        val model = getOrCreateModel()
+
+        recordingJob = helper.listenToRecording()
+            .onStart { Log.d(TAG, "Audio flow started") }
+            .toFloatChunks(CHUNK_SIZE)
+            .onStart { Log.d(TAG, "Float chunks flow started (toFloatChunks -> onEach)") }
+            .onEach { floatBuffer ->
+                try {
+                    val detectionScore = model.processFrame(floatBuffer)
+                    framesProcessed++
+
+                    // Log progress periodically (every 10 frames) or always in test mode
+                    val isTestMode = testModeCallback != null
+                    if (isTestMode || framesProcessed % 10 == 0 || framesProcessed <= 5) {
+                        val warmupStatus = if (framesProcessed <= WARMUP_FRAMES) "WARMUP" else "ACTIVE"
+                        Log.d(TAG, "Frame $framesProcessed [$warmupStatus]: score=%.4f, threshold=${currentSettings.threshold}, testMode=$isTestMode".format(detectionScore))
+                    }
+
+                    // Test mode: report every score to callback
+                    testModeCallback?.let { callback ->
+                        Log.v(TAG, "Invoking test mode callback with score=%.4f".format(detectionScore))
+                        withContext(Dispatchers.Main) {
+                            callback(detectionScore)
+                        }
+                    }
+
+                    // Normal mode: only trigger on threshold (skip if in test mode or warming up)
+                    if (testModeCallback == null && framesProcessed > WARMUP_FRAMES && detectionScore > currentSettings.threshold) {
+                        Log.i(TAG, "Wake word detected! Score: %.4f (threshold: ${currentSettings.threshold})".format(detectionScore))
+                        // IMPORTANT: Launch callback in a new coroutine BEFORE cleanup,
+                        // because cleanup() cancels this coroutine. Using scope.launch
+                        // creates a new job that won't be cancelled by our cleanup.
+                        scope.launch(Dispatchers.Main) {
+                            onWakeWordDetected()
+                        }
+                        cleanup()
+                        return@onEach // Stop processing after detection
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error running ONNX inference: ${e.message}", e)
+                }
+            }
+            .onCompletion { cause ->
+                if (cause != null) {
+                    Log.d(TAG, "Flow completed with exception: ${cause.message}")
+                } else {
+                    Log.d(TAG, "Flow completed normally (this shouldn't happen - flow is infinite)")
+                }
+            }
+            .catch { e ->
+                Log.e(TAG, "Error in audio stream: ${e.message}", e)
+                // Check if we were intentionally listening before cleanup resets the flag
+                val shouldRestart = isListening
+                cleanup()
+                // Auto-restart listening on error (unless we were stopping intentionally)
+                if (shouldRestart) {
+                    Log.d(TAG, "Restarting wake word listening after error")
+                    startListening()
+                }
+            }
+            .launchIn(scope)
     }
 
     /**
@@ -211,6 +221,71 @@ class WakeWordService(
 
         Log.d(TAG, "Stopping wake word listener${if (testModeCallback != null) " (test mode)" else ""}")
         cleanup()
+    }
+
+    /**
+     * Yields the AudioHelper for handover to another service.
+     * Pauses recording but does NOT release resources.
+     * Returns null if not currently listening or no AudioHelper available.
+     *
+     * After calling this, the WakeWordService is no longer listening and
+     * the caller takes ownership of the AudioHelper.
+     */
+    fun yieldAudioHelper(): AudioHelper? {
+        if (!isListening || audioHelper == null) {
+            Log.d(TAG, "yieldAudioHelper: not listening or no audioHelper, returning null")
+            return null
+        }
+
+        Log.d(TAG, "Yielding AudioHelper for handover")
+        isListening = false
+        recordingJob?.cancel()
+        recordingJob = null
+        audioHelper?.pauseRecording()
+
+        val helper = audioHelper
+        audioHelper = null  // Transfer ownership
+        return helper
+    }
+
+    /**
+     * Resumes wake word listening with an existing AudioHelper.
+     * Used after a conversation session returns the AudioHelper.
+     *
+     * @param helper The AudioHelper to resume with (takes ownership)
+     */
+    fun resumeWith(helper: AudioHelper) {
+        if (isListening) {
+            Log.w(TAG, "Already listening, ignoring resumeWith() - releasing provided helper")
+            helper.release()
+            return
+        }
+
+        // Verify AudioHelper is still usable
+        if (helper.isReleased) {
+            Log.w(TAG, "AudioHelper already released, starting fresh")
+            startListening()
+            return
+        }
+
+        Log.d(TAG, "Resuming wake word listening with existing AudioHelper")
+
+        try {
+            // Reset model accumulators for fresh detection
+            getOrCreateModel().resetAccumulators()
+
+            audioHelper = helper
+            audioHelper?.clearPreBuffer()  // Fresh start for buffering
+            isListening = true
+            framesProcessed = 0
+
+            launchRecordingPipeline()
+            Log.d(TAG, "Successfully resumed with existing AudioHelper")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error resuming with AudioHelper, starting fresh: ${e.message}", e)
+            helper.release()
+            startListening()
+        }
     }
 
     /**

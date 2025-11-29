@@ -104,10 +104,9 @@ class DirectConversationService(private val context: Context) :
      * Establishes a connection to the Gemini Live API and starts the audio conversation.
      * Tool calls from the model are handled via the onToolCall callback.
      *
-     * @param onToolCall Callback when AI wants to call a tool
-     * @param onTranscript Optional callback for transcription updates
+     * @param audioHelper Optional AudioHelper for audio stream handover
      */
-    override suspend fun startSession() {
+    override suspend fun startSession(audioHelper: AudioHelper?) {
         try {
             // Get API key from config
             val apiKey = GeminiConfig.getApiKey(context)
@@ -136,7 +135,8 @@ class DirectConversationService(private val context: Context) :
                 voiceName = voiceName ?: "Aoede",
                 interruptable = interruptable,
                 onToolCall = protocolToolCallHandler,
-                onTranscription = transcriptor
+                onTranscription = transcriptor,
+                externalAudioHelper = audioHelper
             )
 
             Log.d(TAG, "Direct protocol session started successfully")
@@ -178,6 +178,13 @@ class DirectConversationService(private val context: Context) :
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping session", e)
         }
+    }
+
+    /**
+     * Yields the AudioHelper from the underlying GeminiLiveSession.
+     */
+    override fun yieldAudioHelper(): AudioHelper? {
+        return session?.yieldAudioHelper()
     }
 
     /**

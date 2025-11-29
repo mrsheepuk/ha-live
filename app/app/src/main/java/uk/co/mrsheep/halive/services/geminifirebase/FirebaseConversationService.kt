@@ -22,6 +22,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.conversation.ConversationService
+import uk.co.mrsheep.halive.services.geminidirect.AudioHelper
 import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.ToolCallResult
 
@@ -111,11 +112,18 @@ class FirebaseConversationService(private val context: Context) :
      * Establishes connection to the model, sets up function call and transcription handlers,
      * and begins audio conversation.
      *
+     * @param audioHelper Optional AudioHelper for audio handover (not supported by Firebase SDK)
      * @param onToolCall Callback invoked when the model calls a tool
      * @param onTranscript Optional callback for transcription updates
      */
     @OptIn(PublicPreviewAPI::class)
-    override suspend fun startSession() {
+    override suspend fun startSession(audioHelper: AudioHelper?) {
+        // Firebase SDK manages its own audio - release any external AudioHelper
+        if (audioHelper != null) {
+            Log.d(TAG, "Firebase provider cannot use external AudioHelper, releasing it")
+            audioHelper.release()
+        }
+
         val model = generativeModel ?: throw IllegalStateException("Model not initialized. Call initialize() first.")
 
         try {
@@ -198,6 +206,17 @@ class FirebaseConversationService(private val context: Context) :
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping session", e)
         }
+    }
+
+    /**
+     * Yield the AudioHelper for handover to another service.
+     *
+     * Firebase SDK manages its own audio, so handover is not supported.
+     * Always returns null.
+     */
+    override fun yieldAudioHelper(): AudioHelper? {
+        Log.d(TAG, "yieldAudioHelper: Firebase provider does not support audio handover")
+        return null
     }
 
     /**
