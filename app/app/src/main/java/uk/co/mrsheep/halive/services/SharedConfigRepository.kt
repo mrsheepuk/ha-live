@@ -2,10 +2,12 @@ package uk.co.mrsheep.halive.services
 
 import android.util.Log
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.*
 
 @Serializable
 data class SharedConfig(
+    @SerialName("gemini_api_key")
     val geminiApiKey: String?,
     val profiles: List<SharedProfile>
 )
@@ -14,20 +16,31 @@ data class SharedConfig(
 data class SharedProfile(
     val id: String,
     val name: String,
+    @SerialName("system_prompt")
     val systemPrompt: String = "",
     val personality: String = "",
+    @SerialName("background_info")
     val backgroundInfo: String = "",
     val model: String = "gemini-2.0-flash-exp",
     val voice: String = "Aoede",
+    @SerialName("tool_filter_mode")
     val toolFilterMode: String = "ALL",
+    @SerialName("selected_tools")
     val selectedTools: List<String> = emptyList(),
+    @SerialName("include_live_context")
     val includeLiveContext: Boolean = true,
+    @SerialName("enable_transcription")
     val enableTranscription: Boolean = false,
+    @SerialName("auto_start_chat")
     val autoStartChat: Boolean = false,
+    @SerialName("initial_message")
     val initialMessage: String = "",
     val interruptable: Boolean = true,
+    @SerialName("last_modified")
     val lastModified: String? = null,
+    @SerialName("modified_by")
     val modifiedBy: String? = null,
+    @SerialName("schema_version")
     val schemaVersion: Int = 1
 )
 
