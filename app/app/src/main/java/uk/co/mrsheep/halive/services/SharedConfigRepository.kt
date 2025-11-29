@@ -167,16 +167,25 @@ class SharedConfigRepository(
     }
 
     private fun parseSharedConfig(json: JsonObject?): SharedConfig? {
-        if (json == null) return null
+        if (json == null) {
+            Log.w(TAG, "parseSharedConfig: json is null")
+            return null
+        }
         return try {
+            val apiKey = json["gemini_api_key"]?.jsonPrimitive?.contentOrNull
+            val profilesArray = json["profiles"]?.jsonArray
+            Log.d(TAG, "parseSharedConfig: raw json keys=${json.keys}, " +
+                    "apiKey=${if (apiKey != null) "present(${apiKey.length} chars)" else "null"}, " +
+                    "profilesArray size=${profilesArray?.size ?: "null"}")
+
             SharedConfig(
-                geminiApiKey = json["gemini_api_key"]?.jsonPrimitive?.contentOrNull,
-                profiles = json["profiles"]?.jsonArray?.map {
+                geminiApiKey = apiKey,
+                profiles = profilesArray?.map {
                     Json.decodeFromJsonElement<SharedProfile>(it)
                 } ?: emptyList()
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse shared config", e)
+            Log.e(TAG, "Failed to parse shared config: $json", e)
             null
         }
     }

@@ -24,17 +24,28 @@ class SharedConfigCache(context: Context) {
     }
 
     fun saveConfig(config: SharedConfig) {
+        val jsonString = Json.encodeToString(config)
+        Log.d(TAG, "saveConfig: hasApiKey=${config.geminiApiKey != null}, " +
+                "profiles=${config.profiles.size}, jsonLength=${jsonString.length}")
         prefs.edit()
-            .putString(KEY_CONFIG, Json.encodeToString(config))
+            .putString(KEY_CONFIG, jsonString)
             .putLong(KEY_LAST_FETCH, System.currentTimeMillis())
             .putBoolean(KEY_LAST_FETCH_FAILED, false)
             .apply()
     }
 
     fun getConfig(): SharedConfig? {
-        val json = prefs.getString(KEY_CONFIG, null) ?: return null
+        val json = prefs.getString(KEY_CONFIG, null)
+        if (json == null) {
+            Log.d(TAG, "getConfig: no cached config found")
+            return null
+        }
+        Log.d(TAG, "getConfig: found cached json, length=${json.length}")
         return try {
-            Json.decodeFromString<SharedConfig>(json)
+            val config = Json.decodeFromString<SharedConfig>(json)
+            Log.d(TAG, "getConfig: parsed config hasApiKey=${config.geminiApiKey != null}, " +
+                    "profiles=${config.profiles.size}")
+            config
         } catch (e: Exception) {
             Log.e(TAG, "Failed to deserialize cached config, clearing cache", e)
             // Clear corrupted cache to prevent repeated failures
