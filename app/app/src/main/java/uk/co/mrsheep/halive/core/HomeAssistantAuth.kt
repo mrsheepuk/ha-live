@@ -3,11 +3,10 @@ package uk.co.mrsheep.halive.core
 import android.content.Context
 import android.util.Log
 
-sealed class AuthMethod {
-    data class OAuth(val tokenManager: OAuthTokenManager) : AuthMethod()
-    data class LegacyToken(val token: String) : AuthMethod()
-}
-
+/**
+ * Manages Home Assistant OAuth authentication.
+ * OAuth is the only supported authentication method.
+ */
 class HomeAssistantAuth(private val context: Context) {
     companion object {
         private const val TAG = "HomeAssistantAuth"
@@ -15,32 +14,26 @@ class HomeAssistantAuth(private val context: Context) {
 
     private val secureStorage = SecureTokenStorage(context)
 
-    fun getAuthMethod(): AuthMethod? {
-        // Check for OAuth tokens first
+    /**
+     * Get the OAuth token manager if authenticated.
+     */
+    fun getTokenManager(): OAuthTokenManager? {
         val tokens = secureStorage.getTokens()
         val haUrl = secureStorage.getHaUrl()
         if (tokens != null && haUrl != null) {
-            Log.d(TAG, "Using OAuth authentication method")
-            return AuthMethod.OAuth(OAuthTokenManager(haUrl, secureStorage))
+            Log.d(TAG, "OAuth authentication available")
+            return OAuthTokenManager(haUrl, secureStorage)
         }
-
-        // Fall back to legacy token
-        val legacyConfig = HAConfig.loadConfig(context)
-        if (legacyConfig != null) {
-            Log.d(TAG, "Using legacy token authentication method")
-            return AuthMethod.LegacyToken(legacyConfig.second)
-        }
-
-        Log.d(TAG, "No authentication method available")
+        Log.d(TAG, "No OAuth authentication available")
         return null
     }
 
     fun isAuthenticated(): Boolean {
-        return getAuthMethod() != null
+        return secureStorage.getTokens() != null && secureStorage.getHaUrl() != null
     }
 
     fun getHaUrl(): String? {
-        return secureStorage.getHaUrl() ?: HAConfig.loadConfig(context)?.first
+        return secureStorage.getHaUrl()
     }
 
     fun clearAuth() {

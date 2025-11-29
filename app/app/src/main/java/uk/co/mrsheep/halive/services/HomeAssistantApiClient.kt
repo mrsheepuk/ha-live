@@ -15,40 +15,10 @@ import java.util.concurrent.TimeUnit
 @Serializable
 data class TemplateRequest(val template: String)
 
-/**
- * Sealed class for providing tokens to HomeAssistantApiClient.
- * Supports both static tokens and OAuth2 token management.
- */
-sealed class TokenProvider {
-    abstract suspend fun getToken(): String
-
-    /**
-     * Static token provider - uses a fixed token string.
-     */
-    data class Static(private val token: String) : TokenProvider() {
-        override suspend fun getToken(): String = token
-    }
-
-    /**
-     * OAuth2 token provider - gets tokens from OAuthTokenManager.
-     * Handles automatic token refresh when needed.
-     */
-    data class OAuth(private val tokenManager: OAuthTokenManager) : TokenProvider() {
-        override suspend fun getToken(): String = tokenManager.getValidToken()
-    }
-}
-
 class HomeAssistantApiClient(
     private val baseUrl: String,
-    private val tokenProvider: TokenProvider
+    private val tokenManager: OAuthTokenManager
 ) {
-    /**
-     * Secondary constructor for backward compatibility with static tokens.
-     * @param baseUrl Home Assistant instance URL
-     * @param token Static authentication token
-     */
-    constructor(baseUrl: String, token: String) : this(baseUrl, TokenProvider.Static(token))
-
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
@@ -72,7 +42,7 @@ class HomeAssistantApiClient(
         while (retryCount <= maxRetries) {
             try {
                 // Get fresh token for this request
-                val token = tokenProvider.getToken()
+                val token = tokenManager.getValidToken()
 
                 // Build request body
                 val requestBody = json.encodeToString(

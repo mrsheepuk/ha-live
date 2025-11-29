@@ -14,7 +14,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
-import uk.co.mrsheep.halive.services.TokenProvider
+import uk.co.mrsheep.halive.core.OAuthTokenManager
 import uk.co.mrsheep.halive.services.ToolExecutor
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -22,14 +22,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class McpClientManager(
     private val haBaseUrl: String,
-    private val tokenProvider: TokenProvider
+    private val tokenManager: OAuthTokenManager
 ): ToolExecutor {
-    /**
-     * Secondary constructor for backward compatibility with static tokens.
-     * @param haBaseUrl Home Assistant instance base URL
-     * @param haToken Static authentication token
-     */
-    constructor(haBaseUrl: String, haToken: String) : this(haBaseUrl, TokenProvider.Static(haToken))
 
     private val json = Json {
         encodeDefaults = true
@@ -63,7 +57,7 @@ class McpClientManager(
             Log.d(TAG, "Connecting to: \"$haBaseUrl/mcp_server/sse\"")
 
             // 1. Open SSE connection
-            val token = tokenProvider.getToken()
+            val token = tokenManager.getValidToken()
             val request = Request.Builder()
                 .url("$haBaseUrl/mcp_server/sse")
                 .header("Authorization", "Bearer $token")
@@ -242,7 +236,7 @@ class McpClientManager(
         try {
             Log.d(TAG, "Sending $message")
             // Get fresh token for this request
-            val token = tokenProvider.getToken()
+            val token = tokenManager.getValidToken()
             val request = Request.Builder()
                 .url("$haBaseUrl$endpoint")
                 .header("Authorization", "Bearer $token")

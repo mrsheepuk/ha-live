@@ -274,32 +274,18 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showHAEditDialog() {
-        // Create custom layout with OAuth and legacy token options
         val dialogView = layoutInflater.inflate(R.layout.dialog_ha_config, null)
 
-        // OAuth section
         val oauthUrlInput = dialogView.findViewById<android.widget.EditText>(R.id.oauthUrlInput)
         val oauthLoginButton = dialogView.findViewById<Button>(R.id.oauthLoginButton)
 
-        // Legacy token section
-        val urlInput = dialogView.findViewById<android.widget.EditText>(R.id.haUrlInput)
-        val tokenInput = dialogView.findViewById<android.widget.EditText>(R.id.haTokenInput)
-
-        // Load current config for legacy section
-        val legacyConfig = uk.co.mrsheep.halive.core.HAConfig.loadConfig(this)
-        val oauthUrl = uk.co.mrsheep.halive.core.SecureTokenStorage(this).getHaUrl()
-
-        // Pre-fill OAuth URL with existing URL (OAuth or legacy)
-        oauthUrlInput.setText(oauthUrl ?: legacyConfig?.first ?: "")
-
-        // Pre-fill legacy section
-        urlInput.setText(legacyConfig?.first ?: "")
-        tokenInput.setText(legacyConfig?.second ?: "")
+        // Pre-fill with current URL if available
+        val currentUrl = uk.co.mrsheep.halive.core.SecureTokenStorage(this).getHaUrl()
+        oauthUrlInput.setText(currentUrl ?: "")
 
         val dialog = AlertDialog.Builder(this)
-            .setTitle("Edit Home Assistant Config")
+            .setTitle("Connect to Home Assistant")
             .setView(dialogView)
-            .setPositiveButton("Save Token", null) // For legacy token
             .setNegativeButton("Cancel", null)
             .create()
 
@@ -330,38 +316,6 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             // Keep dialog open - it will be dismissed on OAuth callback
-        }
-
-        dialog.setOnShowListener {
-            val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            saveButton.setOnClickListener {
-                val newUrl = urlInput.text.toString().trim()
-                val newToken = tokenInput.text.toString().trim()
-
-                // Validate inputs
-                if (newUrl.isBlank()) {
-                    urlInput.error = "URL is required"
-                    return@setOnClickListener
-                }
-                if (newToken.isBlank()) {
-                    tokenInput.error = "Token is required"
-                    return@setOnClickListener
-                }
-
-                // Save temporarily and test
-                saveButton.isEnabled = false
-                saveButton.text = "Testing..."
-
-                // Save config
-                uk.co.mrsheep.halive.core.HAConfig.saveConfig(this, newUrl, newToken)
-
-                // Test connection
-                viewModel.testHAConnection()
-
-                // Close dialog
-                dialog.dismiss()
-                haEditDialog = null
-            }
         }
 
         dialog.setOnDismissListener {

@@ -1,13 +1,11 @@
 package uk.co.mrsheep.halive.ui
 
 import android.app.Application
-import android.net.Uri
 import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.GeminiConfig
-import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.core.WakeWordSettings
@@ -18,9 +16,8 @@ import uk.co.mrsheep.halive.core.QuickMessageConfig
 import uk.co.mrsheep.halive.core.OAuthConfig
 import uk.co.mrsheep.halive.core.SecureTokenStorage
 import uk.co.mrsheep.halive.core.OAuthTokenManager
-import uk.co.mrsheep.halive.core.AuthMethod
+import uk.co.mrsheep.halive.core.HomeAssistantAuth
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
-import uk.co.mrsheep.halive.services.TokenProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -38,6 +35,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val app = application as HAGeminiApp
     private val secureTokenStorage = SecureTokenStorage(application)
+    private val haAuth = HomeAssistantAuth(application)
 
     // This should be set from MainActivity when launching SettingsActivity
     var isChatActive: Boolean = false
@@ -75,7 +73,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 app.initializeHomeAssistantWithOAuth(pendingOAuthUrl, tokenManager)
 
                 // Test connection
-                val testMcpClient = McpClientManager(pendingOAuthUrl, TokenProvider.OAuth(tokenManager))
+                val testMcpClient = McpClientManager(pendingOAuthUrl, tokenManager)
                 testMcpClient.connect()
                 val tools = testMcpClient.getTools()
                 testMcpClient.shutdown()
@@ -100,26 +98,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun loadSettings() {
         viewModelScope.launch {
-            // Determine auth method and URL
-            val authMethod = app.getAuthMethod()
-            val haUrl: String
-            val authMethodDisplay: String
-
-            when (authMethod) {
-                is AuthMethod.OAuth -> {
-                    haUrl = secureTokenStorage.getHaUrl() ?: "Not configured"
-                    authMethodDisplay = "OAuth (Browser Login)"
-                }
-                is AuthMethod.LegacyToken -> {
-                    val config = HAConfig.loadConfig(getApplication())
-                    haUrl = config?.first ?: "Not configured"
-                    authMethodDisplay = "Long-lived Token"
-                }
-                null -> {
-                    haUrl = "Not configured"
-                    authMethodDisplay = "Not authenticated"
-                }
-            }
+            val haUrl = haAuth.getHaUrl() ?: "Not configured"
+            val authMethodDisplay = if (haAuth.isAuthenticated()) "OAuth (Browser Login)" else "Not authenticated"
 
             val geminiKey = GeminiConfig.getApiKey(getApplication()) ?: "Not configured"
             val profileCount = ProfileManager.getAllProfiles().size
@@ -166,29 +146,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
             var testMcpClient: McpClientManager? = null
             try {
-                // Get current auth method and create appropriate MCP client
-                val authMethod = app.getAuthMethod()
-                val url: String
-                val tokenProvider: TokenProvider
-
-                when (authMethod) {
-                    is AuthMethod.OAuth -> {
-                        url = secureTokenStorage.getHaUrl() ?: throw Exception("HA URL not configured")
-                        tokenProvider = TokenProvider.OAuth(authMethod.tokenManager)
-                    }
-                    is AuthMethod.LegacyToken -> {
-                        val config = HAConfig.loadConfig(getApplication())
-                            ?: throw Exception("HA not configured")
-                        url = config.first
-                        tokenProvider = TokenProvider.Static(config.second)
-                        // Re-initialize for legacy
-                        app.initializeHomeAssistant(url, config.second)
-                    }
-                    null -> throw Exception("Not authenticated")
-                }
+                val tokenManager = haAuth.getTokenManager()
+                    ?: throw Exception("Not authenticated")
+                val url = haAuth.getHaUrl()
+                    ?: throw Exception("HA URL not configured")
 
                 // Create temporary MCP connection for testing
-                testMcpClient = McpClientManager(url, tokenProvider)
+                testMcpClient = McpClientManager(url, tokenManager)
                 testMcpClient.connect()
 
                 // Try to fetch tools
