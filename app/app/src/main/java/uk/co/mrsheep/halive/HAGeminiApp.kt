@@ -51,6 +51,14 @@ class HAGeminiApp : Application() {
             // Initialize shared config cache
             sharedConfigCache = SharedConfigCache(this)
 
+            // Restore cached shared key on app restart
+            // This ensures GeminiConfig.isConfigured() returns true if we have a cached shared key
+            val cachedConfig = sharedConfigCache?.getConfig()
+            if (cachedConfig?.geminiApiKey != null) {
+                GeminiConfig.updateSharedKey(cachedConfig.geminiApiKey)
+                Log.d(TAG, "Restored cached shared Gemini key")
+            }
+
             // Note: MCP connection is NOT established here
             // It will be established in MainActivity after user configures HA
         } catch (e: Exception) {
