@@ -127,16 +127,16 @@ class ProfileTestManager(
             // Get HA credentials from app
             val haUrl = app.haUrl
                 ?: throw IllegalStateException("Home Assistant URL not configured")
-            val haToken = app.haToken
-                ?: throw IllegalStateException("Home Assistant token not configured")
+            val tokenManager = app.getTokenManager()
+                ?: throw IllegalStateException("OAuth not configured")
 
             val haApiClient = app.haApiClient
                 ?: throw IllegalStateException("Home Assistant API client not initialized")
 
             testConversationService = ConversationServiceFactory.create(app.applicationContext)
 
-            // Create fresh MCP connection for this test session
-            mcpClient = McpClientManager(haUrl, haToken)
+            // Create fresh MCP connection for this test session using OAuth
+            mcpClient = McpClientManager(haUrl, tokenManager)
             mcpClient!!.connect()
             Log.d(TAG, "Fresh MCP connection created for test session")
 

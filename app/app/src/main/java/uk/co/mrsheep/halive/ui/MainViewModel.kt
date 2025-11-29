@@ -137,22 +137,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            // Step 2: Check Home Assistant
+            // Step 2: Check Home Assistant OAuth authentication
             if (!HAConfig.isConfigured(getApplication())) {
                 _uiState.value = UiState.HAConfigNeeded
                 return@launch
             }
 
-            // Step 3: Store HA credentials and initialize API client (MCP connection created per-session)
+            // Step 3: Initialize API client using OAuth token manager (MCP connection created per-session)
             try {
-                val (haUrl, haToken) = HAConfig.loadConfig(getApplication())!!
-                app.initializeHomeAssistant(haUrl, haToken)
+                val tokenManager = app.getTokenManager()
+                val haUrl = HAConfig.getHaUrl(getApplication())
+
+                if (tokenManager == null || haUrl == null) {
+                    _uiState.value = UiState.HAConfigNeeded
+                    return@launch
+                }
+
+                app.initializeHomeAssistantWithOAuth(haUrl, tokenManager)
                 _uiState.value = UiState.ReadyToTalk
 
                 // Check if we should auto-start (only on first initialization)
                 checkAutoStart()
             } catch (e: Exception) {
-                _uiState.value = UiState.Error("Failed to initialize HA config: ${e.message}")
+                _uiState.value = UiState.Error("Failed to initialize HA: ${e.message}")
             }
         }
     }
@@ -249,31 +256,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Called by MainActivity when user provides HA credentials.
+     * Refresh configuration after OAuth login from onboarding.
+     * Called when returning from OnboardingActivity after successful OAuth.
      */
-    fun saveHAConfig(baseUrl: String, token: String) {
-        viewModelScope.launch {
-            try {
-                // Validate inputs (basic check)
-                if (baseUrl.isBlank() || token.isBlank()) {
-                    _uiState.value = UiState.Error("URL and token cannot be empty")
-                    return@launch
-                }
-
-                // Save config
-                HAConfig.saveConfig(getApplication(), baseUrl, token)
-
-                // Try to initialize MCP connection (Gemini will be initialized when user starts chat)
-                app.initializeHomeAssistant(baseUrl, token)
-
-                // Ready for user to start chat (Gemini initialization will happen on Start Chat)
-                _uiState.value = UiState.ReadyToTalk
-            } catch (e: Exception) {
-                _uiState.value = UiState.Error("Failed to connect: ${e.message}")
-                // Clear bad config
-                HAConfig.clearConfig(getApplication())
-            }
-        }
+    fun refreshConfigurationAfterOAuth() {
+        checkConfiguration()
     }
 
     fun onChatButtonClicked() {
