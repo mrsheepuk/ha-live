@@ -1,7 +1,5 @@
 package uk.co.mrsheep.halive.services
 
-import com.google.firebase.ai.type.FunctionCallPart
-import com.google.firebase.ai.type.FunctionResponsePart
 import kotlinx.serialization.json.JsonElement
 import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.ToolCallResult

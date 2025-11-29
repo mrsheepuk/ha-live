@@ -3,7 +3,6 @@ package uk.co.mrsheep.halive
 import android.app.Application
 import uk.co.mrsheep.halive.core.AssetCopyUtil
 import uk.co.mrsheep.halive.core.CrashLogger
-import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.services.HomeAssistantApiClient
 import uk.co.mrsheep.halive.services.ToolExecutor
@@ -25,9 +24,6 @@ class HAGeminiApp : Application() {
 
             // Clear old crash logs on successful startup (they've already been seen/fixed)
             CrashLogger.clearLog(this)
-
-            // Try to initialize Firebase on launch
-            FirebaseConfig.initializeFirebase(this)
 
             // Initialize ProfileManager
             ProfileManager.initialize(this)

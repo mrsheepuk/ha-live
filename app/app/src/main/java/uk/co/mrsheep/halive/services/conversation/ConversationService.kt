@@ -9,7 +9,7 @@ import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
  * Interface for AI conversation services.
  *
  * This interface allows multiple implementations of conversation services,
- * supporting different backends (Firebase SDK, direct WebSocket API, etc.)
+ * supporting different AI provider backends (direct WebSocket API, etc.)
  * to power the Home Assistant voice assistant. Each implementation handles
  * the specifics of connecting to an AI provider while conforming to this
  * contract for tool execution and transcription handling.

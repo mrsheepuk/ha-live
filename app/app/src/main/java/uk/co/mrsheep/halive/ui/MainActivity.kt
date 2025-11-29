@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.Menu
@@ -35,10 +34,8 @@ import androidx.transition.Fade
 import androidx.transition.TransitionManager
 import androidx.transition.TransitionSet
 import com.google.android.material.button.MaterialButton
-import com.google.firebase.FirebaseApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.DummyToolsConfig
-import uk.co.mrsheep.halive.core.FirebaseConfig
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import kotlinx.coroutines.launch
@@ -76,13 +73,9 @@ class MainActivity : AppCompatActivity() {
     private var hasTransitionedToTop = false
 
     private fun checkConfigurationAndLaunch() {
-        // Check if app is configured - need at least one provider AND Home Assistant
-        val hasFirebase = FirebaseConfig.isConfigured(this)
-        val hasGemini = GeminiConfig.isConfigured(this)
-        val hasHA = HAConfig.isConfigured(this)
-
-        if ((!hasFirebase && !hasGemini) || !hasHA) {
-            // Launch onboarding - need at least one conversation provider and HA
+        // Check if app is configured - need Gemini API key AND Home Assistant
+        if (!GeminiConfig.isConfigured(this) || !HAConfig.isConfigured(this)) {
+            // Launch onboarding - need Gemini API configuration and HA
             val intent = Intent(this, OnboardingActivity::class.java)
             startActivity(intent)
             finish()
@@ -170,15 +163,6 @@ class MainActivity : AppCompatActivity() {
 
         TransitionManager.beginDelayedTransition(mainConstraintLayout, transitionSet)
         topAlignedConstraintSet.applyTo(mainConstraintLayout)
-    }
-
-    // Activity Result Launcher for the file picker
-    private val selectConfigFileLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri?.let {
-            viewModel.saveFirebaseConfigFile(it)
-        }
     }
 
     // Activity Result Launcher for required permissions (RECORD_AUDIO and POST_NOTIFICATIONS on API 33+)
