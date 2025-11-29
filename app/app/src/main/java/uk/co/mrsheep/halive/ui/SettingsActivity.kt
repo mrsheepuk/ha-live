@@ -838,7 +838,7 @@ class SettingsActivity : AppCompatActivity() {
                     .setTitle("Clear Cache")
                     .setMessage("This will clear cached shared profiles. They will be re-fetched from Home Assistant on next launch.")
                     .setPositiveButton("Clear") { _, _ ->
-                        cache.clear()
+                        cache.clearProfileCache()
                         Toast.makeText(this, "Cache cleared", Toast.LENGTH_SHORT).show()
                         lastSyncText.text = "Never synced"
                     }

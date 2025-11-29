@@ -39,11 +39,8 @@ class HAGeminiApp : Application() {
             // Initialize auth system
             homeAssistantAuth = HomeAssistantAuth(this)
 
-            // Initialize ProfileManager
+            // Initialize ProfileManager (but don't create default profile yet)
             ProfileManager.initialize(this)
-
-            // Ensure at least one profile exists
-            ProfileManager.ensureDefaultProfileExists()
 
             // Copy TFLite model files from assets to filesDir for wake word detection
             AssetCopyUtil.copyAssetsToFilesDir(this)
@@ -51,13 +48,26 @@ class HAGeminiApp : Application() {
             // Initialize shared config cache
             sharedConfigCache = SharedConfigCache(this)
 
-            // Restore cached shared key on app restart
+            // Restore cached shared config on app restart
             // This ensures GeminiConfig.isConfigured() returns true if we have a cached shared key
+            // and also restores shared profiles before we check if default profile is needed
             val cachedConfig = sharedConfigCache?.getConfig()
-            if (cachedConfig?.geminiApiKey != null) {
-                GeminiConfig.updateSharedKey(cachedConfig.geminiApiKey)
-                Log.d(TAG, "Restored cached shared Gemini key")
+            if (cachedConfig != null) {
+                if (cachedConfig.geminiApiKey != null) {
+                    GeminiConfig.updateSharedKey(cachedConfig.geminiApiKey)
+                    Log.d(TAG, "Restored cached shared Gemini key")
+                }
+                // Restore cached shared profiles to ProfileManager
+                if (cachedConfig.profiles.isNotEmpty()) {
+                    ProfileManager.updateCachedSharedProfiles(
+                        cachedConfig.profiles.map { Profile.fromShared(it) }
+                    )
+                    Log.d(TAG, "Restored ${cachedConfig.profiles.size} cached shared profiles")
+                }
             }
+
+            // Now ensure at least one profile exists (after shared profiles are restored)
+            ProfileManager.ensureDefaultProfileExists()
 
             // Note: MCP connection is NOT established here
             // It will be established in MainActivity after user configures HA
