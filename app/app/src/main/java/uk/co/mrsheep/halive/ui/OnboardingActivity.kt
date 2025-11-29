@@ -1,6 +1,7 @@
 package uk.co.mrsheep.halive.ui
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -8,8 +9,10 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
@@ -35,13 +38,11 @@ class OnboardingActivity : AppCompatActivity() {
     private lateinit var geminiApiKeyInput: TextInputEditText
     private lateinit var geminiContinueButton: Button
 
-    // Step 3: HA Config
-    private lateinit var haUrlInput: EditText
-    private lateinit var haTokenInput: EditText
-    private lateinit var haTestButton: Button
-    private lateinit var haContinueButton: Button
+    // Step 2: OAuth Flow
+    private lateinit var haUrlOnlyInput: EditText
+    private lateinit var haConnectButton: Button
 
-    // Step 4: Complete
+    // Step 3: Complete
     private lateinit var completeButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,23 +76,33 @@ class OnboardingActivity : AppCompatActivity() {
             viewModel.saveGeminiApiKey(apiKey)
         }
 
-        // Step 3: HA Config
-        haUrlInput = findViewById(R.id.haUrlInput)
-        haTokenInput = findViewById(R.id.haTokenInput)
-        haTestButton = findViewById(R.id.haTestButton)
-        haContinueButton = findViewById(R.id.haContinueButton)
+        // Step 2: OAuth Flow
+        haUrlOnlyInput = findViewById(R.id.haUrlOnlyInput)
+        haConnectButton = findViewById(R.id.haConnectButton)
 
-        haTestButton.setOnClickListener {
-            val url = haUrlInput.text.toString()
-            val token = haTokenInput.text.toString()
-            viewModel.testHAConnection(url, token)
+        haConnectButton.setOnClickListener {
+            val url = haUrlOnlyInput.text.toString()
+            if (url.isBlank()) {
+                Toast.makeText(this, "Please enter your Home Assistant URL", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val authUrl = viewModel.startOAuthFlow(url)
+
+            // Set source so callback knows where to return
+            OAuthCallbackActivity.setSourceActivity(this, OAuthCallbackActivity.SOURCE_ONBOARDING)
+
+            // Open browser for OAuth
+            try {
+                val customTabsIntent = CustomTabsIntent.Builder().build()
+                customTabsIntent.launchUrl(this, Uri.parse(authUrl))
+            } catch (e: Exception) {
+                // Fallback to regular browser
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
+                startActivity(intent)
+            }
         }
 
-        haContinueButton.setOnClickListener {
-            viewModel.saveHAConfigAndContinue()
-        }
-
-        // Step 4: Complete
+        // Step 3: Complete
         completeButton = findViewById(R.id.completeButton)
         completeButton.setOnClickListener {
             viewModel.completeOnboarding()
@@ -108,7 +119,7 @@ class OnboardingActivity : AppCompatActivity() {
 
     private fun updateUIForState(state: OnboardingState) {
         when (state) {
-            OnboardingState.Step2ProviderConfig -> {
+            OnboardingState.Step1GeminiConfig -> {
                 progressText.text = "Step 1 of 3"
                 progressBar.progress = 33
                 showStep(1)
@@ -120,32 +131,22 @@ class OnboardingActivity : AppCompatActivity() {
             }
             is OnboardingState.GeminiKeyValid -> {
                 geminiContinueButton.isEnabled = true
-                geminiContinueButton.text = "✓ Valid"
+                geminiContinueButton.text = "Valid"
             }
             is OnboardingState.GeminiKeyInvalid -> {
                 geminiContinueButton.isEnabled = true
                 geminiContinueButton.text = "Continue"
                 geminiApiKeyLayout.error = state.error
             }
-            OnboardingState.Step3HomeAssistant -> {
+            OnboardingState.Step2HomeAssistant -> {
                 progressText.text = "Step 2 of 3"
                 progressBar.progress = 66
                 showStep(2)
             }
-            is OnboardingState.TestingConnection -> {
-                haTestButton.isEnabled = false
-                haTestButton.text = "Testing..."
+            is OnboardingState.OAuthError -> {
+                Toast.makeText(this, "OAuth error: ${state.error}", Toast.LENGTH_LONG).show()
             }
-            is OnboardingState.ConnectionSuccess -> {
-                haTestButton.isEnabled = true
-                haTestButton.text = "✓ Connection successful"
-                haContinueButton.isEnabled = true
-            }
-            is OnboardingState.ConnectionFailed -> {
-                haTestButton.isEnabled = true
-                haTestButton.text = "✗ Test Connection"
-            }
-            OnboardingState.Step4Complete -> {
+            OnboardingState.Step3Complete -> {
                 progressText.text = "Step 3 of 3"
                 progressBar.progress = 100
                 showStep(3)
@@ -156,7 +157,6 @@ class OnboardingActivity : AppCompatActivity() {
                 startActivity(intent)
                 finish()
             }
-            else -> {}
         }
     }
 
@@ -165,18 +165,32 @@ class OnboardingActivity : AppCompatActivity() {
         step2Container.visibility = if (step == 2) View.VISIBLE else View.GONE
         step3Container.visibility = if (step == 3) View.VISIBLE else View.GONE
     }
+
+    override fun onResume() {
+        super.onResume()
+        // Check if we returned from OAuth with result
+        checkPendingOAuthResult()
+    }
+
+    private fun checkPendingOAuthResult() {
+        val (code, state, error) = OAuthCallbackActivity.getPendingResult(this)
+
+        if (code != null) {
+            viewModel.handleOAuthCallback(code, state)
+        } else if (error != null) {
+            viewModel.handleOAuthError(error)
+        }
+    }
 }
 
 // Onboarding states
 sealed class OnboardingState {
-    object Step2ProviderConfig : OnboardingState()
+    object Step1GeminiConfig : OnboardingState()
     object ValidatingGeminiKey : OnboardingState()
     data class GeminiKeyValid(val message: String) : OnboardingState()
     data class GeminiKeyInvalid(val error: String) : OnboardingState()
-    object Step3HomeAssistant : OnboardingState()
-    object TestingConnection : OnboardingState()
-    data class ConnectionSuccess(val message: String) : OnboardingState()
-    data class ConnectionFailed(val error: String) : OnboardingState()
-    object Step4Complete : OnboardingState()
+    object Step2HomeAssistant : OnboardingState()
+    data class OAuthError(val error: String) : OnboardingState()
+    object Step3Complete : OnboardingState()
     object Finished : OnboardingState()
 }

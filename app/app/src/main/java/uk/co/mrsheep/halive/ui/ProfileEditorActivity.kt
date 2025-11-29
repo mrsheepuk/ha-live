@@ -482,7 +482,12 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
     private fun loadAvailableTools() {
         lifecycleScope.launch {
             val app = application as HAGeminiApp
-            val mcp = McpClientManager(app.haUrl!!, app.haToken!!)
+            val tokenManager = app.getTokenManager()
+            if (tokenManager == null || app.haUrl == null) {
+                toolCacheWarning.visibility = View.VISIBLE
+                return@launch
+            }
+            val mcp = McpClientManager(app.haUrl!!, tokenManager)
             try {
                 mcp.connect()
                 val toolsResult = mcp.getTools()

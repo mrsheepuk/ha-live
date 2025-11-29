@@ -3,17 +3,18 @@ package uk.co.mrsheep.halive
 import android.app.Application
 import uk.co.mrsheep.halive.core.AssetCopyUtil
 import uk.co.mrsheep.halive.core.CrashLogger
+import uk.co.mrsheep.halive.core.HomeAssistantAuth
+import uk.co.mrsheep.halive.core.OAuthTokenManager
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.services.HomeAssistantApiClient
-import uk.co.mrsheep.halive.services.ToolExecutor
-import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import uk.co.mrsheep.halive.services.mcp.McpTool
 
 class HAGeminiApp : Application() {
     var haApiClient: HomeAssistantApiClient? = null
     var lastAvailableTools: List<String>? = null
     var haUrl: String? = null
-    var haToken: String? = null
+    var homeAssistantAuth: HomeAssistantAuth? = null
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -24,6 +25,9 @@ class HAGeminiApp : Application() {
 
             // Clear old crash logs on successful startup (they've already been seen/fixed)
             CrashLogger.clearLog(this)
+
+            // Initialize auth system
+            homeAssistantAuth = HomeAssistantAuth(this)
 
             // Initialize ProfileManager
             ProfileManager.initialize(this)
@@ -53,14 +57,23 @@ class HAGeminiApp : Application() {
     }
 
     /**
-     * Called by MainActivity after user provides HA credentials.
-     * Establishes the MCP SSE connection and performs initialization handshake.
+     * Initialize Home Assistant using OAuth tokens.
+     * Called after successful OAuth authentication.
      */
-    suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
+    suspend fun initializeHomeAssistantWithOAuth(haUrl: String, tokenManager: OAuthTokenManager) {
         this.haUrl = haUrl
-        this.haToken = haToken
-        haApiClient = HomeAssistantApiClient(haUrl, haToken)
+        haApiClient = HomeAssistantApiClient(haUrl, tokenManager)
     }
+
+    /**
+     * Check if Home Assistant is configured and authenticated.
+     */
+    fun isHomeAssistantConfigured(): Boolean = homeAssistantAuth?.isAuthenticated() == true
+
+    /**
+     * Get the OAuth token manager if authenticated.
+     */
+    fun getTokenManager(): OAuthTokenManager? = homeAssistantAuth?.getTokenManager()
 
     /**
      * Updates the cache of available tool names.
