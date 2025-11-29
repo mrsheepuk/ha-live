@@ -45,6 +45,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView.ViewHolder
 import uk.co.mrsheep.halive.core.QuickMessage
 import uk.co.mrsheep.halive.core.OAuthConfig
+import uk.co.mrsheep.halive.HAGeminiApp
 import androidx.browser.customtabs.CustomTabsIntent
 import android.widget.Toast
 import java.util.UUID
