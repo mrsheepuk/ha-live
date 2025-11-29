@@ -59,8 +59,9 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
                 // Save to config
                 GeminiConfig.saveApiKey(getApplication(), apiKey)
 
-                // Move to HA step
-                _onboardingState.value = OnboardingState.Step2HomeAssistant
+                // HA OAuth is already complete at this point, so proceed to completion
+                ProfileManager.ensureDefaultProfileExists()
+                _onboardingState.value = OnboardingState.Step3Complete
             } catch (e: Exception) {
                 _onboardingState.value = OnboardingState.GeminiKeyInvalid(e.message ?: "Failed to save API key")
             }
