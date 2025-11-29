@@ -99,6 +99,9 @@ class OnboardingActivity : AppCompatActivity() {
             }
             val authUrl = viewModel.startOAuthFlow(url)
 
+            // Set source so callback knows where to return
+            OAuthCallbackActivity.setSourceActivity(this, OAuthCallbackActivity.SOURCE_ONBOARDING)
+
             // Open browser for OAuth
             try {
                 val customTabsIntent = CustomTabsIntent.Builder().build()

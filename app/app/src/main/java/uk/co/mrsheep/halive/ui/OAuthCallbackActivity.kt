@@ -27,6 +27,19 @@ class OAuthCallbackActivity : AppCompatActivity() {
         private const val KEY_AUTH_CODE = "pending_auth_code"
         private const val KEY_STATE = "pending_state"
         private const val KEY_ERROR = "pending_error"
+        private const val KEY_SOURCE_ACTIVITY = "source_activity"
+
+        const val SOURCE_ONBOARDING = "onboarding"
+        const val SOURCE_SETTINGS = "settings"
+
+        /**
+         * Set the source activity before initiating OAuth.
+         * This tells the callback handler which activity to return to.
+         */
+        fun setSourceActivity(context: Context, source: String) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putString(KEY_SOURCE_ACTIVITY, source).apply()
+        }
 
         /**
          * Check if there's a pending OAuth result.
@@ -54,6 +67,11 @@ class OAuthCallbackActivity : AppCompatActivity() {
                 .putString(KEY_STATE, state)
                 .putString(KEY_ERROR, error)
                 .apply()
+        }
+
+        private fun getSourceActivity(context: Context): String? {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getString(KEY_SOURCE_ACTIVITY, null)
         }
     }
 
@@ -124,8 +142,18 @@ class OAuthCallbackActivity : AppCompatActivity() {
     }
 
     private fun finishAndReturnToCaller() {
-        // Simply finish - the calling activity will receive onResume and check for pending result
-        // This works because the activity that launched the browser is still in the back stack
+        // Determine which activity to return to based on the stored source
+        val targetClass = when (getSourceActivity(this)) {
+            SOURCE_ONBOARDING -> OnboardingActivity::class.java
+            SOURCE_SETTINGS -> SettingsActivity::class.java
+            else -> MainActivity::class.java // Fallback
+        }
+
+        // Launch with flags to clear the Chrome Custom Tab from the task stack
+        val intent = Intent(this, targetClass).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        startActivity(intent)
         finish()
     }
 }
