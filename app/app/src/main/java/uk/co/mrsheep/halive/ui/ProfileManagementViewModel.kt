@@ -6,9 +6,12 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ProfileExportImport
+import uk.co.mrsheep.halive.core.ProfileSource
+import uk.co.mrsheep.halive.core.ProfileNameConflictException
 
 /**
  * ViewModel for ProfileManagementActivity.
@@ -25,6 +28,9 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
         loadProfiles()
     }
 
+    private val app: HAGeminiApp
+        get() = getApplication()
+
     /**
      * Loads profiles from ProfileManager and observes changes.
      * Also loads the active profile ID and includes it in the state.
@@ -33,6 +39,11 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
         viewModelScope.launch {
             try {
                 _state.value = ProfileManagementState.Loading
+
+                // Only refresh shared profiles if the HACS integration is installed
+                if (app.isSharedConfigAvailable()) {
+                    ProfileManager.refreshSharedProfiles()
+                }
 
                 // Observe the profiles StateFlow from ProfileManager
                 ProfileManager.profiles.collect { profiles ->
@@ -78,7 +89,22 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
     fun deleteProfile(profileId: String) {
         viewModelScope.launch {
             try {
-                ProfileManager.deleteProfile(profileId)
+                val profile = ProfileManager.getProfileById(profileId)
+                if (profile == null) {
+                    _state.value = ProfileManagementState.Error("Profile not found")
+                    return@launch
+                }
+
+                when (profile.source) {
+                    ProfileSource.LOCAL -> ProfileManager.deleteLocalProfile(profileId)
+                    ProfileSource.SHARED -> {
+                        val success = ProfileManager.deleteSharedProfile(profileId)
+                        if (!success) {
+                            _state.value = ProfileManagementState.Error("Failed to delete shared profile")
+                            return@launch
+                        }
+                    }
+                }
                 // ProfileManager will emit updated list via StateFlow
             } catch (e: IllegalStateException) {
                 // This is the "last profile" error
@@ -167,6 +193,89 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
             }
         }
     }
+
+    /**
+     * Uploads a local profile to shared storage.
+     */
+    fun uploadToShared(profile: Profile, deleteLocal: Boolean, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                ProfileManager.uploadToShared(profile, deleteLocal)
+                onSuccess()
+            } catch (e: ProfileNameConflictException) {
+                onError(e.message ?: "Name already exists")
+            } catch (e: Exception) {
+                onError(e.message ?: "Upload failed")
+            }
+        }
+    }
+
+    /**
+     * Downloads a shared profile to local storage.
+     */
+    fun downloadToLocal(profile: Profile): Profile {
+        return ProfileManager.downloadToLocal(profile)
+    }
+
+    /**
+     * Refreshes profiles from the backend.
+     * Handles errors gracefully and sets offline state if refresh fails.
+     * Skips network call if HACS integration is not installed.
+     */
+    fun refreshProfiles() {
+        viewModelScope.launch {
+            // Don't show loading state for refresh
+            try {
+                // Only attempt network refresh if HACS integration is installed
+                if (app.isSharedConfigAvailable()) {
+                    ProfileManager.refreshSharedProfiles()
+                }
+                val profiles = ProfileManager.getAllProfiles()
+                val activeId = ProfileManager.getActiveProfile()?.id
+                _state.value = ProfileManagementState.Loaded(
+                    profiles = profiles,
+                    activeProfileId = activeId,
+                    isOffline = false
+                )
+            } catch (e: Exception) {
+                // On error, show cached data but mark as offline
+                val profiles = ProfileManager.getAllProfiles()
+                val activeId = ProfileManager.getActiveProfile()?.id
+                _state.value = ProfileManagementState.Loaded(
+                    profiles = profiles,
+                    activeProfileId = activeId,
+                    isOffline = true
+                )
+            }
+        }
+    }
+
+    /**
+     * Uploads multiple profiles to shared storage.
+     * Called as part of the migration feature.
+     */
+    fun uploadAllProfiles(profiles: List<Profile>, onComplete: (Int, Int) -> Unit) {
+        viewModelScope.launch {
+            var successCount = 0
+            var failCount = 0
+
+            for (profile in profiles) {
+                try {
+                    ProfileManager.uploadToShared(profile, deleteLocal = true)
+                    successCount++
+                } catch (e: ProfileNameConflictException) {
+                    failCount++
+                } catch (e: Exception) {
+                    failCount++
+                }
+            }
+
+            onComplete(successCount, failCount)
+
+            // Refresh the list
+            refreshProfiles()
+        }
+    }
 }
 
 /**
@@ -176,7 +285,8 @@ sealed class ProfileManagementState {
     object Loading : ProfileManagementState()
     data class Loaded(
         val profiles: List<Profile>,
-        val activeProfileId: String? = null
+        val activeProfileId: String? = null,
+        val isOffline: Boolean = false
     ) : ProfileManagementState()
     data class Error(val message: String) : ProfileManagementState()
 }

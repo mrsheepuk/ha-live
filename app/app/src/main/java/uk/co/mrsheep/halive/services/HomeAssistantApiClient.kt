@@ -5,11 +5,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import uk.co.mrsheep.halive.core.OAuthTokenManager
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 @Serializable
@@ -91,6 +101,153 @@ class HomeAssistantApiClient(
         }
 
         throw Exception("Template rendering failed after $maxRetries retries")
+    }
+
+    /**
+     * Get list of available services (to check for integration).
+     */
+    suspend fun getServices(): JsonArray = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Fetching available services...")
+
+        var retryCount = 0
+        val maxRetries = 1
+
+        while (retryCount <= maxRetries) {
+            try {
+                val token = tokenManager.getValidToken()
+
+                val request = Request.Builder()
+                    .url("$baseUrl/api/services")
+                    .addHeader("Authorization", "Bearer $token")
+                    .get()
+                    .build()
+
+                val response = client.newCall(request).execute()
+
+                if (response.code == 401 && retryCount < maxRetries) {
+                    Log.d(TAG, "Received 401, retrying getServices...")
+                    response.body?.close()
+                    retryCount++
+                    continue
+                }
+
+                if (!response.isSuccessful) {
+                    throw IOException("Failed to get services: ${response.code}")
+                }
+
+                val body = response.body?.string() ?: throw Exception("Empty response from services API")
+                return@withContext Json.parseToJsonElement(body).jsonArray
+
+            } catch (e: Exception) {
+                if (retryCount < maxRetries) {
+                    Log.d(TAG, "Exception during getServices, retrying: ${e.message}")
+                    retryCount++
+                } else {
+                    throw e
+                }
+            }
+        }
+
+        throw Exception("getServices failed after $maxRetries retries")
+    }
+
+    /**
+     * Call a Home Assistant service, optionally returning the response.
+     */
+    suspend fun callService(
+        domain: String,
+        service: String,
+        data: Map<String, Any>,
+        returnResponse: Boolean = false
+    ): JsonObject? = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Calling service: $domain.$service")
+
+        var retryCount = 0
+        val maxRetries = 1
+
+        while (retryCount <= maxRetries) {
+            try {
+                val token = tokenManager.getValidToken()
+
+                val url = if (returnResponse) {
+                    "$baseUrl/api/services/$domain/$service?return_response=true"
+                } else {
+                    "$baseUrl/api/services/$domain/$service"
+                }
+
+                val body = Json.encodeToString(
+                    JsonObject.serializer(),
+                    buildJsonObject {
+                        data.forEach { (key, value) ->
+                            put(key, anyToJsonElement(value))
+                        }
+                    }
+                ).toRequestBody("application/json".toMediaType())
+
+                val request = Request.Builder()
+                    .url(url)
+                    .addHeader("Authorization", "Bearer $token")
+                    .addHeader("Content-Type", "application/json")
+                    .post(body)
+                    .build()
+
+                val response = client.newCall(request).execute()
+
+                if (response.code == 401 && retryCount < maxRetries) {
+                    Log.d(TAG, "Received 401, retrying callService...")
+                    response.body?.close()
+                    retryCount++
+                    continue
+                }
+
+                if (!response.isSuccessful) {
+                    throw IOException("Service call failed: ${response.code}")
+                }
+
+                if (returnResponse) {
+                    val responseBody = response.body?.string()
+                    if (responseBody.isNullOrBlank()) return@withContext null
+                    return@withContext Json.parseToJsonElement(responseBody).jsonObject
+                }
+                return@withContext null
+
+            } catch (e: Exception) {
+                if (retryCount < maxRetries) {
+                    Log.d(TAG, "Exception during callService, retrying: ${e.message}")
+                    retryCount++
+                } else {
+                    throw e
+                }
+            }
+        }
+
+        throw Exception("callService failed after $maxRetries retries")
+    }
+
+    /**
+     * Recursively converts Any value to JsonElement, handling nested maps and lists.
+     */
+    private fun anyToJsonElement(value: Any?): JsonElement {
+        return when (value) {
+            null -> JsonNull
+            is String -> JsonPrimitive(value)
+            is Number -> JsonPrimitive(value)
+            is Boolean -> JsonPrimitive(value)
+            is Map<*, *> -> buildJsonObject {
+                value.forEach { (k, v) ->
+                    if (k is String) {
+                        put(k, anyToJsonElement(v))
+                    }
+                }
+            }
+            is List<*> -> buildJsonArray {
+                value.forEach { add(anyToJsonElement(it)) }
+            }
+            is Set<*> -> buildJsonArray {
+                value.forEach { add(anyToJsonElement(it)) }
+            }
+            else -> JsonPrimitive(value.toString())
+        }
     }
 
     companion object {

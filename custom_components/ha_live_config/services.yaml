@@ -1,0 +1,64 @@
+get_config:
+  name: Get Configuration
+  description: Retrieve all HA Live shared configuration including Gemini API key and profiles.
+
+set_gemini_key:
+  name: Set Gemini API Key
+  description: Set or update the shared Gemini API key.
+  fields:
+    api_key:
+      name: API Key
+      description: The Gemini API key to store. Pass null/empty to clear.
+      required: false
+      example: "AIzaSy..."
+      selector:
+        text:
+
+upsert_profile:
+  name: Create/Update Profile
+  description: Create a new profile or update an existing one. Returns the profile ID.
+  fields:
+    profile:
+      name: Profile
+      description: The profile data as a JSON object.
+      required: true
+      example: |
+        {
+          "name": "Default Assistant",
+          "system_prompt": "You are a helpful assistant...",
+          "personality": "Friendly and concise",
+          "model": "gemini-2.0-flash-exp",
+          "voice": "Aoede",
+          "interruptable": true
+        }
+      selector:
+        object:
+
+delete_profile:
+  name: Delete Profile
+  description: Delete a profile by its ID.
+  fields:
+    profile_id:
+      name: Profile ID
+      description: The UUID of the profile to delete.
+      required: true
+      example: "550e8400-e29b-41d4-a716-446655440000"
+      selector:
+        text:
+
+check_profile_name:
+  name: Check Profile Name
+  description: Check if a profile name is available (case-insensitive).
+  fields:
+    name:
+      name: Name
+      description: The profile name to check.
+      required: true
+      selector:
+        text:
+    exclude_id:
+      name: Exclude ID
+      description: Optional profile ID to exclude from the check (useful when updating).
+      required: false
+      selector:
+        text:

@@ -19,7 +19,26 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="4dp"
+            android:gravity="center_vertical">
+
+            <!-- Source Icon -->
+            <ImageView
+                android:id="@+id/sourceIcon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_marginEnd="4dp"
+                android:contentDescription="Profile source indicator"
+                android:tint="?attr/colorOnSurface" />
+
+            <!-- Sync Status Icon (for shared profiles) -->
+            <ImageView
+                android:id="@+id/syncIcon"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginEnd="8dp"
+                android:contentDescription="Sync status"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/profileNameText"
@@ -50,6 +69,17 @@
                 android:visibility="gone" />
 
         </LinearLayout>
+
+        <!-- Profile Source Subtitle -->
+        <TextView
+            android:id="@+id/subtitleText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="12dp"
+            android:visibility="gone" />
 
         <!-- Action Buttons -->
         <LinearLayout

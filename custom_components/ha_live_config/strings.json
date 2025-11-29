@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up HA Live Config",
+        "description": "This integration enables shared configuration storage for the HA Live voice assistant app. Profiles and API keys stored here can be accessed by all HA Live app users in your household."
+      }
+    },
+    "abort": {
+      "already_configured": "HA Live Config is already set up."
+    }
+  }
+}

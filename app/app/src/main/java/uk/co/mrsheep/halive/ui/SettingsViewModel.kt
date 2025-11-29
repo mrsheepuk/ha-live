@@ -26,7 +26,7 @@ import java.security.SecureRandom
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _settingsState = MutableStateFlow<SettingsState>(
-        SettingsState.Loaded("", "", 0, false, "", "", false, false, "", 0.5f)
+        SettingsState.Loaded("", "", 0, false, "", "", false, false, "", 0.5f, false, false, false)
     )
     val settingsState: StateFlow<SettingsState> = _settingsState
 
@@ -79,7 +79,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 testMcpClient.shutdown()
 
                 if (tools.isNotEmpty()) {
-                    _settingsState.value = SettingsState.ConnectionSuccess("Connected via OAuth! Found ${tools.size} tools")
+                    // Check for HACS integration now that HA is connected
+                    val sharedConfig = app.fetchSharedConfig()
+                    val integrationMsg = if (sharedConfig != null) {
+                        " HA Live Config integration detected."
+                    } else {
+                        ""
+                    }
+                    _settingsState.value = SettingsState.ConnectionSuccess("Connected via OAuth! Found ${tools.size} tools.$integrationMsg")
                 } else {
                     _settingsState.value = SettingsState.ConnectionFailed("Connected but no tools found")
                 }
@@ -125,6 +132,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 optimizationLevelDisplay
             )
 
+            val hasSharedKey = GeminiConfig.hasSharedKey()
+            val isUsingSharedKey = GeminiConfig.isUsingSharedKey(getApplication())
+            val sharedConfigAvailable = app.isSharedConfigAvailable()
+
             _settingsState.value = SettingsState.Loaded(
                 haUrl = haUrl,
                 authMethod = authMethodDisplay,
@@ -135,7 +146,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 canChooseService = canChooseService,
                 wakeWordEnabled = wakeWordSettings.enabled,
                 wakeWordDetails = wakeWordDetails,
-                wakeWordThreshold = wakeWordSettings.threshold
+                wakeWordThreshold = wakeWordSettings.threshold,
+                hasSharedKey = hasSharedKey,
+                isUsingSharedKey = isUsingSharedKey,
+                sharedConfigAvailable = sharedConfigAvailable
             )
         }
     }
@@ -277,6 +291,31 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             } catch (e: Exception) {
                 _settingsState.value = SettingsState.ConnectionFailed("Failed to toggle quick message: ${e.message}")
             }
+        }
+    }
+
+    fun setUseSharedKey(useShared: Boolean) {
+        viewModelScope.launch {
+            GeminiConfig.setUseSharedKey(getApplication(), useShared)
+            loadSettings()
+        }
+    }
+
+    fun setSharedGeminiKey(apiKey: String) {
+        viewModelScope.launch {
+            try {
+                val repo = app.sharedConfigRepo
+                if (repo != null && repo.setGeminiKey(apiKey)) {
+                    // Refresh shared config
+                    app.fetchSharedConfig()
+                    _settingsState.value = SettingsState.ConnectionSuccess("Shared API key updated")
+                } else {
+                    _settingsState.value = SettingsState.ConnectionFailed("Failed to update shared key")
+                }
+            } catch (e: Exception) {
+                _settingsState.value = SettingsState.ConnectionFailed("Failed: ${e.message}")
+            }
+            loadSettings()
         }
     }
 }
