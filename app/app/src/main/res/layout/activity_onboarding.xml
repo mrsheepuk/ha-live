@@ -184,4 +184,114 @@
             android:textSize="16sp" />
     </LinearLayout>
 
+    <!-- Step 4: Shared Configuration -->
+    <LinearLayout
+        android:id="@+id/step4SharedConfigContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/progressBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginTop="32dp">
+
+        <TextView
+            android:id="@+id/sharedConfigTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Shared Configuration Found"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/sharedConfigMessage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Integration found with profiles. Please configure the Gemini API key."
+            android:textSize="14sp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- API Key input (shown only when needed) -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/sharedConfigApiKeyLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Gemini API Key"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/sharedConfigApiKeyInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:singleLine="true" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Save button (shown only when API key input is visible) -->
+        <Button
+            android:id="@+id/sharedConfigSaveButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Save API Key"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone" />
+
+        <!-- Skip/Continue button -->
+        <Button
+            android:id="@+id/sharedConfigSkipButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Skip" />
+    </LinearLayout>
+
+    <!-- Step 5: No Integration Found -->
+    <LinearLayout
+        android:id="@+id/step5NoIntegrationContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/progressBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginTop="32dp">
+
+        <TextView
+            android:id="@+id/noIntegrationTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="No Integration Found"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/noIntegrationMessage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="The ha_live_config integration is not installed.\n\nYou can continue with local setup or install the integration for shared config support."
+            android:textSize="14sp"
+            android:layout_marginBottom="24dp" />
+
+        <Button
+            android:id="@+id/noIntegrationContinueButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Continue with Local Setup"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/noIntegrationLearnMoreButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Learn More About Integration"
+            style="?attr/borderlessButtonStyle" />
+    </LinearLayout>
+
 </androidx.constraintlayout.widget.ConstraintLayout>

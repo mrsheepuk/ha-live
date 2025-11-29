@@ -2,6 +2,7 @@ package uk.co.mrsheep.halive.ui
 
 import android.app.Application
 import android.util.Base64
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
@@ -18,6 +19,9 @@ import kotlinx.coroutines.launch
 import java.security.SecureRandom
 
 class OnboardingViewModel(application: Application) : AndroidViewModel(application) {
+    companion object {
+        private const val TAG = "OnboardingViewModel"
+    }
 
     private val _onboardingState = MutableStateFlow<OnboardingState>(OnboardingState.Step1GeminiConfig)
     val onboardingState: StateFlow<OnboardingState> = _onboardingState
@@ -106,14 +110,44 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
                 testMcpClient.shutdown()
 
                 if (tools.isNotEmpty()) {
-                    // Create default profile
-                    ProfileManager.ensureDefaultProfileExists()
-                    // Move to completion step
-                    _onboardingState.value = OnboardingState.Step3Complete
+                    // Tools check succeeded - now check for shared config
+                    _onboardingState.value = OnboardingState.CheckingSharedConfig
+                    val sharedConfig = app.fetchSharedConfig()
+
+                    when {
+                        sharedConfig == null -> {
+                            // No integration - proceed with local setup (need Gemini key if not set)
+                            Log.d(TAG, "No shared config found - no integration installed")
+                            if (!GeminiConfig.isConfigured(getApplication())) {
+                                _onboardingState.value = OnboardingState.NoSharedConfig
+                            } else {
+                                ProfileManager.ensureDefaultProfileExists()
+                                _onboardingState.value = OnboardingState.Step3Complete
+                            }
+                        }
+                        sharedConfig.geminiApiKey != null -> {
+                            // Shared config with API key - all set!
+                            Log.d(TAG, "Shared config found with API key")
+                            ProfileManager.ensureDefaultProfileExists()
+                            _onboardingState.value = OnboardingState.SharedConfigFound(
+                                hasApiKey = true,
+                                profileCount = sharedConfig.profiles.size
+                            )
+                        }
+                        else -> {
+                            // Integration installed but no shared key
+                            Log.d(TAG, "Shared config found without API key")
+                            _onboardingState.value = OnboardingState.SharedConfigFound(
+                                hasApiKey = false,
+                                profileCount = sharedConfig.profiles.size
+                            )
+                        }
+                    }
                 } else {
                     _onboardingState.value = OnboardingState.OAuthError("No tools found - is the MCP server enabled?")
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "OAuth callback failed", e)
                 _onboardingState.value = OnboardingState.OAuthError(e.message ?: "OAuth failed")
             }
         }
@@ -121,5 +155,61 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
 
     fun handleOAuthError(error: String) {
         _onboardingState.value = OnboardingState.OAuthError(error)
+    }
+
+    /**
+     * Save the Gemini API key to the shared config in Home Assistant.
+     * Called when user provides API key on the shared config step.
+     */
+    fun setSharedGeminiKey(apiKey: String) {
+        viewModelScope.launch {
+            try {
+                val repo = app.sharedConfigRepo
+                if (repo != null) {
+                    Log.d(TAG, "Saving shared Gemini key")
+                    val success = repo.setGeminiKey(apiKey)
+                    if (success) {
+                        // Refresh config after setting key
+                        app.fetchSharedConfig()
+                        ProfileManager.ensureDefaultProfileExists()
+                        _onboardingState.value = OnboardingState.Step3Complete
+                    } else {
+                        _onboardingState.value = OnboardingState.GeminiKeyInvalid("Failed to save shared key")
+                    }
+                } else {
+                    _onboardingState.value = OnboardingState.GeminiKeyInvalid("Shared config repository not initialized")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to set shared Gemini key", e)
+                _onboardingState.value = OnboardingState.GeminiKeyInvalid(e.message ?: "Failed to save key")
+            }
+        }
+    }
+
+    /**
+     * Continue with local setup by showing the Gemini key entry step.
+     * User chose to skip shared config and set up locally.
+     */
+    fun continueWithLocalSetup() {
+        Log.d(TAG, "Continuing with local setup")
+        // Check if Gemini is already configured
+        if (GeminiConfig.isConfigured(getApplication())) {
+            // Already have Gemini key, go straight to complete
+            ProfileManager.ensureDefaultProfileExists()
+            _onboardingState.value = OnboardingState.Step3Complete
+        } else {
+            // Need to enter Gemini key locally
+            _onboardingState.value = OnboardingState.Step1GeminiConfig
+        }
+    }
+
+    /**
+     * Skip to completion step.
+     * User confirmed they have shared config with API key or chose to complete without further setup.
+     */
+    fun skipToComplete() {
+        Log.d(TAG, "Skipping to complete step")
+        ProfileManager.ensureDefaultProfileExists()
+        _onboardingState.value = OnboardingState.Step3Complete
     }
 }

@@ -122,6 +122,62 @@
                 android:textSize="14sp"
                 android:layout_marginBottom="12dp" />
 
+            <!-- API Key Source Section -->
+            <TextView
+                android:id="@+id/apiKeySourceLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Source:"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginTop="8dp" />
+
+            <TextView
+                android:id="@+id/apiKeySourceText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Using local key"
+                android:textSize="14sp"
+                android:layout_marginBottom="8dp" />
+
+            <!-- Shared Key Section (visible when shared key available) -->
+            <LinearLayout
+                android:id="@+id/sharedKeySection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:layout_marginBottom="12dp">
+
+                <RadioGroup
+                    android:id="@+id/keySourceRadioGroup"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <RadioButton
+                        android:id="@+id/sharedKeyRadio"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Use shared key (from Home Assistant)"
+                        android:checked="true" />
+
+                    <RadioButton
+                        android:id="@+id/localKeyRadio"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Use local key (this device only)" />
+                </RadioGroup>
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/manageSharedKeyButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Manage Shared Key"
+                android:visibility="gone"
+                android:layout_marginBottom="12dp" />
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
