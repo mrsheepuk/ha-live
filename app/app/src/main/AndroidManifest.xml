@@ -50,6 +50,21 @@
             android:parentActivityName=".ui.ProfileManagementActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".ui.OAuthCallbackActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="halive"
+                    android:host="oauth"
+                    android:path="/callback" />
+            </intent-filter>
+        </activity>
+
         <!-- LiveSessionService for background audio recording -->
         <service
             android:name=".services.LiveSessionService"

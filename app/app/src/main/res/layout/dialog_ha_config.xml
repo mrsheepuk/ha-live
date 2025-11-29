@@ -5,14 +5,30 @@
     android:orientation="vertical"
     android:padding="24dp">
 
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Connect to Home Assistant"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Log in securely via your browser."
+        android:textSize="12sp"
+        android:layout_marginBottom="16dp" />
+
     <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/oauthUrlLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="Home Assistant URL"
         android:layout_marginBottom="16dp">
 
         <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/haUrlInput"
+            android:id="@+id/oauthUrlInput"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="textUri"
@@ -20,18 +36,10 @@
 
     </com.google.android.material.textfield.TextInputLayout>
 
-    <com.google.android.material.textfield.TextInputLayout
+    <Button
+        android:id="@+id/oauthLoginButton"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Long-Lived Access Token">
-
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/haTokenInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="textPassword"
-            android:singleLine="true" />
-
-    </com.google.android.material.textfield.TextInputLayout>
+        android:text="Log in with Home Assistant" />
 
 </LinearLayout>

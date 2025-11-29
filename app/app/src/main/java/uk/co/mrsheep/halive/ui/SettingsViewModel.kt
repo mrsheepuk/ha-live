@@ -1,12 +1,11 @@
 package uk.co.mrsheep.halive.ui
 
 import android.app.Application
-import android.net.Uri
+import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.GeminiConfig
-import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.core.WakeWordSettings
@@ -14,10 +13,15 @@ import uk.co.mrsheep.halive.core.ExecutionMode
 import uk.co.mrsheep.halive.core.OptimizationLevel
 import uk.co.mrsheep.halive.core.QuickMessage
 import uk.co.mrsheep.halive.core.QuickMessageConfig
+import uk.co.mrsheep.halive.core.OAuthConfig
+import uk.co.mrsheep.halive.core.SecureTokenStorage
+import uk.co.mrsheep.halive.core.OAuthTokenManager
+import uk.co.mrsheep.halive.core.HomeAssistantAuth
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.security.SecureRandom
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -30,13 +34,73 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val quickMessages: StateFlow<List<QuickMessage>> = _quickMessages
 
     private val app = application as HAGeminiApp
+    private val secureTokenStorage = SecureTokenStorage(application)
+    private val haAuth = HomeAssistantAuth(application)
 
     // This should be set from MainActivity when launching SettingsActivity
     var isChatActive: Boolean = false
 
+    // OAuth state tracking
+    private var pendingOAuthState: String? = null
+    private var pendingOAuthUrl: String = ""
+
+    fun startOAuthFlow(haUrl: String): String {
+        pendingOAuthUrl = haUrl.trimEnd('/')
+        // Generate random state for CSRF protection
+        val bytes = ByteArray(32)
+        SecureRandom().nextBytes(bytes)
+        pendingOAuthState = Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP)
+        return OAuthConfig.buildAuthUrl(pendingOAuthUrl, pendingOAuthState!!)
+    }
+
+    fun handleOAuthCallback(code: String, state: String?) {
+        viewModelScope.launch {
+            _settingsState.value = SettingsState.TestingConnection
+
+            // Validate state to prevent CSRF
+            if (state != pendingOAuthState) {
+                _settingsState.value = SettingsState.ConnectionFailed("Invalid OAuth state - possible security issue")
+                loadSettings()
+                return@launch
+            }
+
+            try {
+                val tokenManager = OAuthTokenManager(pendingOAuthUrl, secureTokenStorage)
+                // Exchange code for tokens (tokens are saved internally)
+                tokenManager.exchangeCodeForTokens(code)
+
+                // Initialize app with OAuth token manager
+                app.initializeHomeAssistantWithOAuth(pendingOAuthUrl, tokenManager)
+
+                // Test connection
+                val testMcpClient = McpClientManager(pendingOAuthUrl, tokenManager)
+                testMcpClient.connect()
+                val tools = testMcpClient.getTools()
+                testMcpClient.shutdown()
+
+                if (tools.isNotEmpty()) {
+                    _settingsState.value = SettingsState.ConnectionSuccess("Connected via OAuth! Found ${tools.size} tools")
+                } else {
+                    _settingsState.value = SettingsState.ConnectionFailed("Connected but no tools found")
+                }
+            } catch (e: Exception) {
+                _settingsState.value = SettingsState.ConnectionFailed("OAuth failed: ${e.message}")
+            }
+
+            loadSettings()
+        }
+    }
+
+    fun handleOAuthError(error: String) {
+        _settingsState.value = SettingsState.ConnectionFailed(error)
+        loadSettings()
+    }
+
     fun loadSettings() {
         viewModelScope.launch {
-            val (haUrl, haToken) = HAConfig.loadConfig(getApplication()) ?: Pair("Not configured", "")
+            val haUrl = haAuth.getHaUrl() ?: "Not configured"
+            val authMethodDisplay = if (haAuth.isAuthenticated()) "OAuth (Browser Login)" else "Not authenticated"
+
             val geminiKey = GeminiConfig.getApiKey(getApplication()) ?: "Not configured"
             val profileCount = ProfileManager.getAllProfiles().size
 
@@ -63,7 +127,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
             _settingsState.value = SettingsState.Loaded(
                 haUrl = haUrl,
-                haToken = haToken,
+                authMethod = authMethodDisplay,
                 profileCount = profileCount,
                 isReadOnly = isChatActive,
                 geminiApiKey = geminiKey,
@@ -82,14 +146,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
             var testMcpClient: McpClientManager? = null
             try {
-                val (url, token) = HAConfig.loadConfig(getApplication())
-                    ?: throw Exception("HA not configured")
-
-                // Store credentials in app for later use
-                app.initializeHomeAssistant(url, token)
+                val tokenManager = haAuth.getTokenManager()
+                    ?: throw Exception("Not authenticated")
+                val url = haAuth.getHaUrl()
+                    ?: throw Exception("HA URL not configured")
 
                 // Create temporary MCP connection for testing
-                testMcpClient = McpClientManager(url, token)
+                testMcpClient = McpClientManager(url, tokenManager)
                 testMcpClient.connect()
 
                 // Try to fetch tools

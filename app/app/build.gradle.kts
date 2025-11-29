@@ -57,6 +57,12 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
     implementation("androidx.activity:activity-ktx:1.8.0")
 
+    // AndroidX Security
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // AndroidX Browser (for Custom Tabs in OAuth flow)
+    implementation("androidx.browser:browser:1.7.0")
+
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 

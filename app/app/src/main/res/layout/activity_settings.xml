@@ -56,15 +56,15 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Token:"
+                android:text="Authentication:"
                 android:textSize="12sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/haTokenText"
+                android:id="@+id/haAuthMethodText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="••••••••"
+                android:text="Not authenticated"
                 android:textSize="14sp"
                 android:layout_marginBottom="12dp" />
 
