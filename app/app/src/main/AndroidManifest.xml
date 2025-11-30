@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <!-- FOREGROUND_SERVICE_CAMERA not needed - camera only used while activity is visible -->
     <uses-permission android:name="android.permission.CAMERA" />
 
     <!-- Camera features (not required, app works without camera) -->
@@ -71,10 +71,10 @@
             </intent-filter>
         </activity>
 
-        <!-- LiveSessionService for background audio recording and camera -->
+        <!-- LiveSessionService for background audio recording -->
         <service
             android:name=".services.LiveSessionService"
-            android:foregroundServiceType="microphone|camera"
+            android:foregroundServiceType="microphone"
             android:exported="false" />
 
         <!-- FileProvider for sharing crash logs -->
