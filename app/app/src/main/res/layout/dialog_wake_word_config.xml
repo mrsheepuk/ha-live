@@ -150,6 +150,7 @@
 
     <!-- Runtime Section -->
     <TextView
+        android:id="@+id/runtimeLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Inference Runtime:"

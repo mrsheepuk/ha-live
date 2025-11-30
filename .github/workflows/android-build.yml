@@ -1,0 +1,137 @@
+name: Android Multi-Flavor Build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write # Required for creating releases
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # PR builds - only tflite for efficiency
+  build-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Get short SHA
+        id: sha
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Decode Keystore
+        run: |
+          echo "Decoding and installing keystore..."
+          mkdir -p ~/.config/.android
+          echo "${DEBUG_KEYSTORE_B64}" | base64 --decode > ~/.config/.android/debug.keystore
+          ls -l ~/.config/.android/debug.keystore
+          echo "Keystore installed."
+        env:
+          DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+
+      - name: Build TFLite Release APK
+        working-directory: ./app
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleTfliteRelease
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: ha-live-tflite-pr-${{ github.event.pull_request.number }}-${{ steps.sha.outputs.SHORT_SHA }}
+          path: ./app/app/build/outputs/apk/tflite/release/*.apk
+
+  # Main/release builds - all three flavors
+  build-full:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        flavor: [onnx, tflite, nowake]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Get short SHA
+        id: sha
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Decode Keystore
+        run: |
+          echo "Decoding and installing keystore..."
+          mkdir -p ~/.config/.android
+          echo "${DEBUG_KEYSTORE_B64}" | base64 --decode > ~/.config/.android/debug.keystore
+          ls -l ~/.config/.android/debug.keystore
+          echo "Keystore installed."
+        env:
+          DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+
+      - name: Build Release APK
+        working-directory: ./app
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assemble${{ matrix.flavor == 'onnx' && 'Onnx' || matrix.flavor == 'tflite' && 'Tflite' || 'Nowake' }}Release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: ha-live-${{ matrix.flavor }}-${{ steps.sha.outputs.SHORT_SHA }}
+          path: ./app/app/build/outputs/apk/${{ matrix.flavor }}/release/*.apk
+
+  release:
+    needs: build-full
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          # Find and rename APKs with version and flavor
+          for flavor in onnx tflite nowake; do
+            find artifacts -name "*.apk" -path "*${flavor}*" -exec cp {} release/ha-live-${flavor}-${{ steps.version.outputs.VERSION }}.apk \;
+          done
+          ls -la release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release/*.apk

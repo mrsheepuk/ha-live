@@ -3,7 +3,29 @@ package uk.co.mrsheep.halive.services.wake
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import uk.co.mrsheep.halive.core.ExecutionMode
+import uk.co.mrsheep.halive.core.OptimizationLevel
 import uk.co.mrsheep.halive.core.WakeWordSettings
+
+/**
+ * Extension function to convert ExecutionMode to OrtSession.SessionOptions.ExecutionMode.
+ * Defined here to keep ONNX-specific code out of the shared WakeWordConfig.
+ */
+private fun ExecutionMode.toOrtExecutionMode(): OrtSession.SessionOptions.ExecutionMode = when (this) {
+    ExecutionMode.SEQUENTIAL -> OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL
+    ExecutionMode.PARALLEL -> OrtSession.SessionOptions.ExecutionMode.PARALLEL
+}
+
+/**
+ * Extension function to convert OptimizationLevel to OrtSession.SessionOptions.OptLevel.
+ * Defined here to keep ONNX-specific code out of the shared WakeWordConfig.
+ */
+private fun OptimizationLevel.toOrtOptLevel(): OrtSession.SessionOptions.OptLevel = when (this) {
+    OptimizationLevel.NO_OPT -> OrtSession.SessionOptions.OptLevel.NO_OPT
+    OptimizationLevel.BASIC_OPT -> OrtSession.SessionOptions.OptLevel.BASIC_OPT
+    OptimizationLevel.EXTENDED_OPT -> OrtSession.SessionOptions.OptLevel.EXTENDED_OPT
+    OptimizationLevel.ALL_OPT -> OrtSession.SessionOptions.OptLevel.ALL_OPT
+}
 
 /**
  * ONNX Runtime implementation of the WakeWordModel interface.
