@@ -203,13 +203,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (!isActive && wasSessionActive) {
                         // Session ended (transitioned from active to inactive)
                         // Handle audio helper handover
-                        val returnedHelper = liveSessionService?.yieldAudioHelper()
+                        val returnedHelper = liveSessionService?.yieldMicrophoneHelper()
 
                         if (returnedHelper != null) {
-                            Log.d(TAG, "Got AudioHelper back from session, resuming wake word")
+                            Log.d(TAG, "Got MicrophoneHelper back from session, resuming wake word")
                             wakeWordService.resumeWith(returnedHelper)
                         } else {
-                            Log.d(TAG, "No AudioHelper from session, starting wake word fresh")
+                            Log.d(TAG, "No MicrophoneHelper from session, starting wake word fresh")
                             startWakeWordListening()
                         }
                     } else if (isActive) {
@@ -283,12 +283,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             try {
-                // Yield AudioHelper from wake word service for seamless handover
-                val audioHelper = wakeWordService.yieldAudioHelper()
-                if (audioHelper != null) {
-                    Log.d(TAG, "Got AudioHelper from wake word service for handover")
+                // Yield MicrophoneHelper from wake word service for seamless handover
+                val microphoneHelper = wakeWordService.yieldMicrophoneHelper()
+                if (microphoneHelper != null) {
+                    Log.d(TAG, "Got MicrophoneHelper from wake word service for handover")
                 } else {
-                    Log.d(TAG, "No AudioHelper from wake word service (not listening or unavailable)")
+                    Log.d(TAG, "No MicrophoneHelper from wake word service (not listening or unavailable)")
                 }
 
                 // Start the foreground service
@@ -316,7 +316,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // Start the session in the service with audio helper for handover
-                liveSessionService?.startSession(profile, externalAudioHelper = audioHelper)
+                liveSessionService?.startSession(profile, externalMicrophoneHelper = microphoneHelper)
 
             } catch (e: Exception) {
                 _uiState.value = UiState.Error("Failed to start session: ${e.message}")

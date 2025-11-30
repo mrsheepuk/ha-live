@@ -21,9 +21,9 @@ import uk.co.mrsheep.halive.services.audio.toFloatChunks
 import uk.co.mrsheep.halive.services.wake.OwwModel
 
 /**
- * Manages wake word detection using AudioHelper and ONNX Runtime inference.
+ * Manages wake word detection using MicrophoneHelper and ONNX Runtime inference.
  *
- * Captures 16kHz mono PCM audio via the shared AudioHelper, processes it in
+ * Captures 16kHz mono PCM audio via the shared MicrophoneHelper, processes it in
  * 1152-sample chunks using Flow operators, and runs ONNX Runtime inference via
  * OwwModel. Triggers callback when detection confidence exceeds the configured threshold.
  *
@@ -45,7 +45,7 @@ class WakeWordService(
         private const val WARMUP_FRAMES = 20
     }
 
-    private var audioHelper: MicrophoneHelper? = null
+    private var microphoneHelper: MicrophoneHelper? = null
     private var recordingJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var isListening = false
@@ -88,7 +88,7 @@ class WakeWordService(
      * If already listening, returns early without error. AudioRecord requires
      * the RECORD_AUDIO permission, which is checked by MainActivity at app startup.
      *
-     * The method initializes the model, creates an AudioHelper instance, and launches
+     * The method initializes the model, creates a MicrophoneHelper instance, and launches
      * a Flow-based coroutine to process audio chunks in real-time.
      *
      * Note: Permission warning is suppressed because MainActivity verifies RECORD_AUDIO
@@ -110,8 +110,8 @@ class WakeWordService(
         }
 
         try {
-            audioHelper = MicrophoneHelper.build(SAMPLE_RATE)
-            audioHelper?.enablePreBuffering(1500)  // Buffer 1.5 seconds of audio
+            microphoneHelper = MicrophoneHelper.build(SAMPLE_RATE)
+            microphoneHelper?.enablePreBuffering(1500)  // Buffer 1.5 seconds of audio
             isListening = true
             framesProcessed = 0  // Reset warm-up counter
             Log.d(TAG, "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE, threshold=${currentSettings.threshold}, warmup=$WARMUP_FRAMES frames)")
@@ -131,10 +131,10 @@ class WakeWordService(
 
     /**
      * Creates and launches the recording pipeline for wake word detection.
-     * Extracted to allow reuse when resuming with an existing AudioHelper.
+     * Extracted to allow reuse when resuming with an existing MicrophoneHelper.
      */
     private fun launchRecordingPipeline() {
-        val helper = audioHelper ?: return
+        val helper = microphoneHelper ?: return
         val model = getOrCreateModel()
 
         recordingJob = helper.listenToRecording()
@@ -205,7 +205,7 @@ class WakeWordService(
      * If not currently listening, logs a debug message and returns.
      */
     fun stopListening() {
-        if (!isListening && audioHelper == null) {
+        if (!isListening && microphoneHelper == null) {
             Log.d(TAG, "Not currently listening for wake word")
             return
         }
@@ -215,35 +215,35 @@ class WakeWordService(
     }
 
     /**
-     * Yields the AudioHelper for handover to another service.
+     * Yields the MicrophoneHelper for handover to another service.
      * Pauses recording but does NOT release resources.
-     * Returns null if not currently listening or no AudioHelper available.
+     * Returns null if not currently listening or no MicrophoneHelper available.
      *
      * After calling this, the WakeWordService is no longer listening and
-     * the caller takes ownership of the AudioHelper.
+     * the caller takes ownership of the MicrophoneHelper.
      */
-    fun yieldAudioHelper(): MicrophoneHelper? {
-        if (!isListening || audioHelper == null) {
-            Log.d(TAG, "yieldAudioHelper: not listening or no audioHelper, returning null")
+    fun yieldMicrophoneHelper(): MicrophoneHelper? {
+        if (!isListening || microphoneHelper == null) {
+            Log.d(TAG, "yieldMicrophoneHelper: not listening or no microphoneHelper, returning null")
             return null
         }
 
-        Log.d(TAG, "Yielding AudioHelper for handover")
+        Log.d(TAG, "Yielding MicrophoneHelper for handover")
         isListening = false
         recordingJob?.cancel()
         recordingJob = null
-        audioHelper?.pauseRecording()
+        microphoneHelper?.pauseRecording()
 
-        val helper = audioHelper
-        audioHelper = null  // Transfer ownership
+        val helper = microphoneHelper
+        microphoneHelper = null  // Transfer ownership
         return helper
     }
 
     /**
-     * Resumes wake word listening with an existing AudioHelper.
-     * Used after a conversation session returns the AudioHelper.
+     * Resumes wake word listening with an existing MicrophoneHelper.
+     * Used after a conversation session returns the MicrophoneHelper.
      *
-     * @param helper The AudioHelper to resume with (takes ownership)
+     * @param helper The MicrophoneHelper to resume with (takes ownership)
      */
     fun resumeWith(helper: MicrophoneHelper) {
         if (isListening) {
@@ -252,28 +252,28 @@ class WakeWordService(
             return
         }
 
-        // Verify AudioHelper is still usable
+        // Verify MicrophoneHelper is still usable
         if (helper.isReleased) {
-            Log.w(TAG, "AudioHelper already released, starting fresh")
+            Log.w(TAG, "MicrophoneHelper already released, starting fresh")
             startListening()
             return
         }
 
-        Log.d(TAG, "Resuming wake word listening with existing AudioHelper")
+        Log.d(TAG, "Resuming wake word listening with existing MicrophoneHelper")
 
         try {
             // Reset model accumulators for fresh detection
             getOrCreateModel().resetAccumulators()
 
-            audioHelper = helper
-            audioHelper?.clearPreBuffer()  // Fresh start for buffering
+            microphoneHelper = helper
+            microphoneHelper?.clearPreBuffer()  // Fresh start for buffering
             isListening = true
             framesProcessed = 0
 
             launchRecordingPipeline()
-            Log.d(TAG, "Successfully resumed with existing AudioHelper")
+            Log.d(TAG, "Successfully resumed with existing MicrophoneHelper")
         } catch (e: Exception) {
-            Log.e(TAG, "Error resuming with AudioHelper, starting fresh: ${e.message}", e)
+            Log.e(TAG, "Error resuming with MicrophoneHelper, starting fresh: ${e.message}", e)
             helper.release()
             startListening()
         }
@@ -309,15 +309,15 @@ class WakeWordService(
     /**
      * Cleans up audio resources.
      *
-     * Cancels the recording job and releases AudioHelper. Note: Model is NOT closed here
+     * Cancels the recording job and releases MicrophoneHelper. Note: Model is NOT closed here
      * for battery efficiency - it's reused across listening sessions.
      */
     private fun cleanup() {
         isListening = false
         recordingJob?.cancel()
         recordingJob = null
-        audioHelper?.release()
-        audioHelper = null
+        microphoneHelper?.release()
+        microphoneHelper = null
     }
 
     /**

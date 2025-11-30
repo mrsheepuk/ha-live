@@ -42,19 +42,19 @@ interface ConversationService {
     /**
      * Start a conversation session.
      *
-     * @param audioHelper Optional AudioHelper for stream handover support
+     * @param microphoneHelper Optional MicrophoneHelper for stream handover support
      */
-    suspend fun startSession(audioHelper: MicrophoneHelper? = null)
+    suspend fun startSession(microphoneHelper: MicrophoneHelper? = null)
 
     /**
-     * Yields the AudioHelper for handover to another service.
-     * Returns the AudioHelper if this service supports handover and has one to yield.
-     * Returns null if handover is not supported or no AudioHelper is available.
+     * Yields the MicrophoneHelper for handover to another service.
+     * Returns the MicrophoneHelper if this service supports handover and has one to yield.
+     * Returns null if handover is not supported or no MicrophoneHelper is available.
      *
-     * After yielding, the service should not release the AudioHelper -
+     * After yielding, the service should not release the MicrophoneHelper -
      * the caller takes ownership.
      */
-    fun yieldAudioHelper(): MicrophoneHelper?
+    fun yieldMicrophoneHelper(): MicrophoneHelper?
 
     /**
      * Send a text message to the AI during an active session.

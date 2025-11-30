@@ -120,7 +120,7 @@ class GeminiLiveSession(
 
     // Recording (microphone input)
     private var microphoneHelper: MicrophoneHelper? = null
-    /** Whether we own the audioHelper and should release it on close */
+    /** Whether we own the microphoneHelper and should release it on close */
     private var ownsMicrophoneHelper: Boolean = true
 
     // New audio pipeline components for playback
@@ -178,11 +178,11 @@ class GeminiLiveSession(
         if (externalMicrophoneHelper != null) {
             microphoneHelper = externalMicrophoneHelper
             ownsMicrophoneHelper = false
-            Log.d(TAG, "Using external AudioHelper (handover mode)")
+            Log.d(TAG, "Using external MicrophoneHelper (handover mode)")
         } else {
             microphoneHelper = MicrophoneHelper.build()
             ownsMicrophoneHelper = true
-            Log.d(TAG, "Created new AudioHelper")
+            Log.d(TAG, "Created new MicrophoneHelper")
         }
 
         // Initialize new audio playback pipeline
@@ -615,24 +615,24 @@ class GeminiLiveSession(
     }
 
     /**
-     * Yields the AudioHelper back for handover to another service.
-     * Only works if AudioHelper was provided externally (not owned by this session).
-     * Returns null if we created our own AudioHelper or session is not active.
+     * Yields the MicrophoneHelper back for handover to another service.
+     * Only works if MicrophoneHelper was provided externally (not owned by this session).
+     * Returns null if we created our own MicrophoneHelper or session is not active.
      *
-     * After calling this, the session will not release the AudioHelper on close.
+     * After calling this, the session will not release the MicrophoneHelper on close.
      */
-    fun yieldAudioHelper(): MicrophoneHelper? {
+    fun yieldMicrophoneHelper(): MicrophoneHelper? {
         if (ownsMicrophoneHelper) {
-            Log.d(TAG, "yieldAudioHelper: we own the AudioHelper, cannot yield")
+            Log.d(TAG, "yieldMicrophoneHelper: we own the MicrophoneHelper, cannot yield")
             return null
         }
 
         if (microphoneHelper == null) {
-            Log.d(TAG, "yieldAudioHelper: no AudioHelper to yield")
+            Log.d(TAG, "yieldMicrophoneHelper: no MicrophoneHelper to yield")
             return null
         }
 
-        Log.d(TAG, "Yielding AudioHelper back for handover")
+        Log.d(TAG, "Yielding MicrophoneHelper back for handover")
         val helper = microphoneHelper
         helper?.pauseRecording()
         microphoneHelper = null
@@ -665,10 +665,10 @@ class GeminiLiveSession(
         if (ownsMicrophoneHelper) {
             microphoneHelper?.release()
             microphoneHelper = null
-            Log.d(TAG, "Released owned AudioHelper")
+            Log.d(TAG, "Released owned MicrophoneHelper")
         } else {
-            // Don't null out audioHelper - leave it for yieldAudioHelper() to return
-            Log.d(TAG, "Not releasing AudioHelper (external ownership, available for yield)")
+            // Don't null out microphoneHelper - leave it for yieldMicrophoneHelper() to return
+            Log.d(TAG, "Not releasing MicrophoneHelper (external ownership, available for yield)")
         }
 
         // Launch close in a separate scope so it isn't cancelled by sessionScope.cancel()

@@ -77,10 +77,10 @@ class MicrophoneHelper(
     private var released: Boolean = false
     private var preBuffer: CircularAudioBuffer? = null
 
-    /** Whether this AudioHelper has been released and can no longer be used. */
+    /** Whether this MicrophoneHelper has been released and can no longer be used. */
     val isReleased: Boolean get() = released
 
-    /** The audio session ID for this AudioHelper's AudioRecord. Used for echo cancellation. */
+    /** The audio session ID for this MicrophoneHelper's AudioRecord. Used for echo cancellation. */
     val audioSessionId: Int get() = recorder.audioSessionId
 
     /**
@@ -101,7 +101,7 @@ class MicrophoneHelper(
             // Already stopped
         }
         recorder.release()
-        Log.d(TAG, "AudioHelper released")
+        Log.d(TAG, "MicrophoneHelper released")
     }
 
     /**
@@ -166,7 +166,7 @@ class MicrophoneHelper(
     fun listenToRecording(): Flow<ByteArray> {
         Log.d(TAG, "listenToRecording() called, released=$released, recordingState=${recorder.recordingState}")
         if (released) {
-            Log.w(TAG, "listenToRecording: AudioHelper already released, returning empty flow")
+            Log.w(TAG, "listenToRecording: MicrophoneHelper already released, returning empty flow")
             return emptyFlow()
         }
         resumeRecording()

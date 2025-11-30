@@ -195,9 +195,9 @@ class LiveSessionService : Service(), AppLogger {
      * Starts a conversation session with the given profile.
      *
      * @param profile The profile configuration for the session
-     * @param externalAudioHelper Optional AudioHelper to handover from external source
+     * @param externalMicrophoneHelper Optional MicrophoneHelper to handover from external source
      */
-    fun startSession(profile: Profile, externalAudioHelper: MicrophoneHelper? = null) {
+    fun startSession(profile: Profile, externalMicrophoneHelper: MicrophoneHelper? = null) {
         serviceScope.launch {
             try {
                 _connectionState.value = UiState.Initializing
@@ -259,7 +259,7 @@ class LiveSessionService : Service(), AppLogger {
 
                 _isSessionActive.value = true
                 _connectionState.value = UiState.ChatActive
-                conversationService!!.startSession(audioHelper = externalAudioHelper)
+                conversationService!!.startSession(microphoneHelper = externalMicrophoneHelper)
 
                 // Play ready beep to indicate session is active
                 BeepHelper.playReadyBeep(this@LiveSessionService)
@@ -359,11 +359,11 @@ class LiveSessionService : Service(), AppLogger {
     }
 
     /**
-     * Yields the AudioHelper from the conversation service for handover.
+     * Yields the MicrophoneHelper from the conversation service for handover.
      * Returns null if conversation service doesn't support handover or no session active.
      */
-    fun yieldAudioHelper(): MicrophoneHelper? {
-        return conversationService?.yieldAudioHelper()
+    fun yieldMicrophoneHelper(): MicrophoneHelper? {
+        return conversationService?.yieldMicrophoneHelper()
     }
 
     /**
@@ -473,7 +473,7 @@ class LiveSessionService : Service(), AppLogger {
 
                     serviceScope.launch {
                         // Allow conversation service to send the function response
-                        delay(2500)
+u                        delay(2500)
                         stopSession()
                     }
 
