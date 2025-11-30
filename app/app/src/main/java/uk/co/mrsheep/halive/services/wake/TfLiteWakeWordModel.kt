@@ -52,7 +52,12 @@ class TfLiteWakeWordModel(
 
     init {
         melInterpreter = try {
-            loadModel(melSpectrogramFile, settings)
+            val interpreter = loadModel(melSpectrogramFile, settings)
+            // Resize mel input tensor to our fixed input size [1, 1152]
+            // The TFLite melspectrogram model has dynamic input shape
+            interpreter.resizeInput(0, intArrayOf(1, MEL_INPUT_COUNT))
+            interpreter.allocateTensors()
+            interpreter
         } catch (t: Throwable) {
             throw t
         }
