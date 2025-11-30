@@ -110,8 +110,9 @@ class OwwModel(
             accumulatedEmbOutputs[i] = if (i < WAKE_INPUT_COUNT - EMB_OUTPUT_COUNT) {
                 accumulatedEmbOutputs[i + EMB_OUTPUT_COUNT]
             } else {
-                // embOutput is already FloatArray[96], use it directly
-                embOutput
+                // Copy embedding to avoid reference issues - without copyOf(), all 16
+                // slots would point to the same array, destroying temporal context
+                embOutput.copyOf()
             }
         }
         if (accumulatedEmbOutputs[0].isEmpty()) {
