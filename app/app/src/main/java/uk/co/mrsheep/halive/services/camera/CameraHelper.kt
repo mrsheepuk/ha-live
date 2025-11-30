@@ -355,34 +355,76 @@ class CameraHelper(
     }
 
     private fun yuv420ToNv21(imageProxy: ImageProxy): ByteArray {
-        val yBuffer = imageProxy.planes[0].buffer
-        val uBuffer = imageProxy.planes[1].buffer
-        val vBuffer = imageProxy.planes[2].buffer
+        val width = imageProxy.width
+        val height = imageProxy.height
 
-        val ySize = yBuffer.remaining()
-        val uSize = uBuffer.remaining()
-        val vSize = vBuffer.remaining()
+        val yPlane = imageProxy.planes[0]
+        val uPlane = imageProxy.planes[1]
+        val vPlane = imageProxy.planes[2]
 
-        val nv21 = ByteArray(ySize + uSize + vSize)
+        val yBuffer = yPlane.buffer
+        val uBuffer = uPlane.buffer
+        val vBuffer = vPlane.buffer
 
-        // Copy Y plane
-        yBuffer.get(nv21, 0, ySize)
+        val yRowStride = yPlane.rowStride
+        val uvRowStride = uPlane.rowStride
+        val uvPixelStride = uPlane.pixelStride
 
-        // Copy VU interleaved (NV21 format: YYYYYYYY VUVU)
-        val uvPixelStride = imageProxy.planes[1].pixelStride
+        // NV21 format: Y plane followed by interleaved VU
+        // Total size: width * height * 3 / 2
+        val nv21 = ByteArray(width * height + (width * height / 2))
+
+        // Copy Y plane row by row (handles row stride padding)
+        var destOffset = 0
+        if (yRowStride == width) {
+            // No padding, can copy directly
+            yBuffer.rewind()
+            yBuffer.get(nv21, 0, width * height)
+            destOffset = width * height
+        } else {
+            // Has padding, copy row by row
+            for (row in 0 until height) {
+                yBuffer.position(row * yRowStride)
+                yBuffer.get(nv21, destOffset, width)
+                destOffset += width
+            }
+        }
+
+        // Copy UV planes - need to interleave V and U for NV21 format (VUVU)
+        val uvHeight = height / 2
+        val uvWidth = width / 2
+
         if (uvPixelStride == 1) {
-            // Planar format - need to interleave
-            val uBytes = ByteArray(uSize)
-            val vBytes = ByteArray(vSize)
-            uBuffer.get(uBytes)
-            vBuffer.get(vBytes)
-            for (i in 0 until min(uSize, vSize)) {
-                nv21[ySize + i * 2] = vBytes[i]
-                nv21[ySize + i * 2 + 1] = uBytes[i]
+            // Planar format (rare) - U and V are separate, need to interleave
+            for (row in 0 until uvHeight) {
+                for (col in 0 until uvWidth) {
+                    val uvIndex = row * uvRowStride + col
+                    nv21[destOffset++] = vBuffer.get(uvIndex)
+                    nv21[destOffset++] = uBuffer.get(uvIndex)
+                }
+            }
+        } else if (uvPixelStride == 2) {
+            // Semi-planar format (common) - UV are interleaved in buffer
+            // Check if it's already VU order (NV21) or UV order (NV12)
+            // CameraX typically gives us UV (NV12), so we need to swap
+            for (row in 0 until uvHeight) {
+                for (col in 0 until uvWidth) {
+                    val uvIndex = row * uvRowStride + col * uvPixelStride
+                    // V comes from vBuffer, U comes from uBuffer
+                    nv21[destOffset++] = vBuffer.get(uvIndex)
+                    nv21[destOffset++] = uBuffer.get(uvIndex)
+                }
             }
         } else {
-            // Semi-planar format - V and U are already interleaved
-            vBuffer.get(nv21, ySize, vSize)
+            // Unexpected pixel stride, log and try best effort
+            Log.w(TAG, "Unexpected UV pixel stride: $uvPixelStride")
+            for (row in 0 until uvHeight) {
+                for (col in 0 until uvWidth) {
+                    val uvIndex = row * uvRowStride + col * uvPixelStride
+                    nv21[destOffset++] = vBuffer.get(uvIndex)
+                    nv21[destOffset++] = uBuffer.get(uvIndex)
+                }
+            }
         }
 
         return nv21
