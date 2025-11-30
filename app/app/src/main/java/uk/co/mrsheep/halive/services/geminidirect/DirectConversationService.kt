@@ -9,6 +9,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
+import uk.co.mrsheep.halive.services.camera.CameraHelper
 import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.mcp.McpTool
@@ -187,6 +188,38 @@ class DirectConversationService(private val context: Context) :
      */
     override fun yieldMicrophoneHelper(): MicrophoneHelper? {
         return session?.yieldMicrophoneHelper()
+    }
+
+    /**
+     * Start video capture and streaming to the AI.
+     *
+     * @param camera CameraHelper instance providing video frames
+     */
+    override fun startVideoCapture(camera: CameraHelper) {
+        try {
+            val activeSession = session
+            if (activeSession == null) {
+                Log.w(TAG, "Cannot start video capture - no active session")
+                return
+            }
+
+            activeSession.startVideoCapture(camera)
+            Log.d(TAG, "Video capture started")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting video capture", e)
+        }
+    }
+
+    /**
+     * Stop video capture and streaming.
+     */
+    override fun stopVideoCapture() {
+        try {
+            session?.stopVideoCapture()
+            Log.d(TAG, "Video capture stopped")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping video capture", e)
+        }
     }
 
     /**

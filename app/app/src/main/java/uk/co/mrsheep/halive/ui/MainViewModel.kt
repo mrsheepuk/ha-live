@@ -24,6 +24,8 @@ import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.core.QuickMessage
 import uk.co.mrsheep.halive.core.QuickMessageConfig
 import uk.co.mrsheep.halive.core.TranscriptionEntry
+import uk.co.mrsheep.halive.services.camera.CameraFacing
+import uk.co.mrsheep.halive.services.camera.CameraHelper
 
 // Define the different states our UI can be in
 sealed class UiState {
@@ -66,6 +68,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Wake word enabled state
     private val _wakeWordEnabled = MutableStateFlow(false)
     val wakeWordEnabled: StateFlow<Boolean> = _wakeWordEnabled
+
+    // Camera state (mirrored from service)
+    private val _isCameraEnabled = MutableStateFlow(false)
+    val isCameraEnabled: StateFlow<Boolean> = _isCameraEnabled.asStateFlow()
+
+    private val _cameraFacing = MutableStateFlow(CameraFacing.FRONT)
+    val cameraFacing: StateFlow<CameraFacing> = _cameraFacing.asStateFlow()
 
     // Track if user has ever started a chat in this session (for layout transition)
     private val _hasEverChatted = MutableStateFlow(false)
@@ -212,12 +221,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             Log.d(TAG, "No MicrophoneHelper from session, starting wake word fresh")
                             startWakeWordListening()
                         }
+
+                        // Reset camera state when session ends
+                        _isCameraEnabled.value = false
                     } else if (isActive) {
                         // Session started, stop wake word
                         wakeWordService.stopListening()
                     }
                     // Update tracking state
                     wasSessionActive = isActive
+                }
+            }
+
+            // Collect camera enabled state
+            viewModelScope.launch {
+                service.isCameraEnabled.collect { enabled ->
+                    _isCameraEnabled.value = enabled
+                }
+            }
+
+            // Collect camera facing state
+            viewModelScope.launch {
+                service.cameraFacing.collect { facing ->
+                    _cameraFacing.value = facing
                 }
             }
         }
@@ -363,6 +389,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // User turned it ON and we're ready -> start listening
             startWakeWordListening()
         }
+    }
+
+    /**
+     * Start video capture with the provided camera helper.
+     * Called by MainActivity when camera toggle is enabled.
+     *
+     * @param camera The CameraHelper instance to use for video capture
+     */
+    fun startVideoCapture(camera: CameraHelper) {
+        if (!isSessionActive()) {
+            Log.w(TAG, "Cannot start video capture - no active session")
+            return
+        }
+
+        liveSessionService?.startVideoCapture(camera)
+        Log.d(TAG, "Video capture started via ViewModel")
+    }
+
+    /**
+     * Stop video capture.
+     * Called by MainActivity when camera toggle is disabled.
+     */
+    fun stopVideoCapture() {
+        liveSessionService?.stopVideoCapture()
+        Log.d(TAG, "Video capture stopped via ViewModel")
+    }
+
+    /**
+     * Update the camera facing direction.
+     * Called by MainActivity when the user switches camera.
+     *
+     * @param facing The new camera facing direction
+     */
+    fun setCameraFacing(facing: CameraFacing) {
+        liveSessionService?.setCameraFacing(facing)
     }
 
     /**

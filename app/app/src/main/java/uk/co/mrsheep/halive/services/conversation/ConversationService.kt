@@ -2,6 +2,7 @@ package uk.co.mrsheep.halive.services.conversation
 
 import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
+import uk.co.mrsheep.halive.services.camera.CameraHelper
 import uk.co.mrsheep.halive.services.mcp.McpTool
 
 /**
@@ -67,6 +68,18 @@ interface ConversationService {
      * Stop the current session.
      */
     fun stopSession()
+
+    /**
+     * Start video capture and streaming to the AI.
+     *
+     * @param camera CameraHelper instance providing video frames
+     */
+    fun startVideoCapture(camera: CameraHelper)
+
+    /**
+     * Stop video capture and streaming.
+     */
+    fun stopVideoCapture()
 
     /**
      * Clean up resources.

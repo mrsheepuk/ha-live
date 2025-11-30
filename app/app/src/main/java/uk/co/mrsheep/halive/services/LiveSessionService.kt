@@ -31,6 +31,8 @@ import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
+import uk.co.mrsheep.halive.services.camera.CameraFacing
+import uk.co.mrsheep.halive.services.camera.CameraHelper
 import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.conversation.ConversationServiceFactory
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
@@ -85,6 +87,16 @@ class LiveSessionService : Service(), AppLogger {
 
     private val _isSessionActive = MutableStateFlow(false)
     val isSessionActive: StateFlow<Boolean> = _isSessionActive.asStateFlow()
+
+    // Camera state
+    private val _isCameraEnabled = MutableStateFlow(false)
+    val isCameraEnabled: StateFlow<Boolean> = _isCameraEnabled.asStateFlow()
+
+    private val _cameraFacing = MutableStateFlow(CameraFacing.FRONT)
+    val cameraFacing: StateFlow<CameraFacing> = _cameraFacing.asStateFlow()
+
+    // Camera helper is provided externally (managed by MainActivity for lifecycle binding)
+    private var cameraHelper: CameraHelper? = null
 
     inner class LocalBinder : Binder() {
         fun getService(): LiveSessionService = this@LiveSessionService
@@ -333,6 +345,12 @@ class LiveSessionService : Service(), AppLogger {
      */
     fun stopSession() {
         BeepHelper.playEndBeep(this)
+
+        // Stop video capture first
+        if (_isCameraEnabled.value) {
+            stopVideoCapture()
+        }
+
         try {
             conversationService?.stopSession()
         } catch (e: Exception) {
@@ -364,6 +382,46 @@ class LiveSessionService : Service(), AppLogger {
      */
     fun yieldMicrophoneHelper(): MicrophoneHelper? {
         return conversationService?.yieldMicrophoneHelper()
+    }
+
+    /**
+     * Start video capture and streaming to the conversation.
+     *
+     * @param camera The CameraHelper instance to use for video capture
+     */
+    fun startVideoCapture(camera: CameraHelper) {
+        if (!_isSessionActive.value) {
+            Log.w(TAG, "Cannot start video capture - no active session")
+            return
+        }
+
+        cameraHelper = camera
+        conversationService?.startVideoCapture(camera)
+        _isCameraEnabled.value = true
+
+        Log.i(TAG, "Video capture started")
+    }
+
+    /**
+     * Stop video capture and streaming.
+     */
+    fun stopVideoCapture() {
+        conversationService?.stopVideoCapture()
+        cameraHelper = null
+        _isCameraEnabled.value = false
+
+        Log.i(TAG, "Video capture stopped")
+    }
+
+    /**
+     * Update the camera facing direction state.
+     * The actual camera switching is handled by MainActivity which owns the CameraHelper lifecycle.
+     *
+     * @param facing The new camera facing direction
+     */
+    fun setCameraFacing(facing: CameraFacing) {
+        _cameraFacing.value = facing
+        Log.d(TAG, "Camera facing updated to: $facing")
     }
 
     /**
