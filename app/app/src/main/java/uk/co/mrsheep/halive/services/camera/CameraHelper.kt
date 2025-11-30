@@ -204,7 +204,7 @@ class CameraHelper(
 
         // Image analysis use case (for capturing frames)
         imageAnalysis = ImageAnalysis.Builder()
-            .setTargetResolution(Size(MAX_DIMENSION, MAX_DIMENSION))
+            .setTargetResolution(Size(maxDimension, maxDimension))
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
             .build()
