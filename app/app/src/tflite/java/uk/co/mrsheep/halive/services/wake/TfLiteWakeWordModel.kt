@@ -1,6 +1,6 @@
 package uk.co.mrsheep.halive.services.wake
 
-import com.google.ai.edge.litert.Interpreter
+import org.tensorflow.lite.Interpreter
 import uk.co.mrsheep.halive.core.WakeWordSettings
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
