@@ -1,0 +1,12 @@
+# Requirements for ONNX to TFLite conversion
+# Install with: pip install -r requirements.txt
+
+onnx>=1.15.0
+onnxruntime>=1.16.0
+tensorflow>=2.15.0
+tf_keras>=2.15.0
+onnx2tf>=1.25.0
+psutil
+flatbuffers
+# Note: ai-edge-litert may have conflicts with tensorflow
+# Try version 1.4.0 if you have issues: pip install ai-edge-litert==1.4.0

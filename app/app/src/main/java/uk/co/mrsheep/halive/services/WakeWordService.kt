@@ -41,11 +41,11 @@ class WakeWordService(
     companion object {
         private const val TAG = "WakeWordService"
         private const val SAMPLE_RATE = 16000
-        private const val CHUNK_SIZE = 1152 // OnnxWakeWordModel.MEL_INPUT_COUNT
+        private const val CHUNK_SIZE = 1280 // OnnxWakeWordModel.MEL_INPUT_COUNT (80ms @ 16kHz)
 
         // Number of frames to skip after starting to allow model to warm up.
         // The model needs time to fill its accumulators and stabilize.
-        // At 16kHz with 1152-sample chunks, each frame is ~72ms, so 20 frames ≈ 1.4 seconds
+        // At 16kHz with 1280-sample chunks, each frame is 80ms, so 20 frames = 1.6 seconds
         private const val WARMUP_FRAMES = 20
     }
 

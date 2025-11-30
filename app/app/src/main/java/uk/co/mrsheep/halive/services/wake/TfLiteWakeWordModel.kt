@@ -51,13 +51,10 @@ class TfLiteWakeWordModel(
     private val transformBuffer = Array(MEL_FEATURE_SIZE) { FloatArray(1) }
 
     init {
+        // The melspectrogram TFLite model now has static input shape [1, 1280]
+        // No resizeInput needed - the model was converted with fixed dimensions
         melInterpreter = try {
-            val interpreter = loadModel(melSpectrogramFile, settings)
-            // Resize mel input tensor to our fixed input size [1, 1152]
-            // The TFLite melspectrogram model has dynamic input shape
-            interpreter.resizeInput(0, intArrayOf(1, MEL_INPUT_COUNT))
-            interpreter.allocateTensors()
-            interpreter
+            loadModel(melSpectrogramFile, settings)
         } catch (t: Throwable) {
             throw t
         }
@@ -171,8 +168,9 @@ class TfLiteWakeWordModel(
 
     companion object {
         // mel model shape is [1,x] -> [1,1,floor((x-512)/160)+1,32]
-        const val MEL_INPUT_COUNT = 512 + 160 * 4 // chosen by us, 1152 samples @ 16kHz = 72ms
-        const val MEL_OUTPUT_COUNT = (MEL_INPUT_COUNT - 512) / 160 + 1 // formula obtained empirically
+        // Using 1280 samples to match Python openWakeWord default and static TFLite model
+        const val MEL_INPUT_COUNT = 1280 // 1280 samples @ 16kHz = 80ms
+        const val MEL_OUTPUT_COUNT = (MEL_INPUT_COUNT - 512) / 160 + 1 // = 5
         const val MEL_FEATURE_SIZE = 32 // also the size of features received by the emb model
 
         // emb model shape is [1,76,32,1] -> [1,1,1,96]
