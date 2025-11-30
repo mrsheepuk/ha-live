@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import uk.co.mrsheep.halive.core.GeminiConfig
+import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.mcp.McpTool
@@ -104,9 +105,9 @@ class DirectConversationService(private val context: Context) :
      * Establishes a connection to the Gemini Live API and starts the audio conversation.
      * Tool calls from the model are handled via the onToolCall callback.
      *
-     * @param audioHelper Optional AudioHelper for audio stream handover
+     * @param microphoneHelper Optional MicrophoneHelper for audio stream handover
      */
-    override suspend fun startSession(audioHelper: AudioHelper?) {
+    override suspend fun startSession(microphoneHelper: MicrophoneHelper?) {
         try {
             // Get API key from config
             val apiKey = GeminiConfig.getApiKey(context)
@@ -136,7 +137,7 @@ class DirectConversationService(private val context: Context) :
                 interruptable = interruptable,
                 onToolCall = protocolToolCallHandler,
                 onTranscription = transcriptor,
-                externalAudioHelper = audioHelper
+                externalMicrophoneHelper = microphoneHelper
             )
 
             Log.d(TAG, "Direct protocol session started successfully")
@@ -169,7 +170,7 @@ class DirectConversationService(private val context: Context) :
 
     /**
      * Stop the current session.
-     * Note: We don't null session here so yieldAudioHelper() can still access it.
+     * Note: We don't null session here so yieldMicrophoneHelper() can still access it.
      * The session reference is nulled in cleanup() instead.
      */
     override fun stopSession() {
@@ -182,10 +183,10 @@ class DirectConversationService(private val context: Context) :
     }
 
     /**
-     * Yields the AudioHelper from the underlying GeminiLiveSession.
+     * Yields the MicrophoneHelper from the underlying GeminiLiveSession.
      */
-    override fun yieldAudioHelper(): AudioHelper? {
-        return session?.yieldAudioHelper()
+    override fun yieldMicrophoneHelper(): MicrophoneHelper? {
+        return session?.yieldMicrophoneHelper()
     }
 
     /**

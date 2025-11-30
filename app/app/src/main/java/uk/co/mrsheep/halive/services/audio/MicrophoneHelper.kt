@@ -1,4 +1,4 @@
-package uk.co.mrsheep.halive.services.geminidirect
+package uk.co.mrsheep.halive.services.audio
 
 import android.Manifest
 import android.media.AudioFormat
@@ -69,7 +69,7 @@ internal class CircularAudioBuffer(
  * Playback is now handled separately by AudioPlaybackThread + JitterBuffer.
  * This class is responsible only for capturing microphone input.
  */
-class AudioHelper(
+class MicrophoneHelper(
     /** AudioRecord for recording from the system microphone. */
     private val recorder: AudioRecord,
     val sampleRate: Int
@@ -77,16 +77,16 @@ class AudioHelper(
     private var released: Boolean = false
     private var preBuffer: CircularAudioBuffer? = null
 
-    /** Whether this AudioHelper has been released and can no longer be used. */
+    /** Whether this MicrophoneHelper has been released and can no longer be used. */
     val isReleased: Boolean get() = released
 
-    /** The audio session ID for this AudioHelper's AudioRecord. Used for echo cancellation. */
+    /** The audio session ID for this MicrophoneHelper's AudioRecord. Used for echo cancellation. */
     val audioSessionId: Int get() = recorder.audioSessionId
 
     /**
      * Release the system resources on the recorder.
      *
-     * Once an [AudioHelper] has been "released", it can _not_ be used again.
+     * Once an [MicrophoneHelper] has been "released", it can _not_ be used again.
      *
      * This method can safely be called multiple times, as it won't do anything if this instance has
      * already been released.
@@ -101,13 +101,13 @@ class AudioHelper(
             // Already stopped
         }
         recorder.release()
-        Log.d(TAG, "AudioHelper released")
+        Log.d(TAG, "MicrophoneHelper released")
     }
 
     /**
      * Pause the recording of the microphone, if it's recording.
      *
-     * Does nothing if this [AudioHelper] has been [released][release].
+     * Does nothing if this [MicrophoneHelper] has been [released][release].
      *
      * @see resumeRecording
      */
@@ -125,7 +125,7 @@ class AudioHelper(
     /**
      * Resumes the recording of the microphone, if it's not already running.
      *
-     * Does nothing if this [AudioHelper] has been [released][release].
+     * Does nothing if this [MicrophoneHelper] has been [released][release].
      *
      * @see pauseRecording
      */
@@ -161,12 +161,12 @@ class AudioHelper(
     /**
      * Start perpetually recording the system microphone, and return the bytes read in a flow.
      *
-     * Returns an empty flow if this [AudioHelper] has been [released][release].
+     * Returns an empty flow if this [MicrophoneHelper] has been [released][release].
      */
     fun listenToRecording(): Flow<ByteArray> {
         Log.d(TAG, "listenToRecording() called, released=$released, recordingState=${recorder.recordingState}")
         if (released) {
-            Log.w(TAG, "listenToRecording: AudioHelper already released, returning empty flow")
+            Log.w(TAG, "listenToRecording: MicrophoneHelper already released, returning empty flow")
             return emptyFlow()
         }
         resumeRecording()
@@ -178,16 +178,16 @@ class AudioHelper(
     }
 
     companion object {
-        private val TAG = AudioHelper::class.simpleName
+        private val TAG = MicrophoneHelper::class.simpleName
 
         /**
-         * Creates an instance of [AudioHelper] with the recorder initialized.
+         * Creates an instance of [MicrophoneHelper] with the recorder initialized.
          *
          * A separate build method is necessary so that we can properly propagate the required manifest
          * permission, and throw exceptions when needed.
          */
         @RequiresPermission(Manifest.permission.RECORD_AUDIO)
-        fun build(sampleRate: Int = 16000): AudioHelper {
+        fun build(sampleRate: Int = 16000): MicrophoneHelper {
             val bufferSize =
                 AudioRecord.getMinBufferSize(
                     sampleRate,
@@ -219,7 +219,7 @@ class AudioHelper(
                 Log.d(TAG, "Acoustic Echo Canceler enabled")
             }
 
-            return AudioHelper(recorder, sampleRate)
+            return MicrophoneHelper(recorder, sampleRate)
         }
     }
 }

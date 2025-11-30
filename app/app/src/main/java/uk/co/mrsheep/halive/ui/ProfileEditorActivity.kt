@@ -208,7 +208,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         voiceInput = findViewById(R.id.voiceInput)
 
         // Setup model dropdown - hardcoded single option for now
-        val modelOptions = arrayOf("gemini-live-2.5-flash-preview", "gemini-2.5-flash-native-audio-preview-09-2025")
+        val modelOptions = arrayOf("gemini-2.5-flash-native-audio-preview-09-2025", "gemini-live-2.5-flash-preview")
         val modelAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, modelOptions)
         modelInput.setAdapter(modelAdapter)
         modelInput.setText(modelOptions[0], false) // Set default

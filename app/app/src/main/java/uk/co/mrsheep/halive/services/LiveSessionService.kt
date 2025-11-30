@@ -30,9 +30,9 @@ import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
+import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.conversation.ConversationServiceFactory
-import uk.co.mrsheep.halive.services.geminidirect.AudioHelper
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import uk.co.mrsheep.halive.services.mcp.McpInputSchema
 import uk.co.mrsheep.halive.services.mcp.McpProperty
@@ -195,9 +195,9 @@ class LiveSessionService : Service(), AppLogger {
      * Starts a conversation session with the given profile.
      *
      * @param profile The profile configuration for the session
-     * @param externalAudioHelper Optional AudioHelper to handover from external source
+     * @param externalMicrophoneHelper Optional MicrophoneHelper to handover from external source
      */
-    fun startSession(profile: Profile, externalAudioHelper: AudioHelper? = null) {
+    fun startSession(profile: Profile, externalMicrophoneHelper: MicrophoneHelper? = null) {
         serviceScope.launch {
             try {
                 _connectionState.value = UiState.Initializing
@@ -259,7 +259,7 @@ class LiveSessionService : Service(), AppLogger {
 
                 _isSessionActive.value = true
                 _connectionState.value = UiState.ChatActive
-                conversationService!!.startSession(audioHelper = externalAudioHelper)
+                conversationService!!.startSession(microphoneHelper = externalMicrophoneHelper)
 
                 // Play ready beep to indicate session is active
                 BeepHelper.playReadyBeep(this@LiveSessionService)
@@ -359,11 +359,11 @@ class LiveSessionService : Service(), AppLogger {
     }
 
     /**
-     * Yields the AudioHelper from the conversation service for handover.
+     * Yields the MicrophoneHelper from the conversation service for handover.
      * Returns null if conversation service doesn't support handover or no session active.
      */
-    fun yieldAudioHelper(): AudioHelper? {
-        return conversationService?.yieldAudioHelper()
+    fun yieldMicrophoneHelper(): MicrophoneHelper? {
+        return conversationService?.yieldMicrophoneHelper()
     }
 
     /**
@@ -457,9 +457,9 @@ class LiveSessionService : Service(), AppLogger {
                     description = """
                     Immediately ends the conversation.
 
-                    Use when the conversation has come to its natural end, for example, if the user says 'thanks' with no obvious follow up.
+                    Use when the conversation has come to its natural end, for example, if the user says "that's all", or "thanks" with no obvious follow up.
 
-                    Wish the user goodbye before calling this tool so they know the conversation is finished.
+                    Tell the user 'goodbye' and call this tool to end the conversation.
                     """.trimIndent(),
                     inputSchema = McpInputSchema(
                         type = "object",
@@ -473,7 +473,7 @@ class LiveSessionService : Service(), AppLogger {
 
                     serviceScope.launch {
                         // Allow conversation service to send the function response
-                        delay(300)
+                        delay(2500)
                         stopSession()
                     }
 
