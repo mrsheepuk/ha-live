@@ -175,7 +175,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Say 'OK Computer' to test your settings"
+            android:text="Say 'Lizzy H' to test your settings"
             android:textSize="12sp"
             android:textColor="?android:attr/textColorSecondary"
             android:layout_marginBottom="12dp" />

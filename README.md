@@ -9,7 +9,7 @@ HA Live is an open-source Android app that bridges Google's Gemini Live API with
 - **True Streaming Conversations**: Uses Gemini Live's real-time, bidirectional streaming for natural, interruptible conversations—no more waiting for the AI to finish speaking
 - **Direct Home Assistant Integration**: Connects to Home Assistant's MCP server to access all your entities, services, and automations as native AI tools
 - **Multiple Personalities**: Create unlimited conversation profiles with different prompts, voices, models, and tool access
-- **Wake Word Detection**: Built-in "Ok Computer" wake word support (foreground only, privacy-first)
+- **Wake Word Detection**: Built-in "Lizzy H" wake word support (foreground only, privacy-first)
 - **Contextual Awareness**: Inject live Home Assistant state and Jinja2 templates into every conversation
 
 ## How It Works
@@ -55,7 +55,7 @@ Create multiple profiles for different use cases:
 
 ### Wake Word Detection
 - Powered by OpenWakeWord's ONNX models
-- "Ok Computer" wake phrase
+- "Lizzy H" wake phrase
 - Foreground-only (battery efficient, privacy-conscious)
 - Works while app is active, pauses during conversations
 
@@ -267,7 +267,7 @@ app/src/main/java/uk/co/mrsheep/halive/
 
 Contributions are welcome! Areas where help is especially appreciated:
 
-- **Additional wake word models** (beyond "Ok Computer")
+- **Additional wake word models** (beyond "Lizzy H")
 - **UI/UX improvements** for profile management
 - **Background mode support** (Android background restrictions are tricky)
 - **Documentation** and example profiles
