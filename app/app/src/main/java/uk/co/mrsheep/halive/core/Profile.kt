@@ -77,7 +77,7 @@ data class Profile(
          */
         fun createDefault(): Profile {
             return Profile(
-                name = "Default",
+                name = "Lizzy H (default)",
                 systemPrompt = SystemPromptConfig.DEFAULT_SYSTEM_PROMPT,
                 personality = SystemPromptConfig.DEFAULT_PERSONALITY,
                 backgroundInfo = SystemPromptConfig.DEFAULT_BACKGROUND_INFO,
