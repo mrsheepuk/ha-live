@@ -107,8 +107,8 @@ dependencies {
     // ONNX Runtime for Android
     "onnxImplementation"(libs.onnx.runtime)
 
-    // TensorFlow Lite for Android
-    "tfliteImplementation"("org.tensorflow:tensorflow-lite:2.14.0")
+    // LiteRT (formerly TensorFlow Lite) for Android
+    "tfliteImplementation"("com.google.ai.edge.litert:litert:1.4.1")
 
     // ConstraintLayout
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
