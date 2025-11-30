@@ -166,7 +166,7 @@ class OwwModel(
         // wake model shape is [1,16,96] -> [1,1]
         const val WAKE_INPUT_COUNT = 16 // hardcoded in the model
 
-        private fun loadModel(model: ByteArray, modelFile: String, settings: WakeWordSettings): OrtSession {
+        private fun loadModel(model: ByteArray, settings: WakeWordSettings): OrtSession {
             try {
                 // Create ONNX Runtime session with optimizations configured via settings
                 val sessionOptions = OrtSession.SessionOptions().apply {
@@ -181,7 +181,7 @@ class OwwModel(
                 }
                 return OrtEnvironment.getEnvironment().createSession(model, sessionOptions)
             } catch (t: Throwable) {
-                throw Exception("Failed to load ONNX model from ${modelFile}", t)
+                throw Exception("Failed to load ONNX model", t)
             }
         }
     }
