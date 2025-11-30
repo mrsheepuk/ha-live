@@ -19,7 +19,6 @@ import uk.co.mrsheep.halive.core.WakeWordSettings
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.audio.toFloatChunks
 import uk.co.mrsheep.halive.services.wake.OwwModel
-import java.io.File
 
 /**
  * Manages wake word detection using AudioHelper and ONNX Runtime inference.
@@ -72,17 +71,9 @@ class WakeWordService(
     private fun getOrCreateModel(): OwwModel {
         owwModel?.let { return it }
 
-        val melModel = loadModelFile("melspectrogram.onnx")
-        val embModel = loadModelFile("embedding_model.onnx")
-        val wakeModel = loadModelFile("lizzy_aitch.onnx")
-
-//        if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
-//            Log.e(TAG, "One or more model files not found in ${context.filesDir}")
-//            Log.e(TAG, "  melspectrogram.onnx: ${melModel.exists()}")
-//            Log.e(TAG, "  embedding_model.onnx: ${embModel.exists()}")
-//            Log.e(TAG, "  ok_computer.onnx: ${wakeModel.exists()}")
-//            throw IllegalStateException("Wake word model files not found")
-//        }
+        val melModel = getAssetData("melspectrogram.onnx")
+        val embModel = getAssetData("embedding_model.onnx")
+        val wakeModel = getAssetData("lizzy_aitch.onnx")
 
         Log.d(TAG, "Initializing wake word models with current settings")
         return OwwModel(melModel, embModel, wakeModel, currentSettings).also {
@@ -386,7 +377,7 @@ class WakeWordService(
      * @param filename Name of the model file (e.g., "melspectrogram.onnx")
      * @return File object pointing to the model in filesDir
      */
-    private fun loadModelFile(filename: String): ByteArray {
+    private fun getAssetData(filename: String): ByteArray {
         val thing = context.assets.open(filename)
         val fileBytes = ByteArray(thing.available())
         thing.read(fileBytes)

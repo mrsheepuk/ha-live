@@ -2,7 +2,6 @@ package uk.co.mrsheep.halive
 
 import android.app.Application
 import android.util.Log
-import uk.co.mrsheep.halive.core.AssetCopyUtil
 import uk.co.mrsheep.halive.core.CrashLogger
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HomeAssistantAuth
@@ -41,9 +40,6 @@ class HAGeminiApp : Application() {
 
             // Initialize ProfileManager (but don't create default profile yet)
             ProfileManager.initialize(this)
-
-            // Copy TFLite model files from assets to filesDir for wake word detection
-            AssetCopyUtil.copyAssetsToFilesDir(this)
 
             // Initialize shared config cache
             sharedConfigCache = SharedConfigCache(this)
