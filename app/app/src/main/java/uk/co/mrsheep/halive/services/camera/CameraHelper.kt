@@ -20,7 +20,10 @@ import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.text.SimpleDateFormat
@@ -41,8 +44,10 @@ class CameraHelper(
 ) {
     companion object {
         private const val TAG = "CameraHelper"
-        private const val MAX_DIMENSION = 1024
-        private const val FRAME_INTERVAL_MS = 1000L // 1 FPS
+        // Debug: Reduced for testing - normally 1024
+        private const val MAX_DIMENSION = 512
+        // Debug: Reduced for testing - normally 1000L (1 FPS)
+        private const val FRAME_INTERVAL_MS = 5000L // 1 frame every 5 seconds
         private const val JPEG_QUALITY = 80
 
         // Debug: Set to true to save frames to external storage for inspection
@@ -67,8 +72,14 @@ class CameraHelper(
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
 
-    /** Flow of JPEG-encoded frames (max 1024x1024, ~1 FPS) */
+    // Flow for tracking frame count (for UI display)
+    private val _frameCountFlow = MutableStateFlow(0)
+
+    /** Flow of JPEG-encoded frames (max 512x512, 1 frame per 5 sec for debug) */
     val frameFlow: Flow<ByteArray> = _frameFlow.asSharedFlow()
+
+    /** Flow of frame count for UI display */
+    val frameCountFlow: StateFlow<Int> = _frameCountFlow.asStateFlow()
 
     /** Current camera facing direction */
     val facing: CameraFacing get() = currentFacing
@@ -99,6 +110,7 @@ class CameraHelper(
 
         currentFacing = facing
         frameCounter = 0
+        _frameCountFlow.value = 0
 
         // Clear old debug frames when starting new capture
         if (DEBUG_SAVE_FRAMES) {
@@ -261,6 +273,7 @@ class CameraHelper(
             if (jpegData != null) {
                 lastFrameTime = currentTime
                 frameCounter++
+                _frameCountFlow.value = frameCounter
 
                 // Debug: Save frame to external storage for inspection
                 if (DEBUG_SAVE_FRAMES) {
@@ -268,7 +281,7 @@ class CameraHelper(
                 }
 
                 _frameFlow.tryEmit(jpegData)
-                Log.v(TAG, "Frame emitted: ${jpegData.size} bytes")
+                Log.d(TAG, "Frame #$frameCounter emitted: ${jpegData.size} bytes")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error processing frame", e)
