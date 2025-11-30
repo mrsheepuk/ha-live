@@ -15,17 +15,21 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uk.co.mrsheep.halive.core.WakeWordConfig
+import uk.co.mrsheep.halive.core.WakeWordRuntime
 import uk.co.mrsheep.halive.core.WakeWordSettings
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.audio.toFloatChunks
-import uk.co.mrsheep.halive.services.wake.OwwModel
+import uk.co.mrsheep.halive.services.wake.OnnxWakeWordModel
+import uk.co.mrsheep.halive.services.wake.TfLiteWakeWordModel
+import uk.co.mrsheep.halive.services.wake.WakeWordModel
 
 /**
- * Manages wake word detection using MicrophoneHelper and ONNX Runtime inference.
+ * Manages wake word detection using MicrophoneHelper and configurable inference runtime.
  *
  * Captures 16kHz mono PCM audio via the shared MicrophoneHelper, processes it in
- * 1152-sample chunks using Flow operators, and runs ONNX Runtime inference via
- * OwwModel. Triggers callback when detection confidence exceeds the configured threshold.
+ * 1152-sample chunks using Flow operators, and runs inference via the configured
+ * runtime (ONNX or TFLite). Triggers callback when detection confidence exceeds
+ * the configured threshold.
  *
  * @param context Application context for accessing files and audio resources
  * @param onWakeWordDetected Callback invoked on the main dispatcher when wake word is detected
@@ -37,11 +41,11 @@ class WakeWordService(
     companion object {
         private const val TAG = "WakeWordService"
         private const val SAMPLE_RATE = 16000
-        private const val CHUNK_SIZE = 1152 // OwwModel.MEL_INPUT_COUNT
+        private const val CHUNK_SIZE = 1280 // OnnxWakeWordModel.MEL_INPUT_COUNT (80ms @ 16kHz)
 
         // Number of frames to skip after starting to allow model to warm up.
-        // The ONNX model needs time to fill its accumulators and stabilize.
-        // At 16kHz with 1152-sample chunks, each frame is ~72ms, so 20 frames ≈ 1.4 seconds
+        // The model needs time to fill its accumulators and stabilize.
+        // At 16kHz with 1280-sample chunks, each frame is 80ms, so 20 frames = 1.6 seconds
         private const val WARMUP_FRAMES = 20
     }
 
@@ -62,23 +66,33 @@ class WakeWordService(
      * Wake word model instance. Created on-demand and can be recreated when settings change.
      * Reused across multiple listening sessions for battery efficiency.
      */
-    private var owwModel: OwwModel? = null
+    private var owwModel: WakeWordModel? = null
 
     /**
      * Initializes or returns the existing wake word model.
      * Models are loaded with current settings and reused until explicitly closed.
+     * The runtime (ONNX or TFLite) is determined by currentSettings.runtime.
      */
-    private fun getOrCreateModel(): OwwModel {
+    private fun getOrCreateModel(): WakeWordModel {
         owwModel?.let { return it }
 
-        val melModel = getAssetData("melspectrogram.onnx")
-        val embModel = getAssetData("embedding_model.onnx")
-        val wakeModel = getAssetData("lizzy_aitch.onnx")
+        val runtime = currentSettings.runtime
+        val extension = when (runtime) {
+            WakeWordRuntime.ONNX -> ".onnx"
+            WakeWordRuntime.TFLITE -> ".tflite"
+        }
 
-        Log.d(TAG, "Initializing wake word models with current settings")
-        return OwwModel(melModel, embModel, wakeModel, currentSettings).also {
+        val melModel = getAssetData("melspectrogram$extension")
+        val embModel = getAssetData("embedding_model$extension")
+        val wakeModel = getAssetData("lizzy_aitch$extension")
+
+        Log.d(TAG, "Initializing wake word models with runtime=$runtime")
+        return when (runtime) {
+            WakeWordRuntime.ONNX -> OnnxWakeWordModel(melModel, embModel, wakeModel, currentSettings)
+            WakeWordRuntime.TFLITE -> TfLiteWakeWordModel(melModel, embModel, wakeModel, currentSettings)
+        }.also {
             owwModel = it
-            Log.d(TAG, "Wake word models initialized successfully")
+            Log.d(TAG, "Wake word models initialized successfully (runtime=$runtime)")
         }
     }
 
@@ -174,7 +188,7 @@ class WakeWordService(
                         return@onEach // Stop processing after detection
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error running ONNX inference: ${e.message}", e)
+                    Log.e(TAG, "Error running inference: ${e.message}", e)
                 }
             }
             .onCompletion { cause ->
@@ -330,13 +344,13 @@ class WakeWordService(
         testModeCallback = null
         stopListening()
 
-        // Close ONNX models only on destroy (not after each listening session)
+        // Close models only on destroy (not after each listening session)
         owwModel?.let {
             try {
                 it.close()
-                Log.d(TAG, "OwwModel closed")
+                Log.d(TAG, "WakeWordModel closed")
             } catch (e: Exception) {
-                Log.e(TAG, "Error closing OwwModel: ${e.message}", e)
+                Log.e(TAG, "Error closing WakeWordModel: ${e.message}", e)
             }
         }
         owwModel = null

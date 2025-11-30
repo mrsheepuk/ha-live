@@ -4,6 +4,16 @@ import android.content.Context
 import ai.onnxruntime.OrtSession
 
 /**
+ * Runtime to use for wake word detection inference.
+ */
+enum class WakeWordRuntime {
+    /** ONNX Runtime - current default */
+    ONNX,
+    /** TensorFlow Lite - alternative runtime for comparison */
+    TFLITE
+}
+
+/**
  * Predefined performance modes for ONNX wake word detection.
  * Each mode balances detection latency, accuracy, and battery consumption.
  */
@@ -164,7 +174,12 @@ data class WakeWordSettings(
     /**
      * Optimization level for ONNX Runtime.
      */
-    val optimizationLevel: OptimizationLevel = OptimizationLevel.BASIC_OPT
+    val optimizationLevel: OptimizationLevel = OptimizationLevel.BASIC_OPT,
+
+    /**
+     * Runtime to use for wake word detection inference.
+     */
+    val runtime: WakeWordRuntime = WakeWordRuntime.ONNX
 )
 
 object WakeWordConfig {
@@ -174,6 +189,7 @@ object WakeWordConfig {
     private const val KEY_THREAD_COUNT = "thread_count"
     private const val KEY_EXECUTION_MODE = "execution_mode"
     private const val KEY_OPTIMIZATION_LEVEL = "optimization_level"
+    private const val KEY_RUNTIME = "runtime"
 
     /**
      * Check if wake word detection is enabled (backward compatible).
@@ -216,12 +232,20 @@ object WakeWordConfig {
             OptimizationLevel.BASIC_OPT
         }
 
+        val runtimeStr = prefs.getString(KEY_RUNTIME, WakeWordRuntime.ONNX.name)
+        val runtime = try {
+            WakeWordRuntime.valueOf(runtimeStr!!)
+        } catch (e: Exception) {
+            WakeWordRuntime.ONNX
+        }
+
         return WakeWordSettings(
             enabled = enabled,
             threshold = threshold,
             threadCount = threadCount,
             executionMode = executionMode,
-            optimizationLevel = optimizationLevel
+            optimizationLevel = optimizationLevel,
+            runtime = runtime
         )
     }
 
@@ -236,6 +260,7 @@ object WakeWordConfig {
             putInt(KEY_THREAD_COUNT, settings.threadCount)
             putString(KEY_EXECUTION_MODE, settings.executionMode.name)
             putString(KEY_OPTIMIZATION_LEVEL, settings.optimizationLevel.name)
+            putString(KEY_RUNTIME, settings.runtime.name)
         }.apply()
     }
 }

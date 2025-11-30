@@ -39,11 +39,12 @@ WakeWordService owns mic (back to ReadyToTalk)
 
 ### Core Classes
 
-**`services/wake/OwwModel.kt`**
+**`services/wake/OnnxWakeWordModel.kt`**
+- ONNX Runtime implementation of the WakeWordModel interface
 - Three-stage ONNX Runtime inference pipeline
 - Processes 1152 audio samples (72ms @ 16kHz)
 - Accumulates outputs for streaming detection
-- Constructor: `OwwModel(melFile: File, embFile: File, wakeFile: File)`
+- Constructor: `OnnxWakeWordModel(melFile: File, embFile: File, wakeFile: File)`
 - Uses `ai.onnxruntime.OrtSession` for inference
 - Battery optimizations:
   - `BASIC_OPT` graph optimization level

@@ -3,15 +3,27 @@ package uk.co.mrsheep.halive.services.wake
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
-import java.io.File
 import uk.co.mrsheep.halive.core.WakeWordSettings
 
-class OwwModel(
+/**
+ * ONNX Runtime implementation of the WakeWordModel interface.
+ *
+ * This implementation uses ONNX Runtime to run three neural network models in sequence:
+ * 1. Melspectrogram model - Extracts mel-spectrogram features from raw audio
+ * 2. Embedding model - Generates temporal embeddings from melspectrogram features
+ * 3. Wake word detection model - Classifies embeddings to produce detection scores
+ *
+ * @param melSpectrogramFile Serialized ONNX model for melspectrogram extraction
+ * @param embeddingFile Serialized ONNX model for embedding generation
+ * @param wakeWordFile Serialized ONNX model for wake word detection
+ * @param settings Configuration for ONNX Runtime optimization and execution
+ */
+class OnnxWakeWordModel(
     melSpectrogramFile: ByteArray,
     embeddingFile: ByteArray,
     wakeWordFile: ByteArray,
     settings: WakeWordSettings
-) : AutoCloseable {
+) : WakeWordModel {
     private val ortEnvironment: OrtEnvironment = OrtEnvironment.getEnvironment()
 
     private val melSession: OrtSession
@@ -47,7 +59,7 @@ class OwwModel(
         }
     }
 
-    fun processFrame(audio: FloatArray): Float {
+    override fun processFrame(audio: FloatArray): Float {
         if (audio.size != MEL_INPUT_COUNT) {
             throw IllegalArgumentException(
                 "OwwModel can only process audio frames of $MEL_INPUT_COUNT samples"
@@ -110,8 +122,9 @@ class OwwModel(
             accumulatedEmbOutputs[i] = if (i < WAKE_INPUT_COUNT - EMB_OUTPUT_COUNT) {
                 accumulatedEmbOutputs[i + EMB_OUTPUT_COUNT]
             } else {
-                // embOutput is already FloatArray[96], use it directly
-                embOutput
+                // Copy embedding to avoid reference issues - without copyOf(), all 16
+                // slots would point to the same array, destroying temporal context
+                embOutput.copyOf()
             }
         }
         if (accumulatedEmbOutputs[0].isEmpty()) {
@@ -141,7 +154,7 @@ class OwwModel(
      * Resets the accumulation buffers to initial state.
      * Call this when starting a new listening session to clear stale data.
      */
-    fun resetAccumulators() {
+    override fun resetAccumulators() {
         accumulatedMelOutputs = Array(EMB_INPUT_COUNT) { arrayOf() }
         accumulatedEmbOutputs = Array(WAKE_INPUT_COUNT) { floatArrayOf() }
     }
@@ -154,8 +167,9 @@ class OwwModel(
 
     companion object {
         // mel model shape is [1,x] -> [1,1,floor((x-512)/160)+1,32]
-        const val MEL_INPUT_COUNT = 512 + 160 * 4 // chosen by us, 1152 samples @ 16kHz = 72ms
-        const val MEL_OUTPUT_COUNT = (MEL_INPUT_COUNT - 512) / 160 + 1 // formula obtained empirically
+        // Using 1280 samples to match Python openWakeWord default
+        const val MEL_INPUT_COUNT = 1280 // 1280 samples @ 16kHz = 80ms
+        const val MEL_OUTPUT_COUNT = (MEL_INPUT_COUNT - 512) / 160 + 1 // = 5
         const val MEL_FEATURE_SIZE = 32 // also the size of features received by the emb model
 
         // emb model shape is [1,76,32,1] -> [1,1,1,96]

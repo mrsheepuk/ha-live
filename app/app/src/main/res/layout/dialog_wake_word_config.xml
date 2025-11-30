@@ -148,6 +148,38 @@
 
     </RadioGroup>
 
+    <!-- Runtime Section -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Inference Runtime:"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:layout_marginBottom="4dp"
+        android:layout_marginTop="8dp" />
+
+    <RadioGroup
+        android:id="@+id/runtimeGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="12dp">
+
+        <RadioButton
+            android:id="@+id/radioRuntimeOnnx"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="ONNX Runtime"
+            android:checked="true" />
+
+        <RadioButton
+            android:id="@+id/radioRuntimeTflite"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="TensorFlow Lite" />
+
+    </RadioGroup>
+
     <!-- Test Detection Section -->
     <View
         android:layout_width="match_parent"

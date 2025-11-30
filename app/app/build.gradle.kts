@@ -79,6 +79,9 @@ dependencies {
     // ONNX Runtime for Android
     implementation(libs.onnx.runtime)
 
+    // TensorFlow Lite for Android
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+
     // ConstraintLayout
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
