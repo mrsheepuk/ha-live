@@ -50,10 +50,13 @@ fun Flow<ByteArray>.chunkedBytes(size: Int): Flow<ByteArray> = flow {
 }
 
 /**
- * Converts 16-bit PCM bytes to float samples in range [-1.0, 1.0].
+ * Converts 16-bit PCM bytes to float samples preserving raw int16 values.
  * Assumes little-endian byte order (Android default for PCM audio).
  *
- * Each pair of bytes becomes one float sample:
+ * Each pair of bytes becomes one float sample in range [-32768, 32767].
+ * This matches the expected input format for OpenWakeWord ONNX models,
+ * which expect raw int16 PCM values cast to float32 (NOT normalized to [-1, 1]).
+ *
  * - First byte: low 8 bits
  * - Second byte: high 8 bits (sign-extended)
  */
@@ -62,7 +65,7 @@ fun Flow<ByteArray>.toFloatSamples(): Flow<FloatArray> = map { bytes ->
         val low = bytes[i * 2].toInt() and 0xFF
         val high = bytes[i * 2 + 1].toInt()
         val sample = (high shl 8) or low
-        sample / 32768f
+        sample.toFloat()
     }
 }
 
