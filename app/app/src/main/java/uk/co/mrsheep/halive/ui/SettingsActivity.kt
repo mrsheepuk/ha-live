@@ -27,6 +27,7 @@ import uk.co.mrsheep.halive.core.ExecutionMode
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.OptimizationLevel
 import uk.co.mrsheep.halive.core.WakeWordConfig
+import uk.co.mrsheep.halive.core.WakeWordRuntime
 import uk.co.mrsheep.halive.core.WakeWordSettings
 import kotlinx.coroutines.launch
 import android.Manifest
@@ -500,6 +501,15 @@ class SettingsActivity : AppCompatActivity() {
             OptimizationLevel.ALL_OPT -> radioOptAll.isChecked = true
         }
 
+        // Runtime radio buttons
+        val radioRuntimeOnnx = dialogView.findViewById<RadioButton>(R.id.radioRuntimeOnnx)
+        val radioRuntimeTflite = dialogView.findViewById<RadioButton>(R.id.radioRuntimeTflite)
+        val currentRuntime = currentSettings.runtime
+        when (currentRuntime) {
+            WakeWordRuntime.ONNX -> radioRuntimeOnnx.isChecked = true
+            WakeWordRuntime.TFLITE -> radioRuntimeTflite.isChecked = true
+        }
+
         // Build dialog
         val dialog = AlertDialog.Builder(this)
             .setTitle("Configure Wake Word Detection")
@@ -527,12 +537,19 @@ class SettingsActivity : AppCompatActivity() {
                     else -> OptimizationLevel.BASIC_OPT
                 }
 
+                val runtime = if (radioRuntimeTflite.isChecked) {
+                    WakeWordRuntime.TFLITE
+                } else {
+                    WakeWordRuntime.ONNX
+                }
+
                 val newSettings = WakeWordSettings(
                     enabled = currentSettings.enabled,
                     threshold = threshold,
                     threadCount = threadCount,
                     executionMode = executionMode,
-                    optimizationLevel = optimizationLevel
+                    optimizationLevel = optimizationLevel,
+                    runtime = runtime
                 )
 
                 viewModel.saveWakeWordSettings(newSettings)
