@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.geminidirect.protocol.AudioTranscriptionConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.RealtimeInputConfig
 import java.util.concurrent.TimeoutException
@@ -42,7 +43,6 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.FunctionResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.GenerationConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.MediaChunk
 import uk.co.mrsheep.halive.services.geminidirect.protocol.PrebuiltVoiceConfig
-import uk.co.mrsheep.halive.services.geminidirect.protocol.ProactivtyConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.RealtimeInput
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ServerMessage
 import uk.co.mrsheep.halive.services.geminidirect.protocol.SetupMessage
@@ -119,9 +119,9 @@ class GeminiLiveSession(
     private var isSessionActive = false
 
     // Recording (microphone input)
-    private var audioHelper: AudioHelper? = null
+    private var microphoneHelper: MicrophoneHelper? = null
     /** Whether we own the audioHelper and should release it on close */
-    private var ownsAudioHelper: Boolean = true
+    private var ownsMicrophoneHelper: Boolean = true
 
     // New audio pipeline components for playback
     private var jitterBuffer: JitterBuffer? = null
@@ -165,7 +165,7 @@ class GeminiLiveSession(
         interruptable: Boolean = true,
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
         onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null,
-        externalAudioHelper: AudioHelper? = null
+        externalMicrophoneHelper: MicrophoneHelper? = null
     ) {
         if (sessionScope.isActive) {
             throw IllegalStateException("Session scope already active, cannot start")
@@ -175,13 +175,13 @@ class GeminiLiveSession(
             CoroutineScope(Dispatchers.Default + SupervisorJob() + CoroutineName("LiveSession Network"))
 
         // Initialize recording (microphone)
-        if (externalAudioHelper != null) {
-            audioHelper = externalAudioHelper
-            ownsAudioHelper = false
+        if (externalMicrophoneHelper != null) {
+            microphoneHelper = externalMicrophoneHelper
+            ownsMicrophoneHelper = false
             Log.d(TAG, "Using external AudioHelper (handover mode)")
         } else {
-            audioHelper = AudioHelper.build()
-            ownsAudioHelper = true
+            microphoneHelper = MicrophoneHelper.build()
+            ownsMicrophoneHelper = true
             Log.d(TAG, "Created new AudioHelper")
         }
 
@@ -263,12 +263,12 @@ class GeminiLiveSession(
             Log.d(TAG, "Setup completed successfully")
 
             // Send any pre-buffered audio from wake word detection
-            if (!ownsAudioHelper) {
-                val preBufferedAudio = audioHelper?.getBufferedAudio()
+            if (!ownsMicrophoneHelper) {
+                val preBufferedAudio = microphoneHelper?.getBufferedAudio()
                 if (preBufferedAudio != null && preBufferedAudio.isNotEmpty()) {
                     Log.d(TAG, "Sending ${preBufferedAudio.size} bytes of pre-buffered audio to Gemini")
                     sendAudioRealtime(preBufferedAudio)
-                    audioHelper?.clearPreBuffer()
+                    microphoneHelper?.clearPreBuffer()
                 }
             }
 
@@ -296,7 +296,7 @@ class GeminiLiveSession(
     /** Listen to the user's microphone and send the data to the model. */
     private fun recordUserAudio() {
         // Buffer the recording so we can keep recording while data is sent to the server
-        audioHelper
+        microphoneHelper
             ?.listenToRecording()
             ?.buffer(UNLIMITED)
             ?.flowOn(audioDispatcher)
@@ -350,7 +350,7 @@ class GeminiLiveSession(
         // Use the same audio session ID as the AudioRecord for proper echo cancellation.
         // The AcousticEchoCanceler attached to the AudioRecord needs to know what audio
         // is being played back so it can cancel it from the microphone input.
-        val sessionId = audioHelper?.audioSessionId ?: AudioManager.AUDIO_SESSION_ID_GENERATE
+        val sessionId = microphoneHelper?.audioSessionId ?: AudioManager.AUDIO_SESSION_ID_GENERATE
 
         playbackAudioTrack = AudioTrack(
             AudioAttributes.Builder()
@@ -621,21 +621,21 @@ class GeminiLiveSession(
      *
      * After calling this, the session will not release the AudioHelper on close.
      */
-    fun yieldAudioHelper(): AudioHelper? {
-        if (ownsAudioHelper) {
+    fun yieldAudioHelper(): MicrophoneHelper? {
+        if (ownsMicrophoneHelper) {
             Log.d(TAG, "yieldAudioHelper: we own the AudioHelper, cannot yield")
             return null
         }
 
-        if (audioHelper == null) {
+        if (microphoneHelper == null) {
             Log.d(TAG, "yieldAudioHelper: no AudioHelper to yield")
             return null
         }
 
         Log.d(TAG, "Yielding AudioHelper back for handover")
-        val helper = audioHelper
+        val helper = microphoneHelper
         helper?.pauseRecording()
-        audioHelper = null
+        microphoneHelper = null
         return helper
     }
 
@@ -662,9 +662,9 @@ class GeminiLiveSession(
         shutdownPlaybackPipeline()
 
         // Release recording resources (only if we own them)
-        if (ownsAudioHelper) {
-            audioHelper?.release()
-            audioHelper = null
+        if (ownsMicrophoneHelper) {
+            microphoneHelper?.release()
+            microphoneHelper = null
             Log.d(TAG, "Released owned AudioHelper")
         } else {
             // Don't null out audioHelper - leave it for yieldAudioHelper() to return

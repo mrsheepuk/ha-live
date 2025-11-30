@@ -1,4 +1,4 @@
-package uk.co.mrsheep.halive.services.geminidirect
+package uk.co.mrsheep.halive.services.audio
 
 import android.util.Log
 import kotlinx.coroutines.flow.Flow

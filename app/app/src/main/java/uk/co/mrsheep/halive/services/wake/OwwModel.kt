@@ -4,14 +4,12 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import java.io.File
-import uk.co.mrsheep.halive.core.ExecutionMode
-import uk.co.mrsheep.halive.core.OptimizationLevel
 import uk.co.mrsheep.halive.core.WakeWordSettings
 
 class OwwModel(
-    melSpectrogramFile: File,
-    embeddingFile: File,
-    wakeWordFile: File,
+    melSpectrogramFile: ByteArray,
+    embeddingFile: ByteArray,
+    wakeWordFile: ByteArray,
     settings: WakeWordSettings
 ) : AutoCloseable {
     private val ortEnvironment: OrtEnvironment = OrtEnvironment.getEnvironment()
@@ -168,7 +166,7 @@ class OwwModel(
         // wake model shape is [1,16,96] -> [1,1]
         const val WAKE_INPUT_COUNT = 16 // hardcoded in the model
 
-        private fun loadModel(modelFile: File, settings: WakeWordSettings): OrtSession {
+        private fun loadModel(model: ByteArray, modelFile: String, settings: WakeWordSettings): OrtSession {
             try {
                 // Create ONNX Runtime session with optimizations configured via settings
                 val sessionOptions = OrtSession.SessionOptions().apply {
@@ -181,9 +179,9 @@ class OwwModel(
                     // Set thread count from settings
                     setIntraOpNumThreads(settings.threadCount)
                 }
-                return OrtEnvironment.getEnvironment().createSession(modelFile.absolutePath, sessionOptions)
+                return OrtEnvironment.getEnvironment().createSession(model, sessionOptions)
             } catch (t: Throwable) {
-                throw Exception("Failed to load ONNX model from ${modelFile.absolutePath}", t)
+                throw Exception("Failed to load ONNX model from ${modelFile}", t)
             }
         }
     }

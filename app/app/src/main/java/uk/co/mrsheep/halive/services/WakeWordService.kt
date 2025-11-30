@@ -7,18 +7,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
-import uk.co.mrsheep.halive.services.geminidirect.AudioHelper
-import uk.co.mrsheep.halive.services.geminidirect.toFloatChunks
-import uk.co.mrsheep.halive.services.wake.OwwModel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.core.WakeWordSettings
+import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
+import uk.co.mrsheep.halive.services.audio.toFloatChunks
+import uk.co.mrsheep.halive.services.wake.OwwModel
 import java.io.File
 
 /**
@@ -46,7 +46,7 @@ class WakeWordService(
         private const val WARMUP_FRAMES = 20
     }
 
-    private var audioHelper: AudioHelper? = null
+    private var audioHelper: MicrophoneHelper? = null
     private var recordingJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var isListening = false
@@ -74,15 +74,15 @@ class WakeWordService(
 
         val melModel = loadModelFile("melspectrogram.onnx")
         val embModel = loadModelFile("embedding_model.onnx")
-        val wakeModel = loadModelFile("ok_computer.onnx")
+        val wakeModel = loadModelFile("lizzy_aitch.onnx")
 
-        if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
-            Log.e(TAG, "One or more model files not found in ${context.filesDir}")
-            Log.e(TAG, "  melspectrogram.onnx: ${melModel.exists()}")
-            Log.e(TAG, "  embedding_model.onnx: ${embModel.exists()}")
-            Log.e(TAG, "  ok_computer.onnx: ${wakeModel.exists()}")
-            throw IllegalStateException("Wake word model files not found")
-        }
+//        if (!melModel.exists() || !embModel.exists() || !wakeModel.exists()) {
+//            Log.e(TAG, "One or more model files not found in ${context.filesDir}")
+//            Log.e(TAG, "  melspectrogram.onnx: ${melModel.exists()}")
+//            Log.e(TAG, "  embedding_model.onnx: ${embModel.exists()}")
+//            Log.e(TAG, "  ok_computer.onnx: ${wakeModel.exists()}")
+//            throw IllegalStateException("Wake word model files not found")
+//        }
 
         Log.d(TAG, "Initializing wake word models with current settings")
         return OwwModel(melModel, embModel, wakeModel, currentSettings).also {
@@ -119,7 +119,7 @@ class WakeWordService(
         }
 
         try {
-            audioHelper = AudioHelper.build(SAMPLE_RATE)
+            audioHelper = MicrophoneHelper.build(SAMPLE_RATE)
             audioHelper?.enablePreBuffering(1500)  // Buffer 1.5 seconds of audio
             isListening = true
             framesProcessed = 0  // Reset warm-up counter
@@ -231,7 +231,7 @@ class WakeWordService(
      * After calling this, the WakeWordService is no longer listening and
      * the caller takes ownership of the AudioHelper.
      */
-    fun yieldAudioHelper(): AudioHelper? {
+    fun yieldAudioHelper(): MicrophoneHelper? {
         if (!isListening || audioHelper == null) {
             Log.d(TAG, "yieldAudioHelper: not listening or no audioHelper, returning null")
             return null
@@ -254,7 +254,7 @@ class WakeWordService(
      *
      * @param helper The AudioHelper to resume with (takes ownership)
      */
-    fun resumeWith(helper: AudioHelper) {
+    fun resumeWith(helper: MicrophoneHelper) {
         if (isListening) {
             Log.w(TAG, "Already listening, ignoring resumeWith() - releasing provided helper")
             helper.release()
@@ -386,7 +386,12 @@ class WakeWordService(
      * @param filename Name of the model file (e.g., "melspectrogram.onnx")
      * @return File object pointing to the model in filesDir
      */
-    private fun loadModelFile(filename: String): File {
-        return File(context.filesDir, filename)
+    private fun loadModelFile(filename: String): ByteArray {
+        val thing = context.assets.open(filename)
+        val fileBytes = ByteArray(thing.available())
+        thing.read(fileBytes)
+        thing.close()
+        return fileBytes
+        //return File(context.filesDir, filename)
     }
 }

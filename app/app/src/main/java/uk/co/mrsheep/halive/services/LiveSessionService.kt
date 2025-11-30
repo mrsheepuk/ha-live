@@ -30,9 +30,9 @@ import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.core.Profile
 import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
+import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.conversation.ConversationServiceFactory
-import uk.co.mrsheep.halive.services.geminidirect.AudioHelper
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
 import uk.co.mrsheep.halive.services.mcp.McpInputSchema
 import uk.co.mrsheep.halive.services.mcp.McpProperty
@@ -197,7 +197,7 @@ class LiveSessionService : Service(), AppLogger {
      * @param profile The profile configuration for the session
      * @param externalAudioHelper Optional AudioHelper to handover from external source
      */
-    fun startSession(profile: Profile, externalAudioHelper: AudioHelper? = null) {
+    fun startSession(profile: Profile, externalAudioHelper: MicrophoneHelper? = null) {
         serviceScope.launch {
             try {
                 _connectionState.value = UiState.Initializing
@@ -362,7 +362,7 @@ class LiveSessionService : Service(), AppLogger {
      * Yields the AudioHelper from the conversation service for handover.
      * Returns null if conversation service doesn't support handover or no session active.
      */
-    fun yieldAudioHelper(): AudioHelper? {
+    fun yieldAudioHelper(): MicrophoneHelper? {
         return conversationService?.yieldAudioHelper()
     }
 

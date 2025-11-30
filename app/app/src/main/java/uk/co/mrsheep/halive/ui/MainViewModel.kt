@@ -16,7 +16,6 @@ import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.services.LiveSessionService
 import uk.co.mrsheep.halive.services.WakeWordService
-import uk.co.mrsheep.halive.services.geminidirect.AudioHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import uk.co.mrsheep.halive.core.GeminiConfig
+import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.mcp.McpTool
@@ -106,7 +107,7 @@ class DirectConversationService(private val context: Context) :
      *
      * @param audioHelper Optional AudioHelper for audio stream handover
      */
-    override suspend fun startSession(audioHelper: AudioHelper?) {
+    override suspend fun startSession(audioHelper: MicrophoneHelper?) {
         try {
             // Get API key from config
             val apiKey = GeminiConfig.getApiKey(context)
@@ -136,7 +137,7 @@ class DirectConversationService(private val context: Context) :
                 interruptable = interruptable,
                 onToolCall = protocolToolCallHandler,
                 onTranscription = transcriptor,
-                externalAudioHelper = audioHelper
+                externalMicrophoneHelper = audioHelper
             )
 
             Log.d(TAG, "Direct protocol session started successfully")
@@ -184,7 +185,7 @@ class DirectConversationService(private val context: Context) :
     /**
      * Yields the AudioHelper from the underlying GeminiLiveSession.
      */
-    override fun yieldAudioHelper(): AudioHelper? {
+    override fun yieldAudioHelper(): MicrophoneHelper? {
         return session?.yieldAudioHelper()
     }
 
