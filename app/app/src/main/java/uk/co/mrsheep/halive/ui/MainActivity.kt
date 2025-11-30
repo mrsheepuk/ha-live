@@ -77,11 +77,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraPreview: PreviewView
     private lateinit var cameraToggleButton: MaterialButton
     private lateinit var cameraFlipButton: MaterialButton
-    private lateinit var frameCounterText: TextView
 
     // Camera helper (created on demand)
     private var cameraHelper: CameraHelper? = null
-    private var frameCounterJob: kotlinx.coroutines.Job? = null
 
     // Layout transition support
     private lateinit var mainConstraintLayout: ConstraintLayout
@@ -295,7 +293,6 @@ class MainActivity : AppCompatActivity() {
         cameraPreview = findViewById(R.id.cameraPreview)
         cameraToggleButton = findViewById(R.id.cameraToggleButton)
         cameraFlipButton = findViewById(R.id.cameraFlipButton)
-        frameCounterText = findViewById(R.id.frameCounterText)
 
         retryButton.setOnClickListener {
             viewModel.retryInitialization()
@@ -878,14 +875,6 @@ class MainActivity : AppCompatActivity() {
                 // Camera is ready, start video streaming
                 viewModel.startVideoCapture(camera)
                 Log.d("MainActivity", "Camera enabled and streaming")
-
-                // Start observing frame count
-                frameCounterJob?.cancel()
-                frameCounterJob = lifecycleScope.launch {
-                    camera.frameCountFlow.collect { count ->
-                        frameCounterText.text = count.toString()
-                    }
-                }
             },
             onError = { e ->
                 Log.e("MainActivity", "Camera error: ${e.message}", e)
@@ -901,10 +890,6 @@ class MainActivity : AppCompatActivity() {
      * Disable camera capture and hide preview.
      */
     private fun disableCamera() {
-        // Stop frame counter observation
-        frameCounterJob?.cancel()
-        frameCounterJob = null
-
         // Stop video streaming
         viewModel.stopVideoCapture()
 

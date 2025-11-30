@@ -20,40 +20,29 @@ import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
+import uk.co.mrsheep.halive.core.CameraConfig
 import java.io.ByteArrayOutputStream
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import kotlin.math.min
 
 /**
  * Helper class for capturing camera frames using CameraX.
  *
- * Captures frames at 1 FPS, converts to JPEG with max 1024x1024 resolution,
- * and emits them via a Flow for sending to Gemini Live API.
+ * Captures frames and converts to JPEG for sending to Gemini Live API.
+ * Resolution and frame rate are configurable via Settings.
  */
 class CameraHelper(
     private val context: Context
 ) {
     companion object {
         private const val TAG = "CameraHelper"
-        // Debug: Reduced for testing - normally 1024
-        private const val MAX_DIMENSION = 512
-        // Debug: Reduced for testing - normally 1000L (1 FPS)
-        private const val FRAME_INTERVAL_MS = 5000L // 1 frame every 5 seconds
         private const val JPEG_QUALITY = 80
-
-        // Debug: Set to true to save frames to external storage for inspection
-        private const val DEBUG_SAVE_FRAMES = true
-        private const val DEBUG_FRAMES_DIR = "camera_debug_frames"
     }
+
+    // Settings loaded at capture start
+    private var maxDimension: Int = 1024
+    private var frameIntervalMs: Long = 1000L
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var imageAnalysis: ImageAnalysis? = null
@@ -72,14 +61,8 @@ class CameraHelper(
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
 
-    // Flow for tracking frame count (for UI display)
-    private val _frameCountFlow = MutableStateFlow(0)
-
-    /** Flow of JPEG-encoded frames (max 512x512, 1 frame per 5 sec for debug) */
+    /** Flow of JPEG-encoded frames */
     val frameFlow: Flow<ByteArray> = _frameFlow.asSharedFlow()
-
-    /** Flow of frame count for UI display */
-    val frameCountFlow: StateFlow<Int> = _frameCountFlow.asStateFlow()
 
     /** Current camera facing direction */
     val facing: CameraFacing get() = currentFacing
@@ -108,14 +91,14 @@ class CameraHelper(
             return
         }
 
+        // Load settings from config
+        val settings = CameraConfig.getSettings(context)
+        maxDimension = settings.resolution.maxDimension
+        frameIntervalMs = settings.frameRate.intervalMs
+        Log.i(TAG, "Camera settings: ${settings.resolution.displayName}, ${settings.frameRate.displayName}")
+
         currentFacing = facing
         frameCounter = 0
-        _frameCountFlow.value = 0
-
-        // Clear old debug frames when starting new capture
-        if (DEBUG_SAVE_FRAMES) {
-            clearDebugFrames()
-        }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
@@ -260,8 +243,8 @@ class CameraHelper(
     private fun processFrame(imageProxy: ImageProxy) {
         val currentTime = System.currentTimeMillis()
 
-        // Rate limit to 1 FPS
-        if (currentTime - lastFrameTime < FRAME_INTERVAL_MS) {
+        // Rate limit based on configured frame interval
+        if (currentTime - lastFrameTime < frameIntervalMs) {
             imageProxy.close()
             return
         }
@@ -273,12 +256,6 @@ class CameraHelper(
             if (jpegData != null) {
                 lastFrameTime = currentTime
                 frameCounter++
-                _frameCountFlow.value = frameCounter
-
-                // Debug: Save frame to external storage for inspection
-                if (DEBUG_SAVE_FRAMES) {
-                    saveDebugFrame(jpegData, frameCounter)
-                }
 
                 _frameFlow.tryEmit(jpegData)
                 Log.d(TAG, "Frame #$frameCounter emitted: ${jpegData.size} bytes")
@@ -287,53 +264,6 @@ class CameraHelper(
             Log.e(TAG, "Error processing frame", e)
         } finally {
             imageProxy.close()
-        }
-    }
-
-    /**
-     * Save a frame to external storage for debugging.
-     * Frames are saved to: Android/data/uk.co.mrsheep.halive/files/camera_debug_frames/
-     */
-    private fun saveDebugFrame(jpegData: ByteArray, frameNum: Int) {
-        try {
-            val externalDir = context.getExternalFilesDir(null) ?: return
-            val debugDir = File(externalDir, DEBUG_FRAMES_DIR)
-            if (!debugDir.exists()) {
-                debugDir.mkdirs()
-                Log.i(TAG, "Created debug frames directory: ${debugDir.absolutePath}")
-            }
-
-            val timestamp = SimpleDateFormat("HHmmss_SSS", Locale.US).format(Date())
-            val filename = "frame_${frameNum}_${timestamp}.jpg"
-            val file = File(debugDir, filename)
-
-            file.writeBytes(jpegData)
-            Log.d(TAG, "Debug frame saved: ${file.absolutePath} (${jpegData.size} bytes)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to save debug frame", e)
-        }
-    }
-
-    /**
-     * Clear old debug frames from previous sessions.
-     */
-    private fun clearDebugFrames() {
-        try {
-            val externalDir = context.getExternalFilesDir(null) ?: return
-            val debugDir = File(externalDir, DEBUG_FRAMES_DIR)
-            if (debugDir.exists()) {
-                val files = debugDir.listFiles() ?: return
-                var deletedCount = 0
-                for (file in files) {
-                    if (file.name.endsWith(".jpg")) {
-                        file.delete()
-                        deletedCount++
-                    }
-                }
-                Log.i(TAG, "Cleared $deletedCount old debug frames from ${debugDir.absolutePath}")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to clear debug frames", e)
         }
     }
 
@@ -453,15 +383,15 @@ class CameraHelper(
             matrix.postRotate(rotationDegrees.toFloat())
         }
 
-        // Calculate scale to fit within MAX_DIMENSION
+        // Calculate scale to fit within configured max dimension
         val maxDim = maxOf(width, height)
-        if (maxDim > MAX_DIMENSION) {
-            val scale = MAX_DIMENSION.toFloat() / maxDim
+        if (maxDim > maxDimension) {
+            val scale = maxDimension.toFloat() / maxDim
             matrix.postScale(scale, scale)
         }
 
         // Apply transformations only if needed
-        return if (rotationDegrees != 0 || maxDim > MAX_DIMENSION) {
+        return if (rotationDegrees != 0 || maxDim > maxDimension) {
             Bitmap.createBitmap(bitmap, 0, 0, width, height, matrix, true)
         } else {
             bitmap

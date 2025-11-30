@@ -42,20 +42,6 @@
             android:layout_height="match_parent"
             app:scaleType="fillCenter" />
 
-        <!-- Frame counter overlay -->
-        <TextView
-            android:id="@+id/frameCounterText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top|start"
-            android:layout_margin="4dp"
-            android:background="#80000000"
-            android:paddingHorizontal="6dp"
-            android:paddingVertical="2dp"
-            android:text="0"
-            android:textColor="@android:color/white"
-            android:textSize="12sp" />
-
         <!-- Camera flip button overlay -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/cameraFlipButton"
