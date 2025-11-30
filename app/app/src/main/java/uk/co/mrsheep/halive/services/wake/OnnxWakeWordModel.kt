@@ -3,15 +3,27 @@ package uk.co.mrsheep.halive.services.wake
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
-import java.io.File
 import uk.co.mrsheep.halive.core.WakeWordSettings
 
-class OwwModel(
+/**
+ * ONNX Runtime implementation of the WakeWordModel interface.
+ *
+ * This implementation uses ONNX Runtime to run three neural network models in sequence:
+ * 1. Melspectrogram model - Extracts mel-spectrogram features from raw audio
+ * 2. Embedding model - Generates temporal embeddings from melspectrogram features
+ * 3. Wake word detection model - Classifies embeddings to produce detection scores
+ *
+ * @param melSpectrogramFile Serialized ONNX model for melspectrogram extraction
+ * @param embeddingFile Serialized ONNX model for embedding generation
+ * @param wakeWordFile Serialized ONNX model for wake word detection
+ * @param settings Configuration for ONNX Runtime optimization and execution
+ */
+class OnnxWakeWordModel(
     melSpectrogramFile: ByteArray,
     embeddingFile: ByteArray,
     wakeWordFile: ByteArray,
     settings: WakeWordSettings
-) : AutoCloseable {
+) : WakeWordModel {
     private val ortEnvironment: OrtEnvironment = OrtEnvironment.getEnvironment()
 
     private val melSession: OrtSession
@@ -47,7 +59,7 @@ class OwwModel(
         }
     }
 
-    fun processFrame(audio: FloatArray): Float {
+    override fun processFrame(audio: FloatArray): Float {
         if (audio.size != MEL_INPUT_COUNT) {
             throw IllegalArgumentException(
                 "OwwModel can only process audio frames of $MEL_INPUT_COUNT samples"
@@ -142,7 +154,7 @@ class OwwModel(
      * Resets the accumulation buffers to initial state.
      * Call this when starting a new listening session to clear stale data.
      */
-    fun resetAccumulators() {
+    override fun resetAccumulators() {
         accumulatedMelOutputs = Array(EMB_INPUT_COUNT) { arrayOf() }
         accumulatedEmbOutputs = Array(WAKE_INPUT_COUNT) { floatArrayOf() }
     }
