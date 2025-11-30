@@ -457,9 +457,9 @@ class LiveSessionService : Service(), AppLogger {
                     description = """
                     Immediately ends the conversation.
 
-                    Use when the conversation has come to its natural end, for example, if the user says 'thanks' with no obvious follow up.
+                    Use when the conversation has come to its natural end, for example, if the user says "that's all", or "thanks" with no obvious follow up.
 
-                    Wish the user goodbye before calling this tool so they know the conversation is finished.
+                    Tell the user 'goodbye' and call this tool to end the conversation.
                     """.trimIndent(),
                     inputSchema = McpInputSchema(
                         type = "object",
@@ -473,7 +473,7 @@ class LiveSessionService : Service(), AppLogger {
 
                     serviceScope.launch {
                         // Allow conversation service to send the function response
-u                        delay(2500)
+                        delay(2500)
                         stopSession()
                     }
 
