@@ -22,6 +22,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.min
@@ -40,6 +44,10 @@ class CameraHelper(
         private const val MAX_DIMENSION = 1024
         private const val FRAME_INTERVAL_MS = 1000L // 1 FPS
         private const val JPEG_QUALITY = 80
+
+        // Debug: Set to true to save frames to external storage for inspection
+        private const val DEBUG_SAVE_FRAMES = true
+        private const val DEBUG_FRAMES_DIR = "camera_debug_frames"
     }
 
     private var cameraProvider: ProcessCameraProvider? = null
@@ -50,6 +58,7 @@ class CameraHelper(
     private var currentFacing = CameraFacing.FRONT
     private var isCapturing = false
     private var lastFrameTime = 0L
+    private var frameCounter = 0
 
     // Flow for emitting JPEG frames
     private val _frameFlow = MutableSharedFlow<ByteArray>(
@@ -89,6 +98,13 @@ class CameraHelper(
         }
 
         currentFacing = facing
+        frameCounter = 0
+
+        // Clear old debug frames when starting new capture
+        if (DEBUG_SAVE_FRAMES) {
+            clearDebugFrames()
+        }
+
         cameraExecutor = Executors.newSingleThreadExecutor()
 
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
@@ -244,6 +260,13 @@ class CameraHelper(
 
             if (jpegData != null) {
                 lastFrameTime = currentTime
+                frameCounter++
+
+                // Debug: Save frame to external storage for inspection
+                if (DEBUG_SAVE_FRAMES) {
+                    saveDebugFrame(jpegData, frameCounter)
+                }
+
                 _frameFlow.tryEmit(jpegData)
                 Log.v(TAG, "Frame emitted: ${jpegData.size} bytes")
             }
@@ -251,6 +274,53 @@ class CameraHelper(
             Log.e(TAG, "Error processing frame", e)
         } finally {
             imageProxy.close()
+        }
+    }
+
+    /**
+     * Save a frame to external storage for debugging.
+     * Frames are saved to: Android/data/uk.co.mrsheep.halive/files/camera_debug_frames/
+     */
+    private fun saveDebugFrame(jpegData: ByteArray, frameNum: Int) {
+        try {
+            val externalDir = context.getExternalFilesDir(null) ?: return
+            val debugDir = File(externalDir, DEBUG_FRAMES_DIR)
+            if (!debugDir.exists()) {
+                debugDir.mkdirs()
+                Log.i(TAG, "Created debug frames directory: ${debugDir.absolutePath}")
+            }
+
+            val timestamp = SimpleDateFormat("HHmmss_SSS", Locale.US).format(Date())
+            val filename = "frame_${frameNum}_${timestamp}.jpg"
+            val file = File(debugDir, filename)
+
+            file.writeBytes(jpegData)
+            Log.d(TAG, "Debug frame saved: ${file.absolutePath} (${jpegData.size} bytes)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save debug frame", e)
+        }
+    }
+
+    /**
+     * Clear old debug frames from previous sessions.
+     */
+    private fun clearDebugFrames() {
+        try {
+            val externalDir = context.getExternalFilesDir(null) ?: return
+            val debugDir = File(externalDir, DEBUG_FRAMES_DIR)
+            if (debugDir.exists()) {
+                val files = debugDir.listFiles() ?: return
+                var deletedCount = 0
+                for (file in files) {
+                    if (file.name.endsWith(".jpg")) {
+                        file.delete()
+                        deletedCount++
+                    }
+                }
+                Log.i(TAG, "Cleared $deletedCount old debug frames from ${debugDir.absolutePath}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear debug frames", e)
         }
     }
 
