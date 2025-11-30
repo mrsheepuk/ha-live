@@ -473,7 +473,7 @@ class LiveSessionService : Service(), AppLogger {
 
                     serviceScope.launch {
                         // Allow conversation service to send the function response
-                        delay(1500)
+                        delay(2500)
                         stopSession()
                     }
 
