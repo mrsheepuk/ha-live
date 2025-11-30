@@ -38,6 +38,7 @@ import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.DummyToolsConfig
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
+import uk.co.mrsheep.halive.BuildConfig
 import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
@@ -244,6 +245,11 @@ class MainActivity : AppCompatActivity() {
         audioVisualizer = findViewById(R.id.audioVisualizer)
         wakeWordChip = findViewById(R.id.wakeWordChip)
 
+        // Hide wake word chip if wake word feature is not available
+        if (!BuildConfig.HAS_WAKE_WORD) {
+            wakeWordChip.visibility = View.GONE
+        }
+
         transcriptionRecyclerView = findViewById(R.id.transcriptionRecyclerView)
 
         // Initialize RecyclerView
@@ -268,9 +274,11 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 // Observe wake word state from ViewModel and update chip appearance
-                launch {
-                    viewModel.wakeWordEnabled.collect { enabled ->
-                        updateWakeWordChipAppearance(enabled)
+                if (BuildConfig.HAS_WAKE_WORD) {
+                    launch {
+                        viewModel.wakeWordEnabled.collect { enabled ->
+                            updateWakeWordChipAppearance(enabled)
+                        }
                     }
                 }
 
@@ -307,9 +315,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Handle user clicking the wake word chip
-        wakeWordChip.setOnClickListener {
-            viewModel.toggleWakeWord(!viewModel.wakeWordEnabled.value)
+        // Handle user clicking the wake word chip (only if wake word feature is available)
+        if (BuildConfig.HAS_WAKE_WORD) {
+            wakeWordChip.setOnClickListener {
+                viewModel.toggleWakeWord(!viewModel.wakeWordEnabled.value)
+            }
         }
 
         // Handle widget auto-start intent
@@ -375,7 +385,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 statusText.text = "Loading..."
-                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
@@ -386,7 +396,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 statusText.text = "Please complete onboarding"
-                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
@@ -397,7 +407,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 statusText.text = "Please complete onboarding"
-                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
@@ -408,7 +418,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 statusText.text = "Initializing..."
-                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
@@ -419,9 +429,9 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 mainButton.text = "Start Chat"
-                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
                 wakeWordChip.isEnabled = true
-                statusText.text = if (viewModel.wakeWordEnabled.value) {
+                statusText.text = if (BuildConfig.HAS_WAKE_WORD && viewModel.wakeWordEnabled.value) {
                     "Listening for wake word..."
                 } else {
                     "Ready to chat"
@@ -439,7 +449,7 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Chat active - listening..."
-                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
                 wakeWordChip.isEnabled = false
                 clearButton.visibility = View.GONE
 
@@ -460,7 +470,7 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Executing ${state.tool}..."
-                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
@@ -471,7 +481,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.VISIBLE
                 statusText.text = state.message
-                wakeWordChip.visibility = View.VISIBLE
+                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE

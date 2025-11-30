@@ -44,6 +44,34 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+
+    flavorDimensions += "wakeword"
+
+    productFlavors {
+        create("onnx") {
+            dimension = "wakeword"
+            buildConfigField("Boolean", "HAS_WAKE_WORD", "true")
+            buildConfigField("Boolean", "HAS_ONNX", "true")
+            buildConfigField("Boolean", "HAS_TFLITE", "false")
+        }
+        create("tflite") {
+            dimension = "wakeword"
+            buildConfigField("Boolean", "HAS_WAKE_WORD", "true")
+            buildConfigField("Boolean", "HAS_ONNX", "false")
+            buildConfigField("Boolean", "HAS_TFLITE", "true")
+        }
+        create("nowake") {
+            dimension = "wakeword"
+            applicationIdSuffix = ".lite"
+            buildConfigField("Boolean", "HAS_WAKE_WORD", "false")
+            buildConfigField("Boolean", "HAS_ONNX", "false")
+            buildConfigField("Boolean", "HAS_TFLITE", "false")
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
 }
 
 dependencies {
@@ -77,10 +105,10 @@ dependencies {
     implementation("org.json:json:20231013")
 
     // ONNX Runtime for Android
-    implementation(libs.onnx.runtime)
+    "onnxImplementation"(libs.onnx.runtime)
 
     // TensorFlow Lite for Android
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    "tfliteImplementation"("org.tensorflow:tensorflow-lite:2.14.0")
 
     // ConstraintLayout
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")

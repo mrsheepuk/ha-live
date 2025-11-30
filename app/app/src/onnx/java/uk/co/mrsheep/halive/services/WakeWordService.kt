@@ -15,24 +15,15 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uk.co.mrsheep.halive.core.WakeWordConfig
-import uk.co.mrsheep.halive.core.WakeWordRuntime
 import uk.co.mrsheep.halive.core.WakeWordSettings
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.audio.toFloatChunks
 import uk.co.mrsheep.halive.services.wake.OnnxWakeWordModel
-import uk.co.mrsheep.halive.services.wake.TfLiteWakeWordModel
 import uk.co.mrsheep.halive.services.wake.WakeWordModel
 
 /**
- * Manages wake word detection using MicrophoneHelper and configurable inference runtime.
- *
- * Captures 16kHz mono PCM audio via the shared MicrophoneHelper, processes it in
- * 1152-sample chunks using Flow operators, and runs inference via the configured
- * runtime (ONNX or TFLite). Triggers callback when detection confidence exceeds
- * the configured threshold.
- *
- * @param context Application context for accessing files and audio resources
- * @param onWakeWordDetected Callback invoked on the main dispatcher when wake word is detected
+ * ONNX flavor implementation of WakeWordService.
+ * Uses ONNX Runtime for wake word detection inference.
  */
 class WakeWordService(
     private val context: Context,
@@ -41,11 +32,7 @@ class WakeWordService(
     companion object {
         private const val TAG = "WakeWordService"
         private const val SAMPLE_RATE = 16000
-        private const val CHUNK_SIZE = 1280 // OnnxWakeWordModel.MEL_INPUT_COUNT (80ms @ 16kHz)
-
-        // Number of frames to skip after starting to allow model to warm up.
-        // The model needs time to fill its accumulators and stabilize.
-        // At 16kHz with 1280-sample chunks, each frame is 80ms, so 20 frames = 1.6 seconds
+        private const val CHUNK_SIZE = 1280
         private const val WARMUP_FRAMES = 20
     }
 
@@ -55,66 +42,29 @@ class WakeWordService(
     private var isListening = false
     private var currentSettings: WakeWordSettings = WakeWordConfig.getSettings(context)
     private var framesProcessed = 0
-
-    /**
-     * Test mode callback - if set, every detection score is reported to this callback.
-     * Used for real-time threshold tuning in settings UI.
-     */
     private var testModeCallback: ((Float) -> Unit)? = null
-
-    /**
-     * Wake word model instance. Created on-demand and can be recreated when settings change.
-     * Reused across multiple listening sessions for battery efficiency.
-     */
     private var owwModel: WakeWordModel? = null
 
-    /**
-     * Initializes or returns the existing wake word model.
-     * Models are loaded with current settings and reused until explicitly closed.
-     * The runtime (ONNX or TFLite) is determined by currentSettings.runtime.
-     */
     private fun getOrCreateModel(): WakeWordModel {
         owwModel?.let { return it }
 
-        val runtime = currentSettings.runtime
-        val extension = when (runtime) {
-            WakeWordRuntime.ONNX -> ".onnx"
-            WakeWordRuntime.TFLITE -> ".tflite"
-        }
+        val melModel = getAssetData("melspectrogram.onnx")
+        val embModel = getAssetData("embedding_model.onnx")
+        val wakeModel = getAssetData("lizzy_aitch.onnx")
 
-        val melModel = getAssetData("melspectrogram$extension")
-        val embModel = getAssetData("embedding_model$extension")
-        val wakeModel = getAssetData("lizzy_aitch$extension")
-
-        Log.d(TAG, "Initializing wake word models with runtime=$runtime")
-        return when (runtime) {
-            WakeWordRuntime.ONNX -> OnnxWakeWordModel(melModel, embModel, wakeModel, currentSettings)
-            WakeWordRuntime.TFLITE -> TfLiteWakeWordModel(melModel, embModel, wakeModel, currentSettings)
-        }.also {
+        Log.d(TAG, "Initializing ONNX wake word models")
+        return OnnxWakeWordModel(melModel, embModel, wakeModel, currentSettings).also {
             owwModel = it
-            Log.d(TAG, "Wake word models initialized successfully (runtime=$runtime)")
+            Log.d(TAG, "ONNX wake word models initialized successfully")
         }
     }
 
-    /**
-     * Starts listening for the wake word.
-     *
-     * If already listening, returns early without error. AudioRecord requires
-     * the RECORD_AUDIO permission, which is checked by MainActivity at app startup.
-     *
-     * The method initializes the model, creates a MicrophoneHelper instance, and launches
-     * a Flow-based coroutine to process audio chunks in real-time.
-     *
-     * Note: Permission warning is suppressed because MainActivity verifies RECORD_AUDIO
-     * permission before calling ViewModel lifecycle methods that trigger this function.
-     */
     fun startListening() {
         if (isListening) {
             Log.w(TAG, "Already listening for wake word, ignoring startListening() call")
             return
         }
 
-        // Verify models can be loaded and initialize if needed
         try {
             getOrCreateModel().resetAccumulators()
             Log.d(TAG, "Wake word models ready")
@@ -125,9 +75,9 @@ class WakeWordService(
 
         try {
             microphoneHelper = MicrophoneHelper.build(SAMPLE_RATE)
-            microphoneHelper?.enablePreBuffering(1500)  // Buffer 1.5 seconds of audio
+            microphoneHelper?.enablePreBuffering(1500)
             isListening = true
-            framesProcessed = 0  // Reset warm-up counter
+            framesProcessed = 0
             Log.d(TAG, "Started listening for wake word (sampleRate=$SAMPLE_RATE, chunkSize=$CHUNK_SIZE, threshold=${currentSettings.threshold}, warmup=$WARMUP_FRAMES frames)")
 
             launchRecordingPipeline()
@@ -143,10 +93,6 @@ class WakeWordService(
         }
     }
 
-    /**
-     * Creates and launches the recording pipeline for wake word detection.
-     * Extracted to allow reuse when resuming with an existing MicrophoneHelper.
-     */
     private fun launchRecordingPipeline() {
         val helper = microphoneHelper ?: return
         val model = getOrCreateModel()
@@ -160,14 +106,12 @@ class WakeWordService(
                     val detectionScore = model.processFrame(floatBuffer)
                     framesProcessed++
 
-                    // Log progress periodically (every 10 frames) or always in test mode
                     val isTestMode = testModeCallback != null
                     if (isTestMode || framesProcessed % 10 == 0 || framesProcessed <= 5) {
                         val warmupStatus = if (framesProcessed <= WARMUP_FRAMES) "WARMUP" else "ACTIVE"
                         Log.d(TAG, "Frame $framesProcessed [$warmupStatus]: score=%.4f, threshold=${currentSettings.threshold}, testMode=$isTestMode".format(detectionScore))
                     }
 
-                    // Test mode: report every score to callback
                     testModeCallback?.let { callback ->
                         Log.v(TAG, "Invoking test mode callback with score=%.4f".format(detectionScore))
                         withContext(Dispatchers.Main) {
@@ -175,17 +119,13 @@ class WakeWordService(
                         }
                     }
 
-                    // Normal mode: only trigger on threshold (skip if in test mode or warming up)
                     if (testModeCallback == null && framesProcessed > WARMUP_FRAMES && detectionScore > currentSettings.threshold) {
                         Log.i(TAG, "Wake word detected! Score: %.4f (threshold: ${currentSettings.threshold})".format(detectionScore))
-                        // IMPORTANT: Launch callback in a new coroutine BEFORE cleanup,
-                        // because cleanup() cancels this coroutine. Using scope.launch
-                        // creates a new job that won't be cancelled by our cleanup.
                         scope.launch(Dispatchers.Main) {
                             onWakeWordDetected()
                         }
                         cleanup()
-                        return@onEach // Stop processing after detection
+                        return@onEach
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error running inference: ${e.message}", e)
@@ -200,10 +140,8 @@ class WakeWordService(
             }
             .catch { e ->
                 Log.e(TAG, "Error in audio stream: ${e.message}", e)
-                // Check if we were intentionally listening before cleanup resets the flag
                 val shouldRestart = isListening
                 cleanup()
-                // Auto-restart listening on error (unless we were stopping intentionally)
                 if (shouldRestart) {
                     Log.d(TAG, "Restarting wake word listening after error")
                     startListening()
@@ -212,12 +150,6 @@ class WakeWordService(
             .launchIn(scope)
     }
 
-    /**
-     * Stops listening for the wake word.
-     *
-     * Cancels the audio processing coroutine and releases audio resources.
-     * If not currently listening, logs a debug message and returns.
-     */
     fun stopListening() {
         if (!isListening && microphoneHelper == null) {
             Log.d(TAG, "Not currently listening for wake word")
@@ -228,14 +160,6 @@ class WakeWordService(
         cleanup()
     }
 
-    /**
-     * Yields the MicrophoneHelper for handover to another service.
-     * Pauses recording but does NOT release resources.
-     * Returns null if not currently listening or no MicrophoneHelper available.
-     *
-     * After calling this, the WakeWordService is no longer listening and
-     * the caller takes ownership of the MicrophoneHelper.
-     */
     fun yieldMicrophoneHelper(): MicrophoneHelper? {
         if (!isListening || microphoneHelper == null) {
             Log.d(TAG, "yieldMicrophoneHelper: not listening or no microphoneHelper, returning null")
@@ -249,16 +173,10 @@ class WakeWordService(
         microphoneHelper?.pauseRecording()
 
         val helper = microphoneHelper
-        microphoneHelper = null  // Transfer ownership
+        microphoneHelper = null
         return helper
     }
 
-    /**
-     * Resumes wake word listening with an existing MicrophoneHelper.
-     * Used after a conversation session returns the MicrophoneHelper.
-     *
-     * @param helper The MicrophoneHelper to resume with (takes ownership)
-     */
     fun resumeWith(helper: MicrophoneHelper) {
         if (isListening) {
             Log.w(TAG, "Already listening, ignoring resumeWith() - releasing provided helper")
@@ -266,7 +184,6 @@ class WakeWordService(
             return
         }
 
-        // Verify MicrophoneHelper is still usable
         if (helper.isReleased) {
             Log.w(TAG, "MicrophoneHelper already released, starting fresh")
             startListening()
@@ -276,11 +193,10 @@ class WakeWordService(
         Log.d(TAG, "Resuming wake word listening with existing MicrophoneHelper")
 
         try {
-            // Reset model accumulators for fresh detection
             getOrCreateModel().resetAccumulators()
 
             microphoneHelper = helper
-            microphoneHelper?.clearPreBuffer()  // Fresh start for buffering
+            microphoneHelper?.clearPreBuffer()
             isListening = true
             framesProcessed = 0
 
@@ -293,39 +209,20 @@ class WakeWordService(
         }
     }
 
-    /**
-     * Starts test mode for real-time score monitoring.
-     * In test mode, every detection score is reported via the callback.
-     * Wake word detection is disabled - this is for testing only.
-     *
-     * @param onScore Callback invoked with each detection score (called on Main dispatcher)
-     */
     fun startTestMode(onScore: (Float) -> Unit) {
         testModeCallback = onScore
         startListening()
         Log.d(TAG, "Test mode started")
     }
 
-    /**
-     * Stops test mode and cleans up resources.
-     */
     fun stopTestMode() {
         testModeCallback = null
         stopListening()
         Log.d(TAG, "Test mode stopped")
     }
 
-    /**
-     * Returns true if currently in test mode.
-     */
     fun isTestMode(): Boolean = testModeCallback != null
 
-    /**
-     * Cleans up audio resources.
-     *
-     * Cancels the recording job and releases MicrophoneHelper. Note: Model is NOT closed here
-     * for battery efficiency - it's reused across listening sessions.
-     */
     private fun cleanup() {
         isListening = false
         recordingJob?.cancel()
@@ -334,17 +231,10 @@ class WakeWordService(
         microphoneHelper = null
     }
 
-    /**
-     * Releases all resources and cancels all coroutines.
-     *
-     * Should be called when the wake word service is no longer needed.
-     * After calling this, the service cannot be reused.
-     */
     fun destroy() {
         testModeCallback = null
         stopListening()
 
-        // Close models only on destroy (not after each listening session)
         owwModel?.let {
             try {
                 it.close()
@@ -359,17 +249,12 @@ class WakeWordService(
         Log.d(TAG, "WakeWordService destroyed")
     }
 
-    /**
-     * Reloads wake word settings from SharedPreferences.
-     * If currently listening, stops and restarts with new settings.
-     */
     fun reloadSettings() {
         currentSettings = WakeWordConfig.getSettings(context)
 
         if (isListening) {
             stopListening()
 
-            // Force re-initialization of model with new settings on next start
             owwModel?.let {
                 try {
                     it.close()
@@ -384,19 +269,11 @@ class WakeWordService(
         }
     }
 
-    /**
-     * Returns a File object pointing to a model file in the application's files directory.
-     * The file should be copied there by AssetCopyUtil during app startup.
-     *
-     * @param filename Name of the model file (e.g., "melspectrogram.onnx")
-     * @return File object pointing to the model in filesDir
-     */
     private fun getAssetData(filename: String): ByteArray {
         val thing = context.assets.open(filename)
         val fileBytes = ByteArray(thing.available())
         thing.read(fileBytes)
         thing.close()
         return fileBytes
-        //return File(context.filesDir, filename)
     }
 }

@@ -1,7 +1,6 @@
 package uk.co.mrsheep.halive.core
 
 import android.content.Context
-import ai.onnxruntime.OrtSession
 
 /**
  * Runtime to use for wake word detection inference.
@@ -96,13 +95,6 @@ enum class ExecutionMode {
      */
     PARALLEL;
 
-    /**
-     * Converts this ExecutionMode to OrtSession.SessionOptions.ExecutionMode.
-     */
-    fun toOrtExecutionMode(): OrtSession.SessionOptions.ExecutionMode = when (this) {
-        SEQUENTIAL -> OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL
-        PARALLEL -> OrtSession.SessionOptions.ExecutionMode.PARALLEL
-    }
 }
 
 /**
@@ -131,17 +123,7 @@ enum class OptimizationLevel {
      * All optimizations enabled.
      * Maximum performance but longest setup time.
      */
-    ALL_OPT;
-
-    /**
-     * Converts this OptimizationLevel to OrtSession.SessionOptions.OptLevel.
-     */
-    fun toOrtOptLevel(): OrtSession.SessionOptions.OptLevel = when (this) {
-        NO_OPT -> OrtSession.SessionOptions.OptLevel.NO_OPT
-        BASIC_OPT -> OrtSession.SessionOptions.OptLevel.BASIC_OPT
-        EXTENDED_OPT -> OrtSession.SessionOptions.OptLevel.EXTENDED_OPT
-        ALL_OPT -> OrtSession.SessionOptions.OptLevel.ALL_OPT
-    }
+    ALL_OPT
 }
 
 /**

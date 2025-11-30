@@ -50,6 +50,7 @@ import uk.co.mrsheep.halive.HAGeminiApp
 import androidx.browser.customtabs.CustomTabsIntent
 import android.widget.Toast
 import java.util.UUID
+import uk.co.mrsheep.halive.BuildConfig
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -85,6 +86,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var shareCrashLogsButton: Button
 
     // Wake word section
+    private lateinit var wakeWordSection: LinearLayout
     private lateinit var wakeWordStatusText: TextView
     private lateinit var wakeWordDetailsText: TextView
     private lateinit var wakeWordConfigButton: Button
@@ -213,12 +215,18 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         // Wake word section
+        wakeWordSection = findViewById(R.id.wakeWordSection)
         wakeWordStatusText = findViewById(R.id.wakeWordStatusText)
         wakeWordDetailsText = findViewById(R.id.wakeWordDetailsText)
         wakeWordConfigButton = findViewById(R.id.wakeWordConfigButton)
 
         wakeWordConfigButton.setOnClickListener {
             showWakeWordConfigDialog()
+        }
+
+        // Hide wake word section if not available in this build
+        if (!BuildConfig.HAS_WAKE_WORD) {
+            wakeWordSection.visibility = View.GONE
         }
 
         // Quick messages section
@@ -504,10 +512,19 @@ class SettingsActivity : AppCompatActivity() {
         // Runtime radio buttons
         val radioRuntimeOnnx = dialogView.findViewById<RadioButton>(R.id.radioRuntimeOnnx)
         val radioRuntimeTflite = dialogView.findViewById<RadioButton>(R.id.radioRuntimeTflite)
+        val runtimeGroup = dialogView.findViewById<RadioGroup>(R.id.runtimeGroup)
         val currentRuntime = currentSettings.runtime
         when (currentRuntime) {
             WakeWordRuntime.ONNX -> radioRuntimeOnnx.isChecked = true
             WakeWordRuntime.TFLITE -> radioRuntimeTflite.isChecked = true
+        }
+
+        // Hide runtime selector if only one runtime available
+        if (!BuildConfig.HAS_ONNX || !BuildConfig.HAS_TFLITE) {
+            // Find the "Inference Runtime:" label and hide it along with the radio group
+            val runtimeLabel = dialogView.findViewById<TextView?>(R.id.runtimeLabel)
+            runtimeLabel?.visibility = View.GONE
+            runtimeGroup.visibility = View.GONE
         }
 
         // Build dialog
