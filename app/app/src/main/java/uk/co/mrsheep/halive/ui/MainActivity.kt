@@ -929,11 +929,13 @@ class MainActivity : AppCompatActivity() {
             // Camera is on - filled style
             cameraToggleButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.teal_primary)
             cameraToggleButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.white))
+            cameraToggleButton.setTextColor(ContextCompat.getColor(this, R.color.white))
             cameraToggleButton.strokeWidth = 0
         } else {
             // Camera is off - outlined style
             cameraToggleButton.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.transparent)
             cameraToggleButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.teal_primary))
+            cameraToggleButton.setTextColor(ContextCompat.getColor(this, R.color.teal_primary))
             cameraToggleButton.strokeWidth = (1 * resources.displayMetrics.density).toInt()
         }
     }
