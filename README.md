@@ -8,6 +8,7 @@ HA Live is an open-source Android app that bridges Google's Gemini Live API with
 
 - **True Streaming Conversations**: Uses Gemini Live's real-time, bidirectional streaming for natural, interruptible conversations—no more waiting for the AI to finish speaking
 - **Direct Home Assistant Integration**: Connects to Home Assistant's MCP server to access all your entities, services, and automations as native AI tools
+- **Real-Time Video Streaming**: Share your phone camera or Home Assistant cameras with Gemini for visual context during conversations
 - **Multiple Personalities**: Create unlimited conversation profiles with different prompts, voices, models, and tool access
 - **Wake Word Detection**: Built-in "Lizzy H" wake word support (foreground only, privacy-first)
 - **Contextual Awareness**: Inject live Home Assistant state and Jinja2 templates into every conversation
@@ -17,20 +18,21 @@ HA Live is an open-source Android app that bridges Google's Gemini Live API with
 HA Live acts as a bridge between two powerful systems:
 
 ```
-You → HA Live (Android) → Gemini Live API
-                ↓
-    Home Assistant MCP Server (/mcp_server/sse)
-                ↓
-    Your Smart Home (lights, sensors, automations, etc.)
+You (voice + optional video) → HA Live (Android) → Gemini Live API
+                                      ↓
+                          Home Assistant MCP Server (/mcp_server/sse)
+                                      ↓
+                          Your Smart Home (lights, sensors, cameras, etc.)
 ```
 
-When you speak to HA Live:
+When you interact with HA Live:
 1. Your voice is streamed to Gemini Live for real-time processing
-2. Gemini Live receives a list of available "tools" from your Home Assistant setup
-3. When Gemini decides to control your home, it calls these tools
-4. HA Live translates tool calls into JSON-RPC requests to your HA MCP server
-5. Home Assistant executes the action and returns results
-6. Gemini confirms the action back to you via voice
+2. Optionally, video from your phone camera or HA cameras is streamed alongside
+3. Gemini Live receives a list of available "tools" from your Home Assistant setup
+4. When Gemini decides to control your home, it calls these tools
+5. HA Live translates tool calls into JSON-RPC requests to your HA MCP server
+6. Home Assistant executes the action and returns results
+7. Gemini confirms the action back to you via voice
 
 All of this happens in real-time with sub-second latency, making conversations feel natural and responsive.
 
@@ -46,6 +48,15 @@ Create multiple profiles for different use cases:
 - **Tool Filtering**: Grant access to ALL tools or create a whitelist for specific profiles
 - **Auto-Start**: Automatically begin conversations when opening the app
 - **Initial Messages**: Send a message to the agent as soon as the session starts
+- **Model Camera Access**: Configure which HA cameras the AI can request to view
+
+### Video Streaming
+Share visual context with Gemini during conversations:
+- **Phone Cameras**: Stream from front or back camera
+- **Home Assistant Cameras**: Stream from any HA camera entity
+- **Configurable Quality**: Choose resolution (256×256, 512×512, 1024×1024) and frame rate (0.2–1 FPS)
+- **AI Camera Control**: Let the AI request access to specific HA cameras during conversation
+- **Live Preview**: See what you're sharing in a preview window
 
 ### Advanced Configuration
 - **Live Context Injection**: Automatically fetch current Home Assistant state before each conversation
@@ -160,6 +171,22 @@ Living room occupied: {{ states('binary_sensor.living_room_motion') }}
 - **ALL**: Grant access to all Home Assistant tools (recommended for general use)
 - **SELECTED**: Whitelist specific tools (useful for restricted profiles, e.g., "kids profile" with limited access)
 
+### Video Configuration
+
+**During Active Chat**: Tap the video button to open the camera source menu. Options include:
+- **Off**: Disable video streaming
+- **Phone Camera (Front/Back)**: Use device camera
+- **Home Assistant Cameras**: Any HA camera entity available in your setup
+
+**Camera Settings** (Settings → Camera Settings):
+- **Resolution**: 256×256 (low bandwidth), 512×512 (balanced), 1024×1024 (high quality)
+- **Frame Rate**: 0.2 FPS (1 per 5s), 0.5 FPS (1 per 2s), 1 FPS (smooth)
+
+**AI Camera Access** (Profile Editor → "Cameras AI Can Access"):
+- Configure which HA cameras the AI model can request to view
+- When enabled, AI can call `StartWatchingCamera` to view specific cameras
+- User is prompted if AI wants to switch from an active phone camera
+
 ### Wake Word Configuration
 
 **Quick Toggle**: Tap the "Wake Word" chip on the main screen to enable/disable detection.
@@ -197,6 +224,8 @@ Templates are re-rendered fresh at the start of each conversation.
 
 In addition to Home Assistant tools, HA Live provides built-in tools:
 - **EndConversation**: Allows Gemini to gracefully end the session when appropriate
+- **StartWatchingCamera**: Lets Gemini request to view a Home Assistant camera (if configured in profile)
+- **StopWatchingCamera**: Stops viewing the current camera
 
 ### Debug Logs (Tool Call Logging)
 
@@ -240,11 +269,18 @@ HA Live uses a modular architecture:
 - **AppToolExecutor**: Wraps MCP client, adds logging and local tool support
 - **SessionPreparer**: Handles tool fetching, filtering, and session initialization
 
+### Audio & Video Pipeline
+- **MicrophoneHelper**: Audio capture with echo cancellation and pre-buffering
+- **CameraHelper**: CameraX-based device camera capture with frame processing
+- **VideoSource Interface**: Abstracts video sources (device cameras, HA cameras)
+- **CameraSourceManager**: Manages available video sources and creates instances
+- **HACameraSource**: Fetches snapshots from Home Assistant camera entities
+
 ### Session Lifecycle
 1. App launch: Load config, initialize API client, start wake word (if enabled)
-2. Start chat: Create MCP connection, fetch tools, apply filtering, render templates
-3. Active session: Stream audio, handle tool calls, provide transcription
-4. End chat: Cleanup MCP connection, play end beep, resume wake word
+2. Start chat: Create MCP connection, fetch tools, fetch HA cameras, apply filtering, render templates
+3. Active session: Stream audio (and optionally video), handle tool calls, provide transcription
+4. End chat: Cleanup MCP connection, stop video capture, play end beep, resume wake word
 
 ### File Organization
 ```
@@ -252,12 +288,21 @@ app/src/main/java/uk/co/mrsheep/halive/
 ├── core/                    # Configuration and data models
 │   ├── HAConfig.kt         # Home Assistant credentials
 │   ├── GeminiConfig.kt     # Gemini API key storage
+│   ├── CameraConfig.kt     # Camera resolution/frame rate settings
 │   ├── Profile.kt          # Profile data model
 │   └── ProfileManager.kt   # Profile CRUD operations
 ├── services/
+│   ├── audio/              # Audio capture
+│   │   └── MicrophoneHelper.kt  # Microphone with echo cancellation
+│   ├── camera/             # Video capture
+│   │   ├── VideoSource.kt       # Video source interface
+│   │   ├── CameraHelper.kt      # Device camera capture (CameraX)
+│   │   ├── HACameraSource.kt    # HA camera snapshot fetching
+│   │   └── CameraSourceManager.kt  # Source management
 │   ├── conversation/       # Provider interface
 │   ├── geminidirect/       # Gemini Live API implementation
 │   ├── mcp/                # MCP client
+│   ├── LiveSessionService.kt  # Foreground service for sessions
 │   ├── WakeWordService.kt  # Wake word detection
 │   └── SessionPreparer.kt  # Session initialization
 └── ui/                     # Activities and ViewModels
@@ -298,6 +343,25 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Issues**: [GitHub Issues](https://github.com/yourusername/ha-live/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/yourusername/ha-live/discussions)
 - **Home Assistant Forum**: [Coming Soon]
+
+## Features Implemented
+
+- ✅ Gemini Live API via WebSocket
+- ✅ Real-time audio streaming with echo cancellation
+- ✅ Real-time video streaming (phone cameras + HA cameras)
+- ✅ AI-controlled camera viewing
+- ✅ Multiple conversation profiles
+- ✅ Tool filtering (whitelist mode per profile)
+- ✅ Wake word detection (foreground only)
+- ✅ Jinja2 template rendering for background info
+- ✅ Live context fetching on session start
+- ✅ Real-time transcription logging
+- ✅ Auto-start chat on app launch
+- ✅ Initial message to agent
+- ✅ Profile export/import
+- ✅ Tool call logging with timestamps
+- ✅ Local tools (EndConversation, StartWatchingCamera, StopWatchingCamera)
+- ✅ Audio feedback (beeps for ready/end)
 
 ## Roadmap
 
