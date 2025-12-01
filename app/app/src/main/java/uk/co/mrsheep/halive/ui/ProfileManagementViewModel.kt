@@ -8,9 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.Profile
-import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ProfileExportImport
-import uk.co.mrsheep.halive.core.ProfileSource
 import uk.co.mrsheep.halive.core.ProfileNameConflictException
 
 /**
@@ -32,7 +30,7 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
         get() = getApplication()
 
     /**
-     * Loads profiles from ProfileManager and observes changes.
+     * Loads profiles from ProfileService and observes changes.
      * Also loads the active profile ID and includes it in the state.
      */
     fun loadProfiles() {
@@ -42,12 +40,12 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
 
                 // Only refresh shared profiles if the HACS integration is installed
                 if (app.isSharedConfigAvailable()) {
-                    ProfileManager.refreshSharedProfiles()
+                    app.profileService.refreshProfiles()
                 }
 
-                // Observe the profiles StateFlow from ProfileManager
-                ProfileManager.profiles.collect { profiles ->
-                    val activeProfileId = ProfileManager.getActiveProfile()?.id
+                // Observe the profiles StateFlow from ProfileService
+                app.profileService.profiles.collect { profiles ->
+                    val activeProfileId = app.profileService.getActiveProfileId()
                     _state.value = ProfileManagementState.Loaded(
                         profiles = profiles,
                         activeProfileId = activeProfileId
@@ -67,7 +65,7 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
     fun setActiveProfile(profileId: String) {
         viewModelScope.launch {
             try {
-                ProfileManager.setActiveProfile(profileId)
+                app.profileService.setActiveProfile(profileId)
 
                 // Manually refresh state since setActiveProfile doesn't trigger StateFlow emission
                 val currentState = _state.value
@@ -84,28 +82,13 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
 
     /**
      * Deletes a profile.
-     * Handles the "last profile" error from ProfileManager.
+     * Handles the "last profile" error from ProfileService.
      */
     fun deleteProfile(profileId: String) {
         viewModelScope.launch {
             try {
-                val profile = ProfileManager.getProfileById(profileId)
-                if (profile == null) {
-                    _state.value = ProfileManagementState.Error("Profile not found")
-                    return@launch
-                }
-
-                when (profile.source) {
-                    ProfileSource.LOCAL -> ProfileManager.deleteLocalProfile(profileId)
-                    ProfileSource.SHARED -> {
-                        val success = ProfileManager.deleteSharedProfile(profileId)
-                        if (!success) {
-                            _state.value = ProfileManagementState.Error("Failed to delete shared profile")
-                            return@launch
-                        }
-                    }
-                }
-                // ProfileManager will emit updated list via StateFlow
+                app.profileService.deleteProfile(profileId)
+                // ProfileService will emit updated list via StateFlow
             } catch (e: IllegalStateException) {
                 // This is the "last profile" error
                 _state.value = ProfileManagementState.Error(
@@ -125,11 +108,11 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
     fun duplicateProfile(profileId: String) {
         viewModelScope.launch {
             try {
-                val original = ProfileManager.getProfileById(profileId)
+                val original = app.profileService.getProfileById(profileId)
                 if (original != null) {
                     val newName = "Copy of ${original.name}"
-                    ProfileManager.duplicateProfile(profileId, newName)
-                    // ProfileManager will emit updated list via StateFlow
+                    app.profileService.duplicateProfile(profileId, newName)
+                    // ProfileService will emit updated list via StateFlow
                 }
             } catch (e: Exception) {
                 _state.value = ProfileManagementState.Error(
@@ -151,7 +134,7 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
      * Returns the JSON string if found, or null if profile doesn't exist.
      */
     fun exportSingleProfile(profileId: String): String? {
-        val profile = ProfileManager.getProfileById(profileId) ?: return null
+        val profile = app.profileService.getAllProfiles().find { it.id == profileId } ?: return null
         return ProfileExportImport.exportProfiles(listOf(profile))
     }
 
@@ -163,22 +146,22 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
     fun importProfiles(jsonString: String, onSuccess: (Int, Int) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
             try {
-                val existingProfiles = ProfileManager.getAllProfiles()
+                val existingProfiles = app.profileService.getAllProfiles()
                 val result = ProfileExportImport.importProfiles(jsonString, existingProfiles)
 
                 result.fold(
                     onSuccess = { importResult ->
-                        // Add imported profiles to ProfileManager
+                        // Add imported profiles to ProfileService
                         importResult.profiles.forEach { profile ->
                             try {
-                                ProfileManager.createProfile(profile)
+                                app.profileService.createProfile(profile)
                             } catch (e: Exception) {
                                 // Log duplicate name errors but continue with other imports
                             }
                         }
                         // Notify caller with count and conflicts
                         onSuccess(importResult.profiles.size, importResult.conflicts.size)
-                        // State will be updated by ProfileManager's StateFlow emissions
+                        // State will be updated by ProfileService's StateFlow emissions
                     },
                     onFailure = { exception ->
                         _state.value = ProfileManagementState.Error(
@@ -200,7 +183,7 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
     fun uploadToShared(profile: Profile, deleteLocal: Boolean, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                ProfileManager.uploadToShared(profile, deleteLocal)
+                app.profileService.uploadToRemote(profile, deleteLocal)
                 onSuccess()
             } catch (e: ProfileNameConflictException) {
                 onError(e.message ?: "Name already exists")
@@ -212,14 +195,22 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
 
     /**
      * Downloads a shared profile to local storage.
+     * Launches the download asynchronously and invokes the callback with the result.
      */
-    fun downloadToLocal(profile: Profile): Profile {
-        return ProfileManager.downloadToLocal(profile)
+    fun downloadToLocal(profile: Profile, onSuccess: (Profile) -> Unit = {}, onError: (String) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                val localCopy = app.profileService.downloadToLocal(profile)
+                onSuccess(localCopy)
+            } catch (e: Exception) {
+                onError(e.message ?: "Failed to download profile")
+            }
+        }
     }
 
     /**
      * Refreshes profiles from the backend.
-     * Handles errors gracefully and sets offline state if refresh fails.
+     * Handles errors gracefully.
      * Skips network call if HACS integration is not installed.
      */
     fun refreshProfiles() {
@@ -228,23 +219,17 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
             try {
                 // Only attempt network refresh if HACS integration is installed
                 if (app.isSharedConfigAvailable()) {
-                    ProfileManager.refreshSharedProfiles()
+                    app.profileService.refreshProfiles()
                 }
-                val profiles = ProfileManager.getAllProfiles()
-                val activeId = ProfileManager.getActiveProfile()?.id
+                val profiles = app.profileService.getAllProfiles()
+                val activeId = app.profileService.getActiveProfileId()
                 _state.value = ProfileManagementState.Loaded(
                     profiles = profiles,
-                    activeProfileId = activeId,
-                    isOffline = false
+                    activeProfileId = activeId
                 )
             } catch (e: Exception) {
-                // On error, show cached data but mark as offline
-                val profiles = ProfileManager.getAllProfiles()
-                val activeId = ProfileManager.getActiveProfile()?.id
-                _state.value = ProfileManagementState.Loaded(
-                    profiles = profiles,
-                    activeProfileId = activeId,
-                    isOffline = true
+                _state.value = ProfileManagementState.Error(
+                    e.message ?: "Failed to refresh profiles"
                 )
             }
         }
@@ -261,7 +246,7 @@ class ProfileManagementViewModel(application: Application) : AndroidViewModel(ap
 
             for (profile in profiles) {
                 try {
-                    ProfileManager.uploadToShared(profile, deleteLocal = true)
+                    app.profileService.uploadToRemote(profile, deleteLocal = true)
                     successCount++
                 } catch (e: ProfileNameConflictException) {
                     failCount++

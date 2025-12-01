@@ -3,11 +3,12 @@ package uk.co.mrsheep.halive.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.Profile
-import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ToolFilterMode
 import uk.co.mrsheep.halive.core.ProfileSource
 import uk.co.mrsheep.halive.core.ProfileNameConflictException
+import uk.co.mrsheep.halive.core.ProfileService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -17,12 +18,15 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
     private val _editorState = MutableStateFlow<ProfileEditorState>(ProfileEditorState.Idle)
     val editorState: StateFlow<ProfileEditorState> = _editorState
 
+    private val profileService: ProfileService
+        get() = (getApplication() as HAGeminiApp).profileService
+
     /**
      * Loads an existing profile for editing.
      */
     fun loadProfile(profileId: String) {
         viewModelScope.launch {
-            val profile = ProfileManager.getProfileById(profileId)
+            val profile = profileService.getProfileById(profileId)
             if (profile != null) {
                 _editorState.value = ProfileEditorState.Loaded(profile)
             } else {
@@ -36,7 +40,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      */
     fun loadForDuplicate(profileId: String) {
         viewModelScope.launch {
-            val original = ProfileManager.getProfileById(profileId)
+            val original = profileService.getProfileById(profileId)
             if (original != null) {
                 // Create a temporary profile with "Copy of" prefix
                 val duplicate = original.copy(
@@ -105,7 +109,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
 
                 if (existingId != null) {
                     // Update existing profile
-                    val existing = ProfileManager.getProfileById(existingId)
+                    val existing = profileService.getProfileById(existingId)
                     if (existing == null) {
                         _editorState.value = ProfileEditorState.SaveError("Profile not found")
                         return@launch
@@ -114,7 +118,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                     // Check for conflict on shared profiles
                     if (existing.source == ProfileSource.SHARED && !forceOverwrite) {
                         // Check if profile has been modified since we loaded it
-                        val currentProfile = ProfileManager.getProfileById(existingId)
+                        val currentProfile = profileService.getProfileById(existingId)
                         if (currentProfile?.lastModified != originalLastModified) {
                             _editorState.value = ProfileEditorState.ConflictDetected(currentProfile)
                             return@launch
@@ -138,10 +142,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         allowedModelCameras = allowedModelCameras
                     )
 
-                    when (existing.source) {
-                        ProfileSource.LOCAL -> ProfileManager.updateLocalProfile(updated)
-                        ProfileSource.SHARED -> ProfileManager.updateSharedProfile(updated)
-                    }
+                    profileService.updateProfile(updated)
                 } else {
                     // Create new profile
                     val newProfile = Profile(
@@ -162,10 +163,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         source = targetSource
                     )
 
-                    when (targetSource) {
-                        ProfileSource.LOCAL -> ProfileManager.createLocalProfile(newProfile)
-                        ProfileSource.SHARED -> ProfileManager.createSharedProfile(newProfile)
-                    }
+                    profileService.createProfile(newProfile, targetSource)
                 }
 
                 _editorState.value = ProfileEditorState.SaveSuccess

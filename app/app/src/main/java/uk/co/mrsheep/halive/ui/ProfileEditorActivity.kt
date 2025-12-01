@@ -35,7 +35,6 @@ import kotlinx.coroutines.delay
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.Profile
-import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ProfileSource
 import uk.co.mrsheep.halive.core.ToolFilterMode
 import uk.co.mrsheep.halive.services.ProfileTestManager
@@ -329,8 +328,12 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
 
         saveButton.setOnClickListener {
             // Show syncing state for shared profiles
+            val app = application as HAGeminiApp
+            val editingProfile = editingProfileId?.let { id ->
+                app.profileService.getAllProfiles().find { it.id == id }
+            }
             if (targetSource == ProfileSource.SHARED ||
-                (editingProfileId != null && ProfileManager.getProfileById(editingProfileId!!)?.source == ProfileSource.SHARED)) {
+                (editingProfile?.source == ProfileSource.SHARED)) {
                 showSyncingState()
             }
 

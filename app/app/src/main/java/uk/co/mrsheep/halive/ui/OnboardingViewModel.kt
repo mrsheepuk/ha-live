@@ -7,7 +7,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.GeminiConfig
-import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ConversationServicePreference
 import uk.co.mrsheep.halive.core.OAuthConfig
 import uk.co.mrsheep.halive.core.SecureTokenStorage
@@ -60,7 +59,7 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
                 GeminiConfig.saveApiKey(getApplication(), apiKey)
 
                 // HA OAuth is already complete at this point, so proceed to completion
-                ProfileManager.ensureDefaultProfileExists()
+                app.profileService.ensureDefaultProfileExists()
                 _onboardingState.value = OnboardingState.Step3Complete
             } catch (e: Exception) {
                 _onboardingState.value = OnboardingState.GeminiKeyInvalid(e.message ?: "Failed to save API key")
@@ -115,14 +114,14 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
                             if (!GeminiConfig.isConfigured(getApplication())) {
                                 _onboardingState.value = OnboardingState.NoSharedConfig
                             } else {
-                                ProfileManager.ensureDefaultProfileExists()
+                                app.profileService.ensureDefaultProfileExists()
                                 _onboardingState.value = OnboardingState.Step3Complete
                             }
                         }
                         sharedConfig.geminiApiKey != null -> {
                             // Shared config with API key - all set!
                             Log.d(TAG, "Shared config found with API key")
-                            ProfileManager.ensureDefaultProfileExists()
+                            app.profileService.ensureDefaultProfileExists()
                             _onboardingState.value = OnboardingState.SharedConfigFound(
                                 hasApiKey = true,
                                 profileCount = sharedConfig.profiles.size
@@ -165,7 +164,7 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
                     if (success) {
                         // Refresh config after setting key
                         app.fetchSharedConfig()
-                        ProfileManager.ensureDefaultProfileExists()
+                        app.profileService.ensureDefaultProfileExists()
                         _onboardingState.value = OnboardingState.Step3Complete
                     } else {
                         _onboardingState.value = OnboardingState.GeminiKeyInvalid("Failed to save shared key")
@@ -189,8 +188,10 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
         // Check if Gemini is already configured
         if (GeminiConfig.isConfigured(getApplication())) {
             // Already have Gemini key, go straight to complete
-            ProfileManager.ensureDefaultProfileExists()
-            _onboardingState.value = OnboardingState.Step3Complete
+            viewModelScope.launch {
+                app.profileService.ensureDefaultProfileExists()
+                _onboardingState.value = OnboardingState.Step3Complete
+            }
         } else {
             // Need to enter Gemini key locally
             _onboardingState.value = OnboardingState.Step1GeminiConfig
@@ -203,7 +204,9 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
      */
     fun skipToComplete() {
         Log.d(TAG, "Skipping to complete step")
-        ProfileManager.ensureDefaultProfileExists()
-        _onboardingState.value = OnboardingState.Step3Complete
+        viewModelScope.launch {
+            app.profileService.ensureDefaultProfileExists()
+            _onboardingState.value = OnboardingState.Step3Complete
+        }
     }
 }

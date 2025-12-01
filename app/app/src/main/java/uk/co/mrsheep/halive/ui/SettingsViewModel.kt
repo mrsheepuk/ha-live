@@ -6,7 +6,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.GeminiConfig
-import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.core.WakeWordSettings
 import uk.co.mrsheep.halive.core.ExecutionMode
@@ -109,7 +108,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val authMethodDisplay = if (haAuth.isAuthenticated()) "OAuth (Browser Login)" else "Not authenticated"
 
             val geminiKey = GeminiConfig.getApiKey(getApplication()) ?: "Not configured"
-            val profileCount = ProfileManager.getAllProfiles().size
+            val profileCount = app.profileService.getAllProfiles().size
 
             val canChooseService = false
             val serviceDisplayName = "Gemini Direct API"
