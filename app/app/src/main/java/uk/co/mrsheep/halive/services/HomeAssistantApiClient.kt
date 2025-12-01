@@ -15,6 +15,8 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -314,7 +316,7 @@ class HomeAssistantApiClient(
         return getStates("camera").map { state ->
             CameraEntity(
                 entityId = state.entityId,
-                friendlyName = state.attributes["friendly_name"]?.toString()
+                friendlyName = state.attributes["friendly_name"]?.jsonPrimitive?.contentOrNull
                     ?: state.entityId.removePrefix("camera.").replace("_", " ").capitalizeWords(),
                 state = state.state
             )

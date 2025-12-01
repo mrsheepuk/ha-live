@@ -8,8 +8,10 @@ import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.widget.PopupMenu
+import android.view.LayoutInflater
+import android.view.ViewGroup
 import androidx.camera.view.PreviewView
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.card.MaterialCardView
 import android.view.Menu
 import android.view.MenuItem
@@ -828,23 +830,63 @@ class MainActivity : AppCompatActivity() {
     // ==================== Camera Methods ====================
 
     /**
-     * Show popup menu for camera source selection.
+     * Show bottom sheet for camera source selection.
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun showCameraSourceMenu(anchor: View) {
-        val popup = PopupMenu(this, anchor)
         val options = viewModel.getAvailableVideoSources()
 
-        options.forEachIndexed { index, option ->
-            popup.menu.add(0, index, index, option.displayName)
+        val bottomSheet = BottomSheetDialog(this)
+        val sheetView = layoutInflater.inflate(R.layout.bottom_sheet_camera_source, null)
+
+        val recyclerView = sheetView.findViewById<RecyclerView>(R.id.sourceList)
+        recyclerView.layoutManager = LinearLayoutManager(this)
+        recyclerView.adapter = CameraSourceAdapter(options) { selectedType ->
+            bottomSheet.dismiss()
+            selectCameraSource(selectedType)
         }
 
-        popup.setOnMenuItemClickListener { item ->
-            val selectedOption = options[item.itemId]
-            selectCameraSource(selectedOption.type)
-            true
+        bottomSheet.setContentView(sheetView)
+        bottomSheet.show()
+    }
+
+    /**
+     * Adapter for camera source selection bottom sheet.
+     */
+    private inner class CameraSourceAdapter(
+        private val options: List<uk.co.mrsheep.halive.services.camera.VideoSourceOption>,
+        private val onSelect: (VideoSourceType) -> Unit
+    ) : RecyclerView.Adapter<CameraSourceAdapter.ViewHolder>() {
+
+        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val icon: ImageView = view.findViewById(R.id.sourceIcon)
+            val name: TextView = view.findViewById(R.id.sourceName)
         }
 
-        popup.show()
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_camera_source, parent, false)
+            return ViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            val option = options[position]
+            holder.name.text = option.displayName
+
+            // Set appropriate icon based on source type
+            val iconRes = when (option.type) {
+                is VideoSourceType.None -> R.drawable.ic_videocam
+                is VideoSourceType.DeviceCamera -> R.drawable.ic_phone
+                is VideoSourceType.HACamera -> R.drawable.ic_camera
+            }
+            holder.icon.setImageResource(iconRes)
+
+            holder.itemView.setOnClickListener {
+                onSelect(option.type)
+            }
+        }
+
+        override fun getItemCount() = options.size
     }
 
     /**
