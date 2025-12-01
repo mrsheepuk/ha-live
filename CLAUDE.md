@@ -1,7 +1,7 @@
 # Claude Context: HA Live - Home Assistant Voice Assistant
 
 ## Project Overview
-Open-source Android voice assistant for Home Assistant using Gemini Live API. Provides low-latency, streaming, interruptible voice conversations by acting as a bridge between Gemini Live and Home Assistant's MCP server.
+Open-source Android voice assistant for Home Assistant using Gemini Live API. Provides low-latency, streaming, interruptible voice and video conversations by acting as a bridge between Gemini Live and Home Assistant's MCP server. Supports real-time video streaming from phone cameras or Home Assistant camera entities.
 
 ## Architecture
 
@@ -30,7 +30,10 @@ The app uses a `ConversationService` interface implemented by `DirectConversatio
 **Tool Execution Layer:**
 - `ToolExecutor` interface - Abstract tool execution contract
 - `AppToolExecutor` - Wraps MCP client, adds logging + local tools
-- Local tools defined in `MainViewModel.getLocalTools()` (e.g., EndConversation)
+- Local tools defined in `LiveSessionService.getLocalTools()`:
+  - `EndConversation` - Gracefully ends the session
+  - `StartWatchingCamera` - Model requests to view an HA camera
+  - `StopWatchingCamera` - Model stops viewing current camera
 - Local tools executed in-app, MCP tools forwarded to Home Assistant
 
 **Session Preparation:**
@@ -45,9 +48,43 @@ The app uses a `ConversationService` interface implemented by `DirectConversatio
 
 **User Features:**
 - `ProfileManager.kt` - Multiple conversation profiles
-- `Profile.kt` - System prompt, personality, model, voice, tool filtering
+- `Profile.kt` - System prompt, personality, model, voice, tool filtering, allowed cameras
 - `WakeWordService.kt` - Foreground wake word detection
 - `ProfileExportImport.kt` - Share profiles via JSON
+
+### Audio & Video Pipeline
+
+**Audio Capture:**
+- `MicrophoneHelper.kt` (`services/audio/`) - Microphone recording with echo cancellation
+- Uses `AudioRecord` with `VOICE_COMMUNICATION` source for AEC
+- Pre-buffering support via `CircularAudioBuffer` for wake word → chat handoff
+- Flow-based audio streaming to conversation service
+
+**Video Capture:**
+- `VideoSource` interface (`services/camera/`) - Abstract video frame provider
+- `DeviceCameraSource` - CameraX-based phone camera capture (front/back)
+- `HACameraSource` - Fetches JPEG snapshots from HA camera proxy API
+- `CameraHelper.kt` - Low-level CameraX frame capture with YUV→JPEG conversion
+- `CameraSourceManager` - Manages available sources and creates instances
+- `FrameProcessor` - JPEG resize/processing utility
+
+**Video Settings:**
+- `CameraConfig.kt` - Resolution (256/512/1024) and frame rate (0.2/0.5/1 FPS) settings
+- Settings persisted via SharedPreferences
+- Remembers last used camera facing (front/back)
+
+**Video Flow:**
+```
+VideoSource.frameFlow → ConversationService → GeminiLiveSession.sendVideoRealtime()
+                                                        ↓
+                                              Gemini Live API (multimodal)
+```
+
+**Model Camera Tools:**
+- `StartWatchingCamera` - Model requests to view an HA camera
+- `StopWatchingCamera` - Model stops viewing current camera
+- `profile.allowedModelCameras` - Set of camera entity IDs model can access
+- System prompt includes `<available_cameras>` section when cameras are configured
 
 ### Session Flow
 
@@ -65,16 +102,26 @@ The app uses a `ConversationService` interface implemented by `DirectConversatio
 4. Create `ConversationService` via factory
 5. `SessionPreparer.prepareAndInitialize()`:
    - Fetch raw MCP tools
+   - Fetch available HA cameras for video source selection
    - Apply profile tool filtering (ALL or SELECTED)
    - Render background info template (Jinja2 via HA API)
    - Fetch live context (GetLiveContext tool) if enabled
-   - Build system prompt with all sections
+   - Build system prompt with all sections (including available cameras)
    - Initialize conversation service with tools + prompt
 6. Start audio conversation session
 7. State: `ChatActive`
 8. Play ready beep
 9. Send initial message to agent if configured
-10. Resume wake word on session end
+10. User can enable video streaming during session (tap video button)
+11. Resume wake word on session end
+
+**Video During Session:**
+- User taps video button → Camera source selector opens
+- Selecting a source creates `VideoSource` instance
+- `ConversationService.startVideoCapture(source)` begins streaming
+- Frames flow to Gemini via `sendVideoRealtime()`
+- Preview shown in UI (device camera: live preview, HA camera: last frame)
+- Model can request camera switch via `StartWatchingCamera` tool
 
 **Tool Call Flow:**
 ```
@@ -135,6 +182,7 @@ Each profile configures:
 - **Model** - e.g., "gemini-2.0-flash-exp"
 - **Voice** - e.g., "Aoede", "Leda"
 - **Tool Filtering** - ALL (use all MCP tools) or SELECTED (whitelist)
+- **Allowed Model Cameras** - Set of HA camera entity IDs the model can access via tools
 - **Include Live Context** - Fetch GetLiveContext on startup
 - **Enable Transcription** - Real-time speech-to-text logging
 - **Auto-Start Chat** - Start conversation on app launch
@@ -150,15 +198,28 @@ interface ConversationService {
     suspend fun sendText(message)
     fun stopSession()
     fun cleanup()
+    // Video support
+    fun startVideoCapture(source: VideoSource)
+    fun stopVideoCapture()
+    fun yieldMicrophoneHelper(): MicrophoneHelper?  // For wake word handoff
 }
 
 interface ToolExecutor {
     suspend fun getTools(): List<McpTool>
     suspend fun callTool(name, arguments): ToolCallResult
 }
+
+interface VideoSource {
+    val sourceId: String
+    val displayName: String
+    val frameFlow: Flow<ByteArray>  // JPEG frames
+    val isActive: Boolean
+    suspend fun start()
+    fun stop()
+}
 ```
 
-**Why:** Clean abstraction allows for potential future provider implementations
+**Why:** Clean abstraction allows for potential future provider implementations and multiple video source types
 
 ### Separation of Concerns
 - **Transformation:** `GeminiLiveMCPToolTransformer` (stateless)
@@ -275,7 +336,8 @@ app/app/src/main/java/uk/co/mrsheep/halive/
 ├── core/
 │   ├── GeminiConfig.kt                 # API key storage
 │   ├── HAConfig.kt                     # HA credentials persistence
-│   ├── Profile.kt                      # Profile data model
+│   ├── CameraConfig.kt                 # Camera resolution/frame rate settings
+│   ├── Profile.kt                      # Profile data model (includes allowedModelCameras)
 │   ├── ProfileManager.kt               # Profile CRUD + migration
 │   ├── ConversationServicePreference.kt # Provider preference (simplified)
 │   ├── WakeWordConfig.kt               # Wake word settings
@@ -283,14 +345,24 @@ app/app/src/main/java/uk/co/mrsheep/halive/
 │   ├── ProfileExportImport.kt          # Profile sharing
 │   └── AppLogger.kt                    # Logging interface
 ├── services/
+│   ├── audio/
+│   │   ├── MicrophoneHelper.kt         # Microphone with echo cancellation
+│   │   └── AudioFlowExtensions.kt      # Audio flow utilities
+│   ├── camera/
+│   │   ├── VideoSource.kt              # Video source interface + types
+│   │   ├── DeviceCameraSource.kt       # CameraX-based phone camera
+│   │   ├── HACameraSource.kt           # HA camera snapshot fetcher
+│   │   ├── CameraHelper.kt             # Low-level CameraX capture
+│   │   ├── CameraSourceManager.kt      # Source management
+│   │   ├── FrameProcessor.kt           # JPEG resize/processing
+│   │   └── CameraFacing.kt             # FRONT/BACK enum
 │   ├── conversation/
-│   │   ├── ConversationService.kt      # Provider interface
+│   │   ├── ConversationService.kt      # Provider interface (with video methods)
 │   │   └── ConversationServiceFactory.kt # Service creation
 │   ├── geminidirect/
 │   │   ├── DirectConversationService.kt     # Gemini Live API implementation
-│   │   ├── GeminiLiveSession.kt             # WebSocket session
+│   │   ├── GeminiLiveSession.kt             # WebSocket session (audio + video)
 │   │   ├── GeminiLiveMCPToolTransformer.kt  # MCP → protocol tools
-│   │   ├── AudioHelper.kt                   # Audio encoding
 │   │   └── protocol/
 │   │       ├── ClientMessages.kt            # Outbound messages
 │   │       ├── ServerMessages.kt            # Inbound messages
@@ -299,39 +371,46 @@ app/app/src/main/java/uk/co/mrsheep/halive/
 │   │   ├── McpClientManager.kt         # MCP SSE client
 │   │   ├── McpMessages.kt              # JSON-RPC message types
 │   │   └── McpToolModels.kt            # MCP tool data structures
+│   ├── LiveSessionService.kt           # Foreground service (session + camera tools)
 │   ├── ToolExecutor.kt                 # Tool execution interface
 │   ├── AppToolExecutor.kt              # Logging + local tool wrapper
 │   ├── SessionPreparer.kt              # Session initialization logic
-│   ├── HomeAssistantApiClient.kt       # HA REST API (templates)
+│   ├── HomeAssistantApiClient.kt       # HA REST API (templates + cameras)
 │   ├── WakeWordService.kt              # Foreground wake detection
 │   └── BeepHelper.kt                   # Audio feedback
 ├── ui/
-│   ├── MainActivity.kt                 # Main UI + audio conversation
+│   ├── MainActivity.kt                 # Main UI + audio/video conversation
 │   ├── MainViewModel.kt                # Main coordination logic
 │   ├── OnboardingActivity.kt           # First-run setup flow
-│   ├── SettingsActivity.kt             # Settings management
+│   ├── SettingsActivity.kt             # Settings management (includes camera settings)
 │   ├── ProfileManagementActivity.kt    # Profile CRUD UI
-│   ├── ProfileEditorActivity.kt        # Profile editing
+│   ├── ProfileEditorActivity.kt        # Profile editing (includes camera selection)
 │   └── adapters/
 │       ├── ProfileAdapter.kt           # Profile list UI
-│       └── ToolSelectionAdapter.kt     # Tool filter UI
+│       ├── ToolSelectionAdapter.kt     # Tool filter UI
+│       └── CameraSelectionAdapter.kt   # Camera selection UI
 └── HAGeminiApp.kt                      # Application class (dependency container)
 ```
 
 ## Dependencies
 
-- **Kotlin Coroutines:** Async operations, SSE handling
-- **OkHttp:** SSE connection (MCP), WebSocket (Gemini Live API), HTTP client (template API)
+- **Kotlin Coroutines:** Async operations, SSE handling, Flow-based audio/video streaming
+- **OkHttp:** SSE connection (MCP), WebSocket (Gemini Live API), HTTP client (template/camera API)
 - **kotlinx.serialization:** JSON parsing (MCP, HA API, protocol messages)
 - **Material Design:** UI components
 - **AndroidX:** Lifecycle, ViewModel, ConstraintLayout
+- **CameraX:** Device camera capture and preview (camera2, lifecycle, view)
 - **ONNX Runtime:** Wake word detection (OpenWakeWord model)
 
 ## Features
 
-- ✅ Gemini Live API via WebSocket
+- ✅ Gemini Live API via WebSocket (audio + video)
+- ✅ Real-time audio streaming with echo cancellation
+- ✅ Real-time video streaming (phone cameras + HA cameras)
+- ✅ AI-controlled camera viewing (StartWatchingCamera/StopWatchingCamera tools)
 - ✅ Multiple conversation profiles
 - ✅ Tool filtering (whitelist mode per profile)
+- ✅ Camera access control per profile (allowedModelCameras)
 - ✅ Wake word detection (foreground only)
 - ✅ Jinja2 template rendering for background info
 - ✅ Live context fetching on session start
@@ -340,5 +419,5 @@ app/app/src/main/java/uk/co/mrsheep/halive/
 - ✅ Initial message to agent
 - ✅ Profile export/import
 - ✅ Tool call logging with timestamps
-- ✅ Local tools (EndConversation)
+- ✅ Local tools (EndConversation, StartWatchingCamera, StopWatchingCamera)
 - ✅ Audio feedback (beeps for ready/end)
