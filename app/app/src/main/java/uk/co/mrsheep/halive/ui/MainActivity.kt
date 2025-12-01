@@ -46,6 +46,7 @@ import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
 import uk.co.mrsheep.halive.core.TranscriptionTurn
+import uk.co.mrsheep.halive.core.CameraConfig
 import uk.co.mrsheep.halive.services.camera.CameraFacing
 import uk.co.mrsheep.halive.services.camera.CameraHelper
 
@@ -840,8 +841,9 @@ class MainActivity : AppCompatActivity() {
             CameraFacing.FRONT
         }
 
-        // Update state first
+        // Update state and save preference
         viewModel.setCameraFacing(newFacing)
+        CameraConfig.saveFacing(this, newFacing)
 
         // Stop current video capture
         viewModel.stopVideoCapture()
@@ -866,11 +868,15 @@ class MainActivity : AppCompatActivity() {
 
         val camera = cameraHelper!!
 
+        // Load saved camera facing preference
+        val savedFacing = CameraConfig.getFacing(this)
+        viewModel.setCameraFacing(savedFacing)
+
         // Start camera capture
         camera.startCapture(
             lifecycleOwner = this,
             previewView = cameraPreview,
-            facing = viewModel.cameraFacing.value,
+            facing = savedFacing,
             onReady = {
                 // Camera is ready, start video streaming
                 viewModel.startVideoCapture(camera)

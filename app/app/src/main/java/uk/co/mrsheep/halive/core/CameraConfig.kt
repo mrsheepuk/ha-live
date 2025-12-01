@@ -1,6 +1,7 @@
 package uk.co.mrsheep.halive.core
 
 import android.content.Context
+import uk.co.mrsheep.halive.services.camera.CameraFacing
 
 /**
  * Camera resolution options for video streaming.
@@ -51,6 +52,7 @@ object CameraConfig {
     private const val PREFS_NAME = "camera_prefs"
     private const val KEY_RESOLUTION = "resolution"
     private const val KEY_FRAME_RATE = "frame_rate"
+    private const val KEY_FACING = "facing"
 
     /**
      * Load camera settings from SharedPreferences.
@@ -88,5 +90,27 @@ object CameraConfig {
             putString(KEY_RESOLUTION, settings.resolution.name)
             putString(KEY_FRAME_RATE, settings.frameRate.name)
         }.apply()
+    }
+
+    /**
+     * Get the last used camera facing direction.
+     * Defaults to FRONT if not set.
+     */
+    fun getFacing(context: Context): CameraFacing {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val facingStr = prefs.getString(KEY_FACING, CameraFacing.FRONT.name)
+        return try {
+            CameraFacing.valueOf(facingStr!!)
+        } catch (e: Exception) {
+            CameraFacing.FRONT
+        }
+    }
+
+    /**
+     * Save the camera facing direction.
+     */
+    fun saveFacing(context: Context, facing: CameraFacing) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_FACING, facing.name).apply()
     }
 }
