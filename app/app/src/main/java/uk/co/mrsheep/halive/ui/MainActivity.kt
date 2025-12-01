@@ -4,10 +4,14 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.LayoutInflater
+import android.view.ViewGroup
 import androidx.camera.view.PreviewView
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.card.MaterialCardView
 import android.view.Menu
 import android.view.MenuItem
@@ -47,8 +51,12 @@ import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
 import uk.co.mrsheep.halive.core.TranscriptionTurn
 import uk.co.mrsheep.halive.core.CameraConfig
+import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.services.camera.CameraFacing
-import uk.co.mrsheep.halive.services.camera.CameraHelper
+import uk.co.mrsheep.halive.services.camera.DeviceCameraSource
+import uk.co.mrsheep.halive.services.camera.HACameraSource
+import uk.co.mrsheep.halive.services.camera.VideoSource
+import uk.co.mrsheep.halive.services.camera.VideoSourceType
 
 class MainActivity : AppCompatActivity() {
 
@@ -79,8 +87,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraToggleButton: MaterialButton
     private lateinit var cameraFlipButton: MaterialButton
 
-    // Camera helper (created on demand)
-    private var cameraHelper: CameraHelper? = null
+    // Current video source (created on demand)
+    private var currentVideoSource: VideoSource? = null
+    private var currentSourceType: VideoSourceType = VideoSourceType.None
+
+    // ImageView for HA camera preview (shows last frame)
+    private var haCameraPreviewImage: ImageView? = null
 
     // Layout transition support
     private lateinit var mainConstraintLayout: ConstraintLayout
@@ -207,16 +219,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Store pending source type for permission callback
+    private var pendingSourceType: VideoSourceType? = null
+
     // Activity Result Launcher for camera permission
     private val requestCameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            // Permission granted, start camera
-            enableCamera()
+    ) { isGranted ->
+        if (isGranted) {
+            // Permission granted, start the pending source
+            (pendingSourceType as? VideoSourceType.DeviceCamera)?.let { sourceType ->
+                startDeviceCameraSource(sourceType.facing)
+            }
         } else {
             Toast.makeText(this, "Camera permission is required to use this feature", Toast.LENGTH_SHORT).show()
         }
+        pendingSourceType = null
     }
 
     override fun onResume() {
@@ -367,9 +385,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Camera toggle button click handler
-        cameraToggleButton.setOnClickListener {
-            toggleCamera()
+        // Camera toggle button click handler - shows popup menu
+        cameraToggleButton.setOnClickListener { view ->
+            showCameraSourceMenu(view)
         }
 
         // Camera flip button click handler
@@ -812,100 +830,244 @@ class MainActivity : AppCompatActivity() {
     // ==================== Camera Methods ====================
 
     /**
-     * Toggle camera on/off.
-     * Checks camera permission before enabling.
+     * Show bottom sheet for camera source selection.
      */
-    private fun toggleCamera() {
-        if (viewModel.isCameraEnabled.value) {
-            // Camera is on, turn it off
-            disableCamera()
-        } else {
-            // Camera is off, check permission first
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                == PackageManager.PERMISSION_GRANTED) {
-                enableCamera()
-            } else {
-                requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+    @Suppress("UNUSED_PARAMETER")
+    private fun showCameraSourceMenu(anchor: View) {
+        val options = viewModel.getAvailableVideoSources()
+
+        val bottomSheet = BottomSheetDialog(this)
+        val sheetView = layoutInflater.inflate(R.layout.bottom_sheet_camera_source, null)
+
+        val recyclerView = sheetView.findViewById<RecyclerView>(R.id.sourceList)
+        recyclerView.layoutManager = LinearLayoutManager(this)
+        recyclerView.adapter = CameraSourceAdapter(options) { selectedType ->
+            bottomSheet.dismiss()
+            selectCameraSource(selectedType)
+        }
+
+        bottomSheet.setContentView(sheetView)
+        bottomSheet.show()
+    }
+
+    /**
+     * Adapter for camera source selection bottom sheet.
+     */
+    private inner class CameraSourceAdapter(
+        private val options: List<uk.co.mrsheep.halive.services.camera.VideoSourceOption>,
+        private val onSelect: (VideoSourceType) -> Unit
+    ) : RecyclerView.Adapter<CameraSourceAdapter.ViewHolder>() {
+
+        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val icon: ImageView = view.findViewById(R.id.sourceIcon)
+            val name: TextView = view.findViewById(R.id.sourceName)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_camera_source, parent, false)
+            return ViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            val option = options[position]
+            holder.name.text = option.displayName
+
+            // Set appropriate icon based on source type
+            val iconRes = when (option.type) {
+                is VideoSourceType.None -> R.drawable.ic_videocam_off
+                is VideoSourceType.DeviceCamera -> R.drawable.ic_phone
+                is VideoSourceType.HACamera -> R.drawable.ic_videocam
+            }
+            holder.icon.setImageResource(iconRes)
+
+            holder.itemView.setOnClickListener {
+                onSelect(option.type)
             }
         }
+
+        override fun getItemCount() = options.size
+    }
+
+    /**
+     * Select and activate a camera source.
+     */
+    private fun selectCameraSource(sourceType: VideoSourceType) {
+        // Stop current source if any
+        stopCurrentVideoSource()
+
+        when (sourceType) {
+            is VideoSourceType.None -> {
+                // Just turn off - already stopped above
+                currentSourceType = VideoSourceType.None
+                updateCameraUI(false)
+                hideCameraPreview()
+            }
+
+            is VideoSourceType.DeviceCamera -> {
+                // Check camera permission first
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                    == PackageManager.PERMISSION_GRANTED) {
+                    startDeviceCameraSource(sourceType.facing)
+                } else {
+                    // Store pending source type and request permission
+                    pendingSourceType = sourceType
+                    requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                }
+            }
+
+            is VideoSourceType.HACamera -> {
+                startHACameraSource(sourceType)
+            }
+        }
+    }
+
+    /**
+     * Start a device camera source (front or back).
+     */
+    private fun startDeviceCameraSource(facing: CameraFacing) {
+        val source = DeviceCameraSource(
+            context = this,
+            lifecycleOwner = this,
+            previewView = cameraPreview,
+            facing = facing
+        )
+
+        currentVideoSource = source
+        currentSourceType = VideoSourceType.DeviceCamera(facing)
+
+        lifecycleScope.launch {
+            try {
+                source.start()
+                viewModel.startVideoCapture(source)
+                viewModel.setCameraFacing(facing)
+                CameraConfig.saveFacing(this@MainActivity, facing)
+
+                // Show preview card with live preview
+                cameraPreviewCard.visibility = View.VISIBLE
+                cameraPreview.visibility = View.VISIBLE
+                // Hide HA camera static image if it exists
+                haCameraPreviewImage?.visibility = View.GONE
+
+                updateCameraUI(true)
+                Log.d("MainActivity", "Device camera started: $facing")
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to start device camera", e)
+                Toast.makeText(this@MainActivity, "Failed to start camera: ${e.message}", Toast.LENGTH_SHORT).show()
+                stopCurrentVideoSource()
+            }
+        }
+    }
+
+    /**
+     * Start a Home Assistant camera source.
+     */
+    private fun startHACameraSource(sourceType: VideoSourceType.HACamera) {
+        val app = application as HAGeminiApp
+        val haApiClient = app.haApiClient
+
+        if (haApiClient == null) {
+            Toast.makeText(this, "Home Assistant not connected", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val settings = CameraConfig.getSettings(this)
+
+        val source = HACameraSource(
+            entityId = sourceType.entityId,
+            friendlyName = sourceType.friendlyName,
+            haApiClient = haApiClient,
+            maxDimension = settings.resolution.maxDimension,
+            frameIntervalMs = settings.frameRate.intervalMs
+        )
+
+        // Set up error callback
+        source.onError = { e ->
+            runOnUiThread {
+                Toast.makeText(this, getString(R.string.camera_error_fetch_failed), Toast.LENGTH_SHORT).show()
+                stopCurrentVideoSource()
+            }
+        }
+
+        // Set up frame callback for preview
+        source.onFrameAvailable = { frame ->
+            runOnUiThread {
+                updateHACameraPreview(frame)
+            }
+        }
+
+        currentVideoSource = source
+        currentSourceType = sourceType
+
+        lifecycleScope.launch {
+            try {
+                source.start()
+                viewModel.startVideoCapture(source)
+
+                // Show preview card
+                cameraPreviewCard.visibility = View.VISIBLE
+                // Hide live preview, use static image for HA cameras
+                cameraPreview.visibility = View.GONE
+                setupHACameraPreview()
+
+                updateCameraUI(true)
+                Log.d("MainActivity", "HA camera started: ${sourceType.entityId}")
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to start HA camera", e)
+                Toast.makeText(this@MainActivity, "Failed to start camera: ${e.message}", Toast.LENGTH_SHORT).show()
+                stopCurrentVideoSource()
+            }
+        }
+    }
+
+    /**
+     * Set up ImageView for HA camera preview.
+     */
+    private fun setupHACameraPreview() {
+        if (haCameraPreviewImage == null) {
+            haCameraPreviewImage = ImageView(this).apply {
+                layoutParams = cameraPreview.layoutParams
+                scaleType = ImageView.ScaleType.CENTER_CROP
+            }
+            (cameraPreviewCard as android.view.ViewGroup).addView(haCameraPreviewImage)
+        }
+        haCameraPreviewImage?.visibility = View.VISIBLE
+    }
+
+    /**
+     * Update HA camera preview with latest frame.
+     */
+    private fun updateHACameraPreview(jpegData: ByteArray) {
+        val bitmap = BitmapFactory.decodeByteArray(jpegData, 0, jpegData.size)
+        haCameraPreviewImage?.setImageBitmap(bitmap)
+    }
+
+    /**
+     * Stop current video source and clean up.
+     */
+    private fun stopCurrentVideoSource() {
+        viewModel.stopVideoCapture()
+        currentVideoSource?.stop()
+        currentVideoSource = null
+        currentSourceType = VideoSourceType.None
     }
 
     /**
      * Switch between front and back camera.
      */
     private fun switchCamera() {
-        val camera = cameraHelper ?: return
+        val source = currentVideoSource as? DeviceCameraSource ?: return
         val newFacing = if (viewModel.cameraFacing.value == CameraFacing.FRONT) {
             CameraFacing.BACK
         } else {
             CameraFacing.FRONT
         }
 
-        // Update state and save preference
-        viewModel.setCameraFacing(newFacing)
-        CameraConfig.saveFacing(this, newFacing)
-
-        // Stop current video capture
-        viewModel.stopVideoCapture()
-
-        // Switch camera facing
-        camera.setFacing(newFacing, this, cameraPreview)
-
-        // Restart video capture
-        viewModel.startVideoCapture(camera)
+        // Stop current, switch facing, restart
+        stopCurrentVideoSource()
+        startDeviceCameraSource(newFacing)
 
         Log.d("MainActivity", "Camera switched to $newFacing")
-    }
-
-    /**
-     * Enable camera capture and show preview.
-     */
-    private fun enableCamera() {
-        // Create camera helper if needed
-        if (cameraHelper == null) {
-            cameraHelper = CameraHelper(this)
-        }
-
-        val camera = cameraHelper!!
-
-        // Load saved camera facing preference
-        val savedFacing = CameraConfig.getFacing(this)
-        viewModel.setCameraFacing(savedFacing)
-
-        // Start camera capture
-        camera.startCapture(
-            lifecycleOwner = this,
-            previewView = cameraPreview,
-            facing = savedFacing,
-            onReady = {
-                // Camera is ready, start video streaming
-                viewModel.startVideoCapture(camera)
-                Log.d("MainActivity", "Camera enabled and streaming")
-            },
-            onError = { e ->
-                Log.e("MainActivity", "Camera error: ${e.message}", e)
-                Toast.makeText(this, "Failed to start camera: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        )
-
-        // Show preview card
-        cameraPreviewCard.visibility = View.VISIBLE
-    }
-
-    /**
-     * Disable camera capture and hide preview.
-     */
-    private fun disableCamera() {
-        // Stop video streaming
-        viewModel.stopVideoCapture()
-
-        // Stop camera capture
-        cameraHelper?.stopCapture()
-
-        // Hide preview card
-        cameraPreviewCard.visibility = View.GONE
-
-        Log.d("MainActivity", "Camera disabled")
     }
 
     /**
@@ -913,12 +1075,9 @@ class MainActivity : AppCompatActivity() {
      * Used when transitioning to non-chat states.
      */
     private fun hideCameraPreview() {
-        // Stop camera and video capture if active
-        if (cameraHelper?.isActive == true) {
-            viewModel.stopVideoCapture()
-            cameraHelper?.stopCapture()
-        }
+        stopCurrentVideoSource()
         cameraPreviewCard.visibility = View.GONE
+        haCameraPreviewImage?.visibility = View.GONE
     }
 
     /**
@@ -942,8 +1101,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Clean up camera resources
-        cameraHelper?.stopCapture()
-        cameraHelper = null
+        // Clean up video source resources
+        stopCurrentVideoSource()
     }
 }

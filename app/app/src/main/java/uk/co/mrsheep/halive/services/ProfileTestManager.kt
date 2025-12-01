@@ -152,6 +152,7 @@ class ProfileTestManager(
             )
 
             // Prepare and initialize the conversation session with the profile
+            // Return value (HA cameras) not needed for profile testing
             sessionPreparer?.prepareAndInitialize(
                 profile = profile,
                 conversationService = testConversationService,

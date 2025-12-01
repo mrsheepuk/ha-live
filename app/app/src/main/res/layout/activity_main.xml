@@ -128,10 +128,11 @@
             android:textSize="14sp"
             android:layout_marginStart="8dp"
             android:visibility="gone"
-            android:contentDescription="Toggle video camera"
+            android:contentDescription="Select video source"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             app:icon="@drawable/ic_videocam"
-            app:iconSize="18dp" />
+            app:iconSize="18dp"
+            app:iconGravity="start" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/wakeWordChip"

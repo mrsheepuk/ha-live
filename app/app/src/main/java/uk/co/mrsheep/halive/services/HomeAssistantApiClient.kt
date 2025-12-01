@@ -4,6 +4,7 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -14,6 +15,8 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -250,7 +253,147 @@ class HomeAssistantApiClient(
         }
     }
 
+    /**
+     * Get all entity states from Home Assistant.
+     * Optionally filter by domain.
+     */
+    suspend fun getStates(domain: String? = null): List<EntityState> = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Fetching entity states" + (domain?.let { " for domain: $it" } ?: ""))
+
+        var retryCount = 0
+        val maxRetries = 1
+
+        while (retryCount <= maxRetries) {
+            try {
+                val token = tokenManager.getValidToken()
+
+                val request = Request.Builder()
+                    .url("$baseUrl/api/states")
+                    .addHeader("Authorization", "Bearer $token")
+                    .get()
+                    .build()
+
+                val response = client.newCall(request).execute()
+
+                if (response.code == 401 && retryCount < maxRetries) {
+                    Log.d(TAG, "Received 401, retrying getStates...")
+                    response.body?.close()
+                    retryCount++
+                    continue
+                }
+
+                if (!response.isSuccessful) {
+                    throw IOException("Failed to get states: ${response.code}")
+                }
+
+                val body = response.body?.string() ?: throw Exception("Empty response from states API")
+                val states = json.decodeFromString<List<EntityState>>(body)
+
+                return@withContext if (domain != null) {
+                    states.filter { it.entityId.startsWith("$domain.") }
+                } else {
+                    states
+                }
+
+            } catch (e: Exception) {
+                if (retryCount < maxRetries) {
+                    Log.d(TAG, "Exception during getStates, retrying: ${e.message}")
+                    retryCount++
+                } else {
+                    throw e
+                }
+            }
+        }
+
+        throw Exception("getStates failed after $maxRetries retries")
+    }
+
+    /**
+     * Get all camera entities from Home Assistant.
+     * Returns list of camera entity states with friendly names.
+     */
+    suspend fun getCameraEntities(): List<CameraEntity> {
+        return getStates("camera").map { state ->
+            CameraEntity(
+                entityId = state.entityId,
+                friendlyName = state.attributes["friendly_name"]?.jsonPrimitive?.contentOrNull
+                    ?: state.entityId.removePrefix("camera.").replace("_", " ").capitalizeWords(),
+                state = state.state
+            )
+        }
+    }
+
+    private fun String.capitalizeWords(): String =
+        split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+
+    /**
+     * Get a snapshot from a Home Assistant camera.
+     * Returns JPEG image data.
+     *
+     * @param entityId The camera entity ID (e.g., "camera.front_door")
+     * @return JPEG image data as ByteArray
+     * @throws Exception if snapshot fetch fails
+     */
+    suspend fun getCameraSnapshot(entityId: String): ByteArray = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Fetching camera snapshot: $entityId")
+
+        var retryCount = 0
+        val maxRetries = 1
+
+        while (retryCount <= maxRetries) {
+            try {
+                val token = tokenManager.getValidToken()
+
+                val request = Request.Builder()
+                    .url("$baseUrl/api/camera_proxy/$entityId")
+                    .addHeader("Authorization", "Bearer $token")
+                    .get()
+                    .build()
+
+                val response = client.newCall(request).execute()
+
+                if (response.code == 401 && retryCount < maxRetries) {
+                    Log.d(TAG, "Received 401, retrying getCameraSnapshot...")
+                    response.body?.close()
+                    retryCount++
+                    continue
+                }
+
+                if (!response.isSuccessful) {
+                    throw IOException("Failed to get camera snapshot: ${response.code}")
+                }
+
+                return@withContext response.body?.bytes()
+                    ?: throw Exception("Empty response from camera proxy")
+
+            } catch (e: Exception) {
+                if (retryCount < maxRetries) {
+                    Log.d(TAG, "Exception during getCameraSnapshot, retrying: ${e.message}")
+                    retryCount++
+                } else {
+                    throw e
+                }
+            }
+        }
+
+        throw Exception("getCameraSnapshot failed after $maxRetries retries")
+    }
+
     companion object {
         private const val TAG = "HomeAssistantApiClient"
     }
 }
+
+@Serializable
+data class EntityState(
+    @SerialName("entity_id")
+    val entityId: String,
+    val state: String,
+    val attributes: Map<String, JsonElement> = emptyMap()
+)
+
+data class CameraEntity(
+    val entityId: String,
+    val friendlyName: String,
+    val state: String  // "idle", "streaming", "recording", "unavailable"
+)
