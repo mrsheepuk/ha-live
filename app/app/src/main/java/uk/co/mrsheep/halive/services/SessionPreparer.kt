@@ -63,6 +63,9 @@ class SessionPreparer(
             // Fetch available HA cameras for video source selection
             val haCameras = fetchHACameras()
 
+            // Filter cameras by profile's allowed list
+            val allowedCameras = haCameras.filter { it.entityId in profile.allowedModelCameras }
+
             // Render background info template if present
             val renderedBackgroundInfo = renderTemplate(profile?.backgroundInfo)
             val renderedPersonality = renderTemplate(profile?.personality)
@@ -84,6 +87,7 @@ class SessionPreparer(
                             renderedPersonality = renderedPersonality,
                             renderedSystemPrompt = renderedSystemPrompt,
                             liveContext = liveContextText,
+                            allowedCameras = allowedCameras,
                     )
 
             // Extract model and voice from profile or use defaults
@@ -297,6 +301,7 @@ class SessionPreparer(
      * @param profile The active profile
      * @param renderedBgInfo The rendered background info template
      * @param liveContext The live context (may be empty)
+     * @param allowedCameras List of cameras the model can access
      * @param defaultSystemPrompt Fallback system prompt if profile is null
      * @return The complete system prompt
      */
@@ -306,6 +311,7 @@ class SessionPreparer(
             renderedPersonality: String,
             renderedSystemPrompt: String,
             liveContext: String,
+            allowedCameras: List<CameraEntity> = emptyList(),
     ): String {
         // Put background context FIRST
         var prompt = ""
@@ -322,6 +328,20 @@ $renderedBgInfo
 <live_context>
 $liveContext
 </live_context>
+
+""".trimIndent()
+        }
+
+        // Add available cameras section if any are configured
+        if (allowedCameras.isNotEmpty()) {
+            val cameraList = allowedCameras.joinToString("\n") { "- ${it.friendlyName} (${it.entityId})" }
+            prompt += """
+<available_cameras>
+You have access to view the following Home Assistant cameras using the StartWatchingCamera tool:
+$cameraList
+
+To view a camera, call StartWatchingCamera with the entity_id. Call StopWatchingCamera when done viewing.
+</available_cameras>
 
 """.trimIndent()
         }

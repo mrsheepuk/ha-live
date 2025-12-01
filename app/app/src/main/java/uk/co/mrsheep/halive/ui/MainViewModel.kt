@@ -83,6 +83,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _availableHACameras = MutableStateFlow<List<CameraEntity>>(emptyList())
     val availableHACameras: StateFlow<List<CameraEntity>> = _availableHACameras.asStateFlow()
 
+    // Model watching camera state (from LiveSessionService)
+    private val _modelWatchingCamera = MutableStateFlow<String?>(null)
+    val modelWatchingCamera: StateFlow<String?> = _modelWatchingCamera.asStateFlow()
+
     // Track if user has ever started a chat in this session (for layout transition)
     private val _hasEverChatted = MutableStateFlow(false)
     val hasEverChatted: StateFlow<Boolean> = _hasEverChatted
@@ -258,6 +262,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 service.availableHACameras.collect { cameras ->
                     _availableHACameras.value = cameras
+                }
+            }
+
+            // Collect model watching camera state
+            viewModelScope.launch {
+                service.modelWatchingCamera.collect { entityId ->
+                    _modelWatchingCamera.value = entityId
                 }
             }
         }
@@ -438,6 +449,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun setCameraFacing(facing: CameraFacing) {
         liveSessionService?.setCameraFacing(facing)
+    }
+
+    /**
+     * Set callback for model camera requests.
+     * Called by MainActivity to handle camera switch dialogs when model requests a view.
+     */
+    fun setModelCameraRequestCallback(
+        callback: (entityId: String, friendlyName: String, onApproved: () -> Unit, onDenied: () -> Unit) -> Unit
+    ) {
+        liveSessionService?.onModelCameraRequest = callback
+    }
+
+    /**
+     * Clear model watching camera state (when user manually overrides camera selection).
+     */
+    fun clearModelWatchingCamera() {
+        liveSessionService?.clearModelWatchingCamera()
     }
 
     /**

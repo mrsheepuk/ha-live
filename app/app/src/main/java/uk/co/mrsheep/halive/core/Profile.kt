@@ -42,6 +42,7 @@ data class Profile(
     val lastUsedAt: Long = System.currentTimeMillis(),
     val toolFilterMode: ToolFilterMode = ToolFilterMode.ALL,
     val selectedToolNames: Set<String> = emptySet(),
+    val allowedModelCameras: Set<String> = emptySet(),
     val enableTranscription: Boolean = SystemPromptConfig.DEFAULT_ENABLE_TRANSCRIPTION,
     val autoStartChat: Boolean = false,
     val interruptable: Boolean = SystemPromptConfig.DEFAULT_INTERRUPTABLE,
@@ -64,6 +65,7 @@ data class Profile(
         "voice" to voice,
         "tool_filter_mode" to toolFilterMode.name,
         "selected_tools" to selectedToolNames.toList(),
+        "allowed_model_cameras" to allowedModelCameras.toList(),
         "include_live_context" to includeLiveContext,
         "enable_transcription" to enableTranscription,
         "auto_start_chat" to autoStartChat,
@@ -87,6 +89,7 @@ data class Profile(
                 includeLiveContext = SystemPromptConfig.DEFAULT_INCLUDE_LIVE_CONTEXT,
                 toolFilterMode = ToolFilterMode.ALL,
                 selectedToolNames = emptySet(),
+                allowedModelCameras = emptySet(),
                 enableTranscription = SystemPromptConfig.DEFAULT_ENABLE_TRANSCRIPTION,
                 autoStartChat = false,
                 interruptable = SystemPromptConfig.DEFAULT_INTERRUPTABLE
@@ -111,6 +114,7 @@ data class Profile(
                     ToolFilterMode.ALL
                 },
                 selectedToolNames = shared.selectedTools.toSet(),
+                allowedModelCameras = shared.allowedModelCameras?.toSet() ?: emptySet(),
                 includeLiveContext = shared.includeLiveContext,
                 enableTranscription = shared.enableTranscription,
                 autoStartChat = shared.autoStartChat,
@@ -155,6 +159,7 @@ data class Profile(
      */
     fun toJsonString(): String {
         val toolNamesJson = selectedToolNames.joinToString(",") { "\"$it\"" }
+        val cameraNamesJson = allowedModelCameras.joinToString(",") { "\"$it\"" }
         return """
         {
             "name": "$name",
@@ -169,7 +174,8 @@ data class Profile(
             "autoStartChat": $autoStartChat,
             "interruptable": $interruptable,
             "toolFilterMode": "$toolFilterMode",
-            "selectedToolNames": [$toolNamesJson]
+            "selectedToolNames": [$toolNamesJson],
+            "allowedModelCameras": [$cameraNamesJson]
         }
         """.trimIndent()
     }

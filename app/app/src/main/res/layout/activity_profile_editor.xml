@@ -518,6 +518,47 @@
                 android:padding="4dp" />
         </LinearLayout>
 
+        <!-- Model Camera Access Section -->
+        <TextView
+            android:id="@+id/modelCameraLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Model Camera Access"
+            android:textAppearance="?attr/textAppearanceSubtitle1"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Select which Home Assistant cameras the AI can request to view during conversations."
+            android:textAppearance="?attr/textAppearanceCaption"
+            android:textColor="?android:attr/textColorSecondary"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:id="@+id/cameraSelectionContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/cameraCountLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="0 cameras available for model"
+                android:textAppearance="?attr/textAppearanceCaption"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/camerasRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="200dp"
+                android:background="@color/surface_variant_light"
+                android:padding="4dp" />
+        </LinearLayout>
+
         <!-- Buttons -->
         <LinearLayout
             android:layout_width="match_parent"

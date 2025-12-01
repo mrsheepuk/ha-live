@@ -12,6 +12,8 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -72,6 +74,7 @@ class LiveSessionService : Service(), AppLogger {
     private var mcpClient: McpClientManager? = null
     private var toolExecutor: ToolExecutor? = null
     private var currentProfile: Profile? = null
+    private var allowedModelCameras: Set<String> = emptySet()
 
     // State flows
     private val _transcriptionLogs = MutableStateFlow<List<TranscriptionEntry>>(emptyList())
@@ -102,6 +105,13 @@ class LiveSessionService : Service(), AppLogger {
 
     // Video source is provided externally (managed by MainActivity for lifecycle binding)
     private var videoSource: VideoSource? = null
+
+    // Model-controlled camera state
+    private val _modelWatchingCamera = MutableStateFlow<String?>(null)  // entity_id or null
+    val modelWatchingCamera: StateFlow<String?> = _modelWatchingCamera.asStateFlow()
+
+    // Callback for requesting camera switch (set by MainActivity)
+    var onModelCameraRequest: ((entityId: String, friendlyName: String, onApproved: () -> Unit, onDenied: () -> Unit) -> Unit)? = null
 
     inner class LocalBinder : Binder() {
         fun getService(): LiveSessionService = this@LiveSessionService
@@ -272,6 +282,9 @@ class LiveSessionService : Service(), AppLogger {
                 // Store current profile for notification
                 currentProfile = profile
 
+                // Store allowed cameras for this session
+                allowedModelCameras = profile.allowedModelCameras
+
                 // Update notification with profile information
                 val notificationManager = getSystemService(NotificationManager::class.java)
                 notificationManager.notify(NOTIFICATION_ID, createNotification(profile))
@@ -377,6 +390,9 @@ class LiveSessionService : Service(), AppLogger {
 
         // Clear available cameras
         _availableHACameras.value = emptyList()
+
+        // Clear model camera state
+        _modelWatchingCamera.value = null
 
         _isSessionActive.value = false
         _connectionState.value = UiState.ReadyToTalk
@@ -515,6 +531,102 @@ class LiveSessionService : Service(), AppLogger {
     }
 
     /**
+     * Start watching a camera (called by model via tool).
+     * Returns result indicating success or failure.
+     */
+    fun modelStartWatchingCamera(entityId: String): ToolCallResult {
+        // Check if camera is in allowed list
+        if (entityId !in allowedModelCameras) {
+            return ToolCallResult(
+                isError = true,
+                content = listOf(ToolContent(type = "text", text = "Camera '$entityId' is not in your allowed camera list. Check the <available_cameras> section in your system prompt to see which cameras you can access."))
+            )
+        }
+
+        // Find camera info
+        val camera = _availableHACameras.value.find { it.entityId == entityId }
+        if (camera == null) {
+            return ToolCallResult(
+                isError = true,
+                content = listOf(ToolContent(type = "text", text = "Camera '$entityId' not found in available cameras."))
+            )
+        }
+
+        // Check if user has device camera active - need to prompt
+        if (_isCameraEnabled.value && _modelWatchingCamera.value == null) {
+            // User has a camera active, need to request permission via callback
+            val callback = onModelCameraRequest
+            if (callback == null) {
+                // No callback set up yet - just proceed without prompting
+                // This shouldn't happen in normal flow, but handle gracefully
+            } else {
+                var approved = false
+                val latch = CountDownLatch(1)
+
+                callback.invoke(
+                    entityId,
+                    camera.friendlyName,
+                    { approved = true; latch.countDown() },
+                    { approved = false; latch.countDown() }
+                )
+
+                // This is synchronous for simplicity - the callback will be called on main thread
+                // In practice, this should complete quickly as user sees dialog
+                try {
+                    latch.await(30, TimeUnit.SECONDS)
+                } catch (e: Exception) {
+                    return ToolCallResult(
+                        isError = true,
+                        content = listOf(ToolContent(type = "text", text = "Timeout waiting for user approval to switch camera view."))
+                    )
+                }
+
+                if (!approved) {
+                    return ToolCallResult(
+                        isError = false,
+                        content = listOf(ToolContent(type = "text", text = "The user declined the request to switch to camera '${camera.friendlyName}'."))
+                    )
+                }
+            }
+        }
+
+        // Set model watching state
+        _modelWatchingCamera.value = entityId
+
+        return ToolCallResult(
+            isError = false,
+            content = listOf(ToolContent(type = "text", text = "Now viewing camera '${camera.friendlyName}' (${entityId}). Video frames are being streamed to you. Call StopWatchingCamera when you no longer need to see this view."))
+        )
+    }
+
+    /**
+     * Stop watching the current camera.
+     */
+    fun modelStopWatchingCamera(): ToolCallResult {
+        val wasWatching = _modelWatchingCamera.value
+        _modelWatchingCamera.value = null
+
+        return if (wasWatching != null) {
+            ToolCallResult(
+                isError = false,
+                content = listOf(ToolContent(type = "text", text = "Stopped viewing camera. Video streaming has ended."))
+            )
+        } else {
+            ToolCallResult(
+                isError = false,
+                content = listOf(ToolContent(type = "text", text = "No camera was being viewed."))
+            )
+        }
+    }
+
+    /**
+     * Clear model watching state (called when user overrides camera selection).
+     */
+    fun clearModelWatchingCamera() {
+        _modelWatchingCamera.value = null
+    }
+
+    /**
      * Returns the local tools map (e.g., EndConversation).
      */
     private fun getLocalTools(): Map<String, LocalTool> {
@@ -551,6 +663,55 @@ class LiveSessionService : Service(), AppLogger {
                         content = listOf(ToolContent(type = "text", text = "Conversation ended: $reason"))
                     )
                 }
+            ),
+            "StartWatchingCamera" to LocalTool(
+                definition = McpTool(
+                    name = "StartWatchingCamera",
+                    description = """
+                    Start viewing a Home Assistant camera. Video frames will be continuously streamed to you until you call StopWatchingCamera.
+
+                    Check the <available_cameras> section in your system prompt to see which cameras you can access.
+
+                    If you want to switch to a different camera, call StartWatchingCamera with the new camera - it will automatically switch.
+
+                    Parameters:
+                    - entity_id: The camera entity ID (e.g., 'camera.front_door')
+                    """.trimIndent(),
+                    inputSchema = McpInputSchema(
+                        type = "object",
+                        properties = mapOf(
+                            "entity_id" to McpProperty(
+                                type = "string",
+                                description = "The Home Assistant camera entity ID (e.g., 'camera.front_door')"
+                            )
+                        ),
+                        required = listOf("entity_id")
+                    )
+                ),
+                execute = { _, arguments ->
+                    val entityId = arguments["entity_id"]?.jsonPrimitive?.content
+                    if (entityId == null) {
+                        ToolCallResult(
+                            isError = true,
+                            content = listOf(ToolContent(type = "text", text = "Missing required parameter: entity_id"))
+                        )
+                    } else {
+                        modelStartWatchingCamera(entityId)
+                    }
+                }
+            ),
+            "StopWatchingCamera" to LocalTool(
+                definition = McpTool(
+                    name = "StopWatchingCamera",
+                    description = """
+                    Stop viewing the current camera. Call this when you no longer need to see the camera feed.
+                    """.trimIndent(),
+                    inputSchema = McpInputSchema(
+                        type = "object",
+                        properties = emptyMap()
+                    )
+                ),
+                execute = { _, _ -> modelStopWatchingCamera() }
             )
         )
     }
