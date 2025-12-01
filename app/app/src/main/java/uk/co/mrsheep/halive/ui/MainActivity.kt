@@ -521,8 +521,8 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Chat active - listening..."
-                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
-                wakeWordChip.isEnabled = false
+                // Hide wake button during chat, show video button instead
+                wakeWordChip.visibility = View.GONE
                 clearButton.visibility = View.GONE
 
                 // Show camera toggle button during active chat
@@ -546,8 +546,8 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Executing ${state.tool}..."
-                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
-                wakeWordChip.isEnabled = false
+                // Hide wake button during chat, show video button instead
+                wakeWordChip.visibility = View.GONE
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
                 // Keep camera visible and enabled during action execution

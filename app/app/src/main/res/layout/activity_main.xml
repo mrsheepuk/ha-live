@@ -122,20 +122,16 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/cameraToggleButton"
-            android:layout_width="56dp"
+            android:layout_width="wrap_content"
             android:layout_height="56dp"
+            android:text="Video"
+            android:textSize="14sp"
             android:layout_marginStart="8dp"
             android:visibility="gone"
-            android:enabled="false"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:padding="0dp"
-            android:contentDescription="Toggle camera"
+            android:contentDescription="Toggle video camera"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            app:icon="@drawable/ic_camera"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp"
-            app:iconSize="24dp" />
+            app:icon="@drawable/ic_videocam"
+            app:iconSize="18dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/wakeWordChip"
