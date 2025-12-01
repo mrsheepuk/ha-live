@@ -6,6 +6,9 @@ import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
+import androidx.camera.view.PreviewView
+import com.google.android.material.card.MaterialCardView
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -43,6 +46,9 @@ import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
 import uk.co.mrsheep.halive.core.TranscriptionTurn
+import uk.co.mrsheep.halive.core.CameraConfig
+import uk.co.mrsheep.halive.services.camera.CameraFacing
+import uk.co.mrsheep.halive.services.camera.CameraHelper
 
 class MainActivity : AppCompatActivity() {
 
@@ -66,6 +72,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var quickMessageScrollView: View
     private lateinit var quickMessageChipGroup: ChipGroup
     private lateinit var clearButton: Button
+
+    // Camera views
+    private lateinit var cameraPreviewCard: MaterialCardView
+    private lateinit var cameraPreview: PreviewView
+    private lateinit var cameraToggleButton: MaterialButton
+    private lateinit var cameraFlipButton: MaterialButton
+
+    // Camera helper (created on demand)
+    private var cameraHelper: CameraHelper? = null
 
     // Layout transition support
     private lateinit var mainConstraintLayout: ConstraintLayout
@@ -192,6 +207,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Activity Result Launcher for camera permission
+    private val requestCameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            // Permission granted, start camera
+            enableCamera()
+        } else {
+            Toast.makeText(this, "Camera permission is required to use this feature", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         // Reload wake word settings in case they were changed in SettingsActivity
@@ -262,6 +289,12 @@ class MainActivity : AppCompatActivity() {
         quickMessageScrollView = findViewById(R.id.quickMessageScrollView)
         quickMessageChipGroup = findViewById(R.id.quickMessageChipGroup)
 
+        // Camera views
+        cameraPreviewCard = findViewById(R.id.cameraPreviewCard)
+        cameraPreview = findViewById(R.id.cameraPreview)
+        cameraToggleButton = findViewById(R.id.cameraToggleButton)
+        cameraFlipButton = findViewById(R.id.cameraFlipButton)
+
         retryButton.setOnClickListener {
             viewModel.retryInitialization()
         }
@@ -312,7 +345,36 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+
+                // Observe camera enabled state
+                launch {
+                    viewModel.isCameraEnabled.collect { enabled ->
+                        updateCameraUI(enabled)
+                    }
+                }
+
+                // Observe camera facing state
+                launch {
+                    viewModel.cameraFacing.collect { facing ->
+                        // Update button appearance based on facing direction
+                        cameraFlipButton.contentDescription = if (facing == CameraFacing.FRONT) {
+                            "Switch to rear camera"
+                        } else {
+                            "Switch to front camera"
+                        }
+                    }
+                }
             }
+        }
+
+        // Camera toggle button click handler
+        cameraToggleButton.setOnClickListener {
+            toggleCamera()
+        }
+
+        // Camera flip button click handler
+        cameraFlipButton.setOnClickListener {
+            switchCamera()
         }
 
         // Handle user clicking the wake word chip (only if wake word feature is available)
@@ -389,6 +451,8 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
+                cameraToggleButton.visibility = View.GONE
+                hideCameraPreview()
             }
             UiState.ProviderConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -400,6 +464,8 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
+                cameraToggleButton.visibility = View.GONE
+                hideCameraPreview()
             }
             UiState.HAConfigNeeded -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -411,6 +477,8 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
+                cameraToggleButton.visibility = View.GONE
+                hideCameraPreview()
             }
             UiState.Initializing -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -422,6 +490,8 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
+                cameraToggleButton.visibility = View.GONE
+                hideCameraPreview()
             }
             UiState.ReadyToTalk -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -441,6 +511,8 @@ class MainActivity : AppCompatActivity() {
                 quickMessageScrollView.visibility = View.GONE
                 // Show clear button if we have transcription logs from previous chats
                 clearButton.visibility = if (viewModel.transcriptionLogs.value.isNotEmpty()) View.VISIBLE else View.GONE
+                cameraToggleButton.visibility = View.GONE
+                hideCameraPreview()
             }
             UiState.ChatActive -> {
                 audioVisualizer.setState(VisualizerState.ACTIVE)
@@ -449,9 +521,13 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Chat active - listening..."
-                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
-                wakeWordChip.isEnabled = false
+                // Hide wake button during chat, show video button instead
+                wakeWordChip.visibility = View.GONE
                 clearButton.visibility = View.GONE
+
+                // Show camera toggle button during active chat
+                cameraToggleButton.visibility = View.VISIBLE
+                cameraToggleButton.isEnabled = true
 
                 // Animate one-time layout transition to top-aligned mode (if first chat)
                 if (!viewModel.hasEverChatted.value) {
@@ -470,10 +546,13 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Executing ${state.tool}..."
-                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
-                wakeWordChip.isEnabled = false
+                // Hide wake button during chat, show video button instead
+                wakeWordChip.visibility = View.GONE
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
+                // Keep camera visible and enabled during action execution
+                cameraToggleButton.visibility = View.VISIBLE
+                cameraToggleButton.isEnabled = true
             }
             is UiState.Error -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -485,6 +564,8 @@ class MainActivity : AppCompatActivity() {
                 wakeWordChip.isEnabled = false
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
+                cameraToggleButton.visibility = View.GONE
+                hideCameraPreview()
             }
         }
     }
@@ -727,4 +808,142 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun provideViewModel(): MainViewModel = viewModel
+
+    // ==================== Camera Methods ====================
+
+    /**
+     * Toggle camera on/off.
+     * Checks camera permission before enabling.
+     */
+    private fun toggleCamera() {
+        if (viewModel.isCameraEnabled.value) {
+            // Camera is on, turn it off
+            disableCamera()
+        } else {
+            // Camera is off, check permission first
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                == PackageManager.PERMISSION_GRANTED) {
+                enableCamera()
+            } else {
+                requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            }
+        }
+    }
+
+    /**
+     * Switch between front and back camera.
+     */
+    private fun switchCamera() {
+        val camera = cameraHelper ?: return
+        val newFacing = if (viewModel.cameraFacing.value == CameraFacing.FRONT) {
+            CameraFacing.BACK
+        } else {
+            CameraFacing.FRONT
+        }
+
+        // Update state and save preference
+        viewModel.setCameraFacing(newFacing)
+        CameraConfig.saveFacing(this, newFacing)
+
+        // Stop current video capture
+        viewModel.stopVideoCapture()
+
+        // Switch camera facing
+        camera.setFacing(newFacing, this, cameraPreview)
+
+        // Restart video capture
+        viewModel.startVideoCapture(camera)
+
+        Log.d("MainActivity", "Camera switched to $newFacing")
+    }
+
+    /**
+     * Enable camera capture and show preview.
+     */
+    private fun enableCamera() {
+        // Create camera helper if needed
+        if (cameraHelper == null) {
+            cameraHelper = CameraHelper(this)
+        }
+
+        val camera = cameraHelper!!
+
+        // Load saved camera facing preference
+        val savedFacing = CameraConfig.getFacing(this)
+        viewModel.setCameraFacing(savedFacing)
+
+        // Start camera capture
+        camera.startCapture(
+            lifecycleOwner = this,
+            previewView = cameraPreview,
+            facing = savedFacing,
+            onReady = {
+                // Camera is ready, start video streaming
+                viewModel.startVideoCapture(camera)
+                Log.d("MainActivity", "Camera enabled and streaming")
+            },
+            onError = { e ->
+                Log.e("MainActivity", "Camera error: ${e.message}", e)
+                Toast.makeText(this, "Failed to start camera: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        )
+
+        // Show preview card
+        cameraPreviewCard.visibility = View.VISIBLE
+    }
+
+    /**
+     * Disable camera capture and hide preview.
+     */
+    private fun disableCamera() {
+        // Stop video streaming
+        viewModel.stopVideoCapture()
+
+        // Stop camera capture
+        cameraHelper?.stopCapture()
+
+        // Hide preview card
+        cameraPreviewCard.visibility = View.GONE
+
+        Log.d("MainActivity", "Camera disabled")
+    }
+
+    /**
+     * Hide camera preview without stopping capture.
+     * Used when transitioning to non-chat states.
+     */
+    private fun hideCameraPreview() {
+        // Stop camera and video capture if active
+        if (cameraHelper?.isActive == true) {
+            viewModel.stopVideoCapture()
+            cameraHelper?.stopCapture()
+        }
+        cameraPreviewCard.visibility = View.GONE
+    }
+
+    /**
+     * Update camera UI based on enabled state.
+     */
+    private fun updateCameraUI(enabled: Boolean) {
+        if (enabled) {
+            // Camera is on - filled style
+            cameraToggleButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.teal_primary)
+            cameraToggleButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.white))
+            cameraToggleButton.setTextColor(ContextCompat.getColor(this, R.color.white))
+            cameraToggleButton.strokeWidth = 0
+        } else {
+            // Camera is off - outlined style
+            cameraToggleButton.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.transparent)
+            cameraToggleButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.teal_primary))
+            cameraToggleButton.setTextColor(ContextCompat.getColor(this, R.color.teal_primary))
+            cameraToggleButton.strokeWidth = (1 * resources.displayMetrics.density).toInt()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Clean up camera resources
+        cameraHelper?.stopCapture()
+        cameraHelper = null
+    }
 }

@@ -113,6 +113,11 @@ dependencies {
     // ConstraintLayout
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
+    // CameraX for video streaming
+    implementation("androidx.camera:camera-camera2:1.3.1")
+    implementation("androidx.camera:camera-lifecycle:1.3.1")
+    implementation("androidx.camera:camera-view:1.3.1")
+
     // SwipeRefreshLayout for pull-to-refresh
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 

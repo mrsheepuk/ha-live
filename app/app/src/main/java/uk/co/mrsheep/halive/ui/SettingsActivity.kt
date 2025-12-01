@@ -29,6 +29,10 @@ import uk.co.mrsheep.halive.core.OptimizationLevel
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.core.WakeWordRuntime
 import uk.co.mrsheep.halive.core.WakeWordSettings
+import uk.co.mrsheep.halive.core.CameraConfig
+import uk.co.mrsheep.halive.core.CameraFrameRate
+import uk.co.mrsheep.halive.core.CameraResolution
+import uk.co.mrsheep.halive.core.CameraSettings
 import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.pm.PackageManager
@@ -90,6 +94,11 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var wakeWordStatusText: TextView
     private lateinit var wakeWordDetailsText: TextView
     private lateinit var wakeWordConfigButton: Button
+
+    // Camera settings section
+    private lateinit var cameraSettingsSection: LinearLayout
+    private lateinit var cameraResolutionSpinner: Spinner
+    private lateinit var cameraFrameRateSpinner: Spinner
 
     // Quick messages section
     private lateinit var quickMessagesRecyclerView: RecyclerView
@@ -228,6 +237,13 @@ class SettingsActivity : AppCompatActivity() {
         if (!BuildConfig.HAS_WAKE_WORD) {
             wakeWordSection.visibility = View.GONE
         }
+
+        // Camera settings section
+        cameraSettingsSection = findViewById(R.id.cameraSettingsSection)
+        cameraResolutionSpinner = findViewById(R.id.cameraResolutionSpinner)
+        cameraFrameRateSpinner = findViewById(R.id.cameraFrameRateSpinner)
+
+        setupCameraSettings()
 
         // Quick messages section
         quickMessagesRecyclerView = findViewById(R.id.quickMessagesRecyclerView)
@@ -851,6 +867,54 @@ class SettingsActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun setupCameraSettings() {
+        val currentSettings = CameraConfig.getSettings(this)
+
+        // Setup resolution spinner
+        val resolutionOptions = CameraResolution.entries.map { it.displayName }
+        cameraResolutionSpinner.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            resolutionOptions
+        ).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        cameraResolutionSpinner.setSelection(CameraResolution.entries.indexOf(currentSettings.resolution))
+
+        cameraResolutionSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val newResolution = CameraResolution.entries[position]
+                val settings = CameraConfig.getSettings(this@SettingsActivity)
+                if (settings.resolution != newResolution) {
+                    CameraConfig.saveSettings(this@SettingsActivity, settings.copy(resolution = newResolution))
+                }
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+
+        // Setup frame rate spinner
+        val frameRateOptions = CameraFrameRate.entries.map { it.displayName }
+        cameraFrameRateSpinner.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            frameRateOptions
+        ).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        cameraFrameRateSpinner.setSelection(CameraFrameRate.entries.indexOf(currentSettings.frameRate))
+
+        cameraFrameRateSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val newFrameRate = CameraFrameRate.entries[position]
+                val settings = CameraConfig.getSettings(this@SettingsActivity)
+                if (settings.frameRate != newFrameRate) {
+                    CameraConfig.saveSettings(this@SettingsActivity, settings.copy(frameRate = newFrameRate))
+                }
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
     }
 
     private fun setupCacheSection() {
