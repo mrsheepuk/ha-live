@@ -531,26 +531,6 @@ class LiveSessionService : Service(), AppLogger {
     }
 
     /**
-     * List cameras available to the model based on profile settings.
-     */
-    fun listModelAvailableCameras(): ToolCallResult {
-        val cameras = _availableHACameras.value.filter { it.entityId in allowedModelCameras }
-
-        if (cameras.isEmpty()) {
-            return ToolCallResult(
-                isError = false,
-                content = listOf(ToolContent(type = "text", text = "No cameras are configured for model access in this profile."))
-            )
-        }
-
-        val cameraList = cameras.joinToString("\n") { "- ${it.friendlyName} (${it.entityId})" }
-        return ToolCallResult(
-            isError = false,
-            content = listOf(ToolContent(type = "text", text = "Available cameras:\n$cameraList"))
-        )
-    }
-
-    /**
      * Start watching a camera (called by model via tool).
      * Returns result indicating success or failure.
      */
@@ -559,7 +539,7 @@ class LiveSessionService : Service(), AppLogger {
         if (entityId !in allowedModelCameras) {
             return ToolCallResult(
                 isError = true,
-                content = listOf(ToolContent(type = "text", text = "Camera '$entityId' is not in your allowed camera list. Use ListAvailableCameras to see which cameras you can access."))
+                content = listOf(ToolContent(type = "text", text = "Camera '$entityId' is not in your allowed camera list. Check the <available_cameras> section in your system prompt to see which cameras you can access."))
             )
         }
 
@@ -677,29 +657,13 @@ class LiveSessionService : Service(), AppLogger {
                     )
                 }
             ),
-            "ListAvailableCameras" to LocalTool(
-                definition = McpTool(
-                    name = "ListAvailableCameras",
-                    description = """
-                    Returns a list of Home Assistant camera entity IDs that you have access to view.
-
-                    Call this tool first to see which cameras are available before using StartWatchingCamera.
-                    The list shows camera friendly names and their entity IDs.
-                    """.trimIndent(),
-                    inputSchema = McpInputSchema(
-                        type = "object",
-                        properties = emptyMap()
-                    )
-                ),
-                execute = { _, _ -> listModelAvailableCameras() }
-            ),
             "StartWatchingCamera" to LocalTool(
                 definition = McpTool(
                     name = "StartWatchingCamera",
                     description = """
                     Start viewing a Home Assistant camera. Video frames will be continuously streamed to you until you call StopWatchingCamera.
 
-                    Use ListAvailableCameras first to see which cameras you can access.
+                    Check the <available_cameras> section in your system prompt to see which cameras you can access.
 
                     If you want to switch to a different camera, call StartWatchingCamera with the new camera - it will automatically switch.
 
