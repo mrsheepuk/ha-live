@@ -875,9 +875,9 @@ class MainActivity : AppCompatActivity() {
 
             // Set appropriate icon based on source type
             val iconRes = when (option.type) {
-                is VideoSourceType.None -> R.drawable.ic_videocam
+                is VideoSourceType.None -> R.drawable.ic_videocam_off
                 is VideoSourceType.DeviceCamera -> R.drawable.ic_phone
-                is VideoSourceType.HACamera -> R.drawable.ic_camera
+                is VideoSourceType.HACamera -> R.drawable.ic_videocam
             }
             holder.icon.setImageResource(iconRes)
 
