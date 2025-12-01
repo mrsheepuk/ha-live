@@ -41,6 +41,8 @@ import uk.co.mrsheep.halive.core.ToolFilterMode
 import uk.co.mrsheep.halive.services.ProfileTestManager
 import uk.co.mrsheep.halive.ui.adapters.SelectableTool
 import uk.co.mrsheep.halive.ui.adapters.ToolSelectionAdapter
+import uk.co.mrsheep.halive.ui.adapters.SelectableCamera
+import uk.co.mrsheep.halive.ui.adapters.CameraSelectionAdapter
 import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.core.AppLogger
 import uk.co.mrsheep.halive.core.LogEntry
@@ -111,6 +113,15 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
     private var currentToolFilterMode: ToolFilterMode = ToolFilterMode.ALL
     private var selectedToolNames: MutableSet<String> = mutableSetOf()
     private var availableTools: List<SelectableTool> = emptyList()
+
+    // Camera selection UI components
+    private lateinit var cameraCountLabel: TextView
+    private lateinit var camerasRecyclerView: RecyclerView
+    private lateinit var cameraAdapter: CameraSelectionAdapter
+
+    // Camera selection state
+    private var selectedCameraEntityIds: MutableSet<String> = mutableSetOf()
+    private var availableCameras: List<SelectableCamera> = emptyList()
 
     // Buttons (unchanged)
     private lateinit var saveButton: Button
@@ -277,6 +288,12 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
 
         // Load available tools
         loadAvailableTools()
+
+        // Camera Selection UI
+        cameraCountLabel = findViewById(R.id.cameraCountLabel)
+        camerasRecyclerView = findViewById(R.id.camerasRecyclerView)
+        setupCameraAdapter()
+        loadAvailableCameras()
 
         // Setup tool filter mode radio buttons
         toolFilterModeGroup.setOnCheckedChangeListener { _, checkedId ->
@@ -451,6 +468,10 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
                 // Update tool selections in adapter
                 updateToolSelections()
 
+                // Restore camera selection settings
+                selectedCameraEntityIds = state.profile.allowedModelCameras.toMutableSet()
+                updateCameraSelections()
+
                 // Set target source based on loaded profile
                 targetSource = state.profile.source
 
@@ -520,6 +541,20 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         toolsRecyclerView.adapter = toolAdapter
     }
 
+    private fun setupCameraAdapter() {
+        cameraAdapter = CameraSelectionAdapter { entityId, isSelected ->
+            if (isSelected) {
+                selectedCameraEntityIds.add(entityId)
+            } else {
+                selectedCameraEntityIds.remove(entityId)
+            }
+            updateCameraCountLabel()
+        }
+
+        camerasRecyclerView.layoutManager = LinearLayoutManager(this)
+        camerasRecyclerView.adapter = cameraAdapter
+    }
+
     private fun loadAvailableTools() {
         lifecycleScope.launch {
             val app = application as HAGeminiApp
@@ -564,6 +599,47 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         val count = selectedToolNames.size
         val plural = if (count == 1) "tool" else "tools"
         toolCountLabel.text = "$count $plural selected"
+    }
+
+    private fun loadAvailableCameras() {
+        lifecycleScope.launch {
+            val app = application as HAGeminiApp
+            val haApiClient = app.haApiClient
+            if (haApiClient == null) {
+                cameraCountLabel.text = "Cameras unavailable (not connected)"
+                return@launch
+            }
+            try {
+                val cameras = haApiClient.getCameraEntities()
+                val selectableCameras = cameras.map { camera ->
+                    SelectableCamera(
+                        entityId = camera.entityId,
+                        friendlyName = camera.friendlyName,
+                        isSelected = selectedCameraEntityIds.contains(camera.entityId)
+                    )
+                }
+                availableCameras = selectableCameras.sortedBy { it.friendlyName }
+                cameraAdapter.submitFullList(availableCameras)
+                updateCameraCountLabel()
+            } catch (e: Exception) {
+                cameraCountLabel.text = "Failed to load cameras"
+            }
+        }
+    }
+
+    private fun updateCameraSelections() {
+        val updatedCameras = availableCameras.map { camera ->
+            camera.copy(isSelected = selectedCameraEntityIds.contains(camera.entityId))
+        }
+        availableCameras = updatedCameras
+        cameraAdapter.submitFullList(updatedCameras)
+        updateCameraCountLabel()
+    }
+
+    private fun updateCameraCountLabel() {
+        val count = selectedCameraEntityIds.size
+        val total = availableCameras.size
+        cameraCountLabel.text = "$count of $total cameras available for model"
     }
 
     private fun showSyncingState() {
@@ -633,10 +709,11 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         val enableTranscription = enableTranscriptionCheckbox.isChecked
         val autoStartChat = autoStartChatCheckbox.isChecked
         val interruptable = interruptableSwitch.isChecked
+        val allowedModelCameras = selectedCameraEntityIds.toSet()
         viewModel.saveProfile(
             name, prompt, personality, backgroundInfo, initialMessageToAgent,
             model, voice, includeLiveContext, enableTranscription, autoStartChat, interruptable, currentToolFilterMode,
-            selectedToolNames.toSet(), editingProfileId, targetSource,
+            selectedToolNames.toSet(), allowedModelCameras, editingProfileId, targetSource,
             originalLastModified, forceOverwrite
         )
     }
@@ -682,7 +759,8 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
             autoStartChat = false, // Irrelevant for testing
             interruptable = interruptableSwitch.isChecked,
             toolFilterMode = currentToolFilterMode,
-            selectedToolNames = selectedToolNames.toSet()
+            selectedToolNames = selectedToolNames.toSet(),
+            allowedModelCameras = selectedCameraEntityIds.toSet()
         )
     }
 
@@ -814,6 +892,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         radioAllTools.isEnabled = enabled
         radioSelectedTools.isEnabled = enabled
         toolSearchBox.isEnabled = enabled
+        camerasRecyclerView.isEnabled = enabled
         saveButton.isEnabled = enabled
         cancelButton.isEnabled = enabled
     }

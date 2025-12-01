@@ -350,6 +350,7 @@ object ProfileManager {
             interruptable = original.interruptable,
             toolFilterMode = original.toolFilterMode,
             selectedToolNames = original.selectedToolNames,
+            allowedModelCameras = original.allowedModelCameras,
             enableTranscription = original.enableTranscription,
             source = ProfileSource.LOCAL
         )

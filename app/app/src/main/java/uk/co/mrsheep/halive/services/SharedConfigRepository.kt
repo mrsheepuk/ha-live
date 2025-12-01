@@ -27,6 +27,8 @@ data class SharedProfile(
     val toolFilterMode: String = "ALL",
     @SerialName("selected_tools")
     val selectedTools: List<String> = emptyList(),
+    @SerialName("allowed_model_cameras")
+    val allowedModelCameras: List<String> = emptyList(),
     @SerialName("include_live_context")
     val includeLiveContext: Boolean = true,
     @SerialName("enable_transcription")

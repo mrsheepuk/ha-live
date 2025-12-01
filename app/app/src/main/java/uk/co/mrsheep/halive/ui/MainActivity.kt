@@ -382,6 +382,13 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+
+                // Observe model camera state
+                launch {
+                    viewModel.modelWatchingCamera.collect { entityId ->
+                        handleModelCameraStateChange(entityId)
+                    }
+                }
             }
         }
 
@@ -555,6 +562,9 @@ class MainActivity : AppCompatActivity() {
                 // Populate quick message chips (visibility handled inside)
                 // Done after transition to avoid visibility being overridden by constraint set
                 populateQuickMessageChips()
+
+                // Set up model camera request callback on first chat activation
+                setupModelCameraCallback()
                 // Listener is already active
             }
             is UiState.ExecutingAction -> {
@@ -834,6 +844,12 @@ class MainActivity : AppCompatActivity() {
      */
     @Suppress("UNUSED_PARAMETER")
     private fun showCameraSourceMenu(anchor: View) {
+        // Don't allow changing camera while model is watching
+        if (viewModel.modelWatchingCamera.value != null) {
+            Toast.makeText(this, "Camera is being controlled by the AI assistant", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val options = viewModel.getAvailableVideoSources()
 
         val bottomSheet = BottomSheetDialog(this)
@@ -948,6 +964,8 @@ class MainActivity : AppCompatActivity() {
                 cameraPreview.visibility = View.VISIBLE
                 // Hide HA camera static image if it exists
                 haCameraPreviewImage?.visibility = View.GONE
+                // Show flip button for device cameras
+                cameraFlipButton.visibility = View.VISIBLE
 
                 updateCameraUI(true)
                 Log.d("MainActivity", "Device camera started: $facing")
@@ -1009,6 +1027,8 @@ class MainActivity : AppCompatActivity() {
                 // Hide live preview, use static image for HA cameras
                 cameraPreview.visibility = View.GONE
                 setupHACameraPreview()
+                // Hide flip button for HA cameras (can't be flipped)
+                cameraFlipButton.visibility = View.GONE
 
                 updateCameraUI(true)
                 Log.d("MainActivity", "HA camera started: ${sourceType.entityId}")
@@ -1081,21 +1101,81 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Handle model camera state changes.
+     * When model requests a camera, start streaming it.
+     * When model stops watching, stop the camera if it was model-controlled.
+     */
+    private fun handleModelCameraStateChange(entityId: String?) {
+        if (entityId != null) {
+            // Model wants to watch a camera - find it and start
+            val camera = viewModel.availableHACameras.value.find { it.entityId == entityId }
+            if (camera != null) {
+                // Stop any current source first
+                stopCurrentVideoSource()
+
+                // Start the HA camera
+                val sourceType = VideoSourceType.HACamera(entityId, camera.friendlyName)
+                startHACameraSource(sourceType)
+
+                Log.d("MainActivity", "Model started watching camera: ${camera.friendlyName}")
+            }
+        } else {
+            // Model stopped watching - if current source is model-controlled, stop it
+            val currentSource = currentSourceType
+            if (currentSource is VideoSourceType.HACamera) {
+                stopCurrentVideoSource()
+                hideCameraPreview()
+                Log.d("MainActivity", "Model stopped watching camera")
+            }
+        }
+    }
+
+    /**
+     * Set up callback for model camera requests.
+     * This shows a dialog when the model wants to switch camera view.
+     */
+    private fun setupModelCameraCallback() {
+        viewModel.setModelCameraRequestCallback { entityId, friendlyName, onApproved, onDenied ->
+            runOnUiThread {
+                AlertDialog.Builder(this)
+                    .setTitle("Camera Request")
+                    .setMessage("The AI assistant is requesting to view '$friendlyName'. Do you want to switch the camera view?")
+                    .setPositiveButton("Allow") { _, _ ->
+                        onApproved()
+                    }
+                    .setNegativeButton("Deny") { _, _ ->
+                        onDenied()
+                    }
+                    .setCancelable(false)
+                    .show()
+            }
+        }
+    }
+
+    /**
      * Update camera UI based on enabled state.
      */
     private fun updateCameraUI(enabled: Boolean) {
+        val isModelControlled = viewModel.modelWatchingCamera.value != null
+
         if (enabled) {
             // Camera is on - filled style
             cameraToggleButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.teal_primary)
             cameraToggleButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.white))
             cameraToggleButton.setTextColor(ContextCompat.getColor(this, R.color.white))
             cameraToggleButton.strokeWidth = 0
+
+            // If model is controlling, disable the button
+            cameraToggleButton.isEnabled = !isModelControlled
+            cameraToggleButton.alpha = if (isModelControlled) 0.5f else 1.0f
         } else {
             // Camera is off - outlined style
             cameraToggleButton.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.transparent)
             cameraToggleButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.teal_primary))
             cameraToggleButton.setTextColor(ContextCompat.getColor(this, R.color.teal_primary))
             cameraToggleButton.strokeWidth = (1 * resources.displayMetrics.density).toInt()
+            cameraToggleButton.isEnabled = true
+            cameraToggleButton.alpha = 1.0f
         }
     }
 

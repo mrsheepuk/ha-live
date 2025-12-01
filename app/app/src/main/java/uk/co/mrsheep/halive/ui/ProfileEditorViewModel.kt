@@ -67,6 +67,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      * @param interruptable Whether the conversation is interruptable
      * @param toolFilterMode Whether to use all tools or only selected tools
      * @param selectedToolNames Set of tool names to use if in SELECTED mode
+     * @param allowedModelCameras Set of camera entity IDs the model can access
      * @param existingId The ID of existing profile (null for create)
      * @param targetSource The target source for new profiles (default LOCAL)
      * @param originalLastModified The original lastModified timestamp for conflict detection
@@ -86,6 +87,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
         interruptable: Boolean,
         toolFilterMode: ToolFilterMode,
         selectedToolNames: Set<String>,
+        allowedModelCameras: Set<String>,
         existingId: String?,
         targetSource: ProfileSource = ProfileSource.LOCAL,
         originalLastModified: String? = null,
@@ -132,7 +134,8 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         interruptable = interruptable,
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,
-                        selectedToolNames = selectedToolNames
+                        selectedToolNames = selectedToolNames,
+                        allowedModelCameras = allowedModelCameras
                     )
 
                     when (existing.source) {
@@ -155,6 +158,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,
                         selectedToolNames = selectedToolNames,
+                        allowedModelCameras = allowedModelCameras,
                         source = targetSource
                     )
 
