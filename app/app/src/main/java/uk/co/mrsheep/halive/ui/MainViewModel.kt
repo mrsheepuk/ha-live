@@ -462,6 +462,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Clear model watching camera state (when user manually overrides camera selection).
+     */
+    fun clearModelWatchingCamera() {
+        liveSessionService?.clearModelWatchingCamera()
+    }
+
+    /**
      * Get list of available video source options for the UI selector.
      * Includes device cameras and any available Home Assistant cameras.
      */

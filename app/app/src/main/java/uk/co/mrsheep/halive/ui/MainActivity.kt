@@ -844,12 +844,6 @@ class MainActivity : AppCompatActivity() {
      */
     @Suppress("UNUSED_PARAMETER")
     private fun showCameraSourceMenu(anchor: View) {
-        // Don't allow changing camera while model is watching
-        if (viewModel.modelWatchingCamera.value != null) {
-            Toast.makeText(this, "Camera is being controlled by the AI assistant", Toast.LENGTH_SHORT).show()
-            return
-        }
-
         val options = viewModel.getAvailableVideoSources()
 
         val bottomSheet = BottomSheetDialog(this)
@@ -909,6 +903,9 @@ class MainActivity : AppCompatActivity() {
      * Select and activate a camera source.
      */
     private fun selectCameraSource(sourceType: VideoSourceType) {
+        // Clear model watching state if user is manually selecting a camera
+        viewModel.clearModelWatchingCamera()
+
         // Stop current source if any
         stopCurrentVideoSource()
 
@@ -1156,26 +1153,18 @@ class MainActivity : AppCompatActivity() {
      * Update camera UI based on enabled state.
      */
     private fun updateCameraUI(enabled: Boolean) {
-        val isModelControlled = viewModel.modelWatchingCamera.value != null
-
         if (enabled) {
             // Camera is on - filled style
             cameraToggleButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.teal_primary)
             cameraToggleButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.white))
             cameraToggleButton.setTextColor(ContextCompat.getColor(this, R.color.white))
             cameraToggleButton.strokeWidth = 0
-
-            // If model is controlling, disable the button
-            cameraToggleButton.isEnabled = !isModelControlled
-            cameraToggleButton.alpha = if (isModelControlled) 0.5f else 1.0f
         } else {
             // Camera is off - outlined style
             cameraToggleButton.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.transparent)
             cameraToggleButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.teal_primary))
             cameraToggleButton.setTextColor(ContextCompat.getColor(this, R.color.teal_primary))
             cameraToggleButton.strokeWidth = (1 * resources.displayMetrics.density).toInt()
-            cameraToggleButton.isEnabled = true
-            cameraToggleButton.alpha = 1.0f
         }
     }
 

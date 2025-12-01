@@ -620,6 +620,13 @@ class LiveSessionService : Service(), AppLogger {
     }
 
     /**
+     * Clear model watching state (called when user overrides camera selection).
+     */
+    fun clearModelWatchingCamera() {
+        _modelWatchingCamera.value = null
+    }
+
+    /**
      * Returns the local tools map (e.g., EndConversation).
      */
     private fun getLocalTools(): Map<String, LocalTool> {
