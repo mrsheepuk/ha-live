@@ -25,6 +25,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.AppLogger
+import uk.co.mrsheep.halive.services.CameraEntity
 import uk.co.mrsheep.halive.core.DummyToolsConfig
 import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.core.Profile
@@ -32,7 +33,7 @@ import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.camera.CameraFacing
-import uk.co.mrsheep.halive.services.camera.CameraHelper
+import uk.co.mrsheep.halive.services.camera.VideoSource
 import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.conversation.ConversationServiceFactory
 import uk.co.mrsheep.halive.services.mcp.McpClientManager
@@ -95,8 +96,12 @@ class LiveSessionService : Service(), AppLogger {
     private val _cameraFacing = MutableStateFlow(CameraFacing.FRONT)
     val cameraFacing: StateFlow<CameraFacing> = _cameraFacing.asStateFlow()
 
-    // Camera helper is provided externally (managed by MainActivity for lifecycle binding)
-    private var cameraHelper: CameraHelper? = null
+    // Available Home Assistant cameras (populated during session start)
+    private val _availableHACameras = MutableStateFlow<List<CameraEntity>>(emptyList())
+    val availableHACameras: StateFlow<List<CameraEntity>> = _availableHACameras.asStateFlow()
+
+    // Video source is provided externally (managed by MainActivity for lifecycle binding)
+    private var videoSource: VideoSource? = null
 
     inner class LocalBinder : Binder() {
         fun getService(): LiveSessionService = this@LiveSessionService
@@ -260,7 +265,9 @@ class LiveSessionService : Service(), AppLogger {
                     onAudioLevel = { level -> _audioLevel.value = level }
                 )
 
-                sessionPreparer.prepareAndInitialize(profile, conversationService!!)
+                val haCameras = sessionPreparer.prepareAndInitialize(profile, conversationService!!)
+                _availableHACameras.value = haCameras
+                Log.d(TAG, "Fetched ${haCameras.size} HA cameras for video source selection")
 
                 // Store current profile for notification
                 currentProfile = profile
@@ -368,6 +375,9 @@ class LiveSessionService : Service(), AppLogger {
         // Reset audio level
         _audioLevel.value = 0f
 
+        // Clear available cameras
+        _availableHACameras.value = emptyList()
+
         _isSessionActive.value = false
         _connectionState.value = UiState.ReadyToTalk
 
@@ -387,19 +397,19 @@ class LiveSessionService : Service(), AppLogger {
     /**
      * Start video capture and streaming to the conversation.
      *
-     * @param camera The CameraHelper instance to use for video capture
+     * @param source The VideoSource instance to use for video capture
      */
-    fun startVideoCapture(camera: CameraHelper) {
+    fun startVideoCapture(source: VideoSource) {
         if (!_isSessionActive.value) {
             Log.w(TAG, "Cannot start video capture - no active session")
             return
         }
 
-        cameraHelper = camera
-        conversationService?.startVideoCapture(camera)
+        videoSource = source
+        conversationService?.startVideoCapture(source)
         _isCameraEnabled.value = true
 
-        Log.i(TAG, "Video capture started")
+        Log.d(TAG, "Video capture started from source: ${source.sourceId}")
     }
 
     /**
@@ -407,10 +417,10 @@ class LiveSessionService : Service(), AppLogger {
      */
     fun stopVideoCapture() {
         conversationService?.stopVideoCapture()
-        cameraHelper = null
+        videoSource = null
         _isCameraEnabled.value = false
 
-        Log.i(TAG, "Video capture stopped")
+        Log.d(TAG, "Video capture stopped")
     }
 
     /**

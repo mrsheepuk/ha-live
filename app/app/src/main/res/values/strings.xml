@@ -16,6 +16,14 @@
     <string name="settings_ha_section">Home Assistant</string>
     <string name="settings_read_only_message">Stop chat to modify settings</string>
 
+    <!-- Camera -->
+    <string name="camera_source_off">Off</string>
+    <string name="camera_source_phone_front">Phone Camera (Front)</string>
+    <string name="camera_source_phone_back">Phone Camera (Back)</string>
+    <string name="camera_source_select">Select Video Source</string>
+    <string name="camera_error_fetch_failed">Failed to fetch camera image</string>
+    <string name="camera_error_unavailable">Camera unavailable</string>
+
     <!-- Profile Management -->
     <string name="profile_management_title">Manage Profiles</string>
     <string name="profile_create_new">Create New Profile</string>

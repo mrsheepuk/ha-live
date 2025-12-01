@@ -152,7 +152,7 @@ class ProfileTestManager(
             )
 
             // Prepare and initialize the conversation session with the profile
-            sessionPreparer?.prepareAndInitialize(
+            val _ = sessionPreparer?.prepareAndInitialize(
                 profile = profile,
                 conversationService = testConversationService,
             )

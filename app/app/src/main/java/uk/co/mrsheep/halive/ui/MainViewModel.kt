@@ -25,7 +25,10 @@ import uk.co.mrsheep.halive.core.QuickMessage
 import uk.co.mrsheep.halive.core.QuickMessageConfig
 import uk.co.mrsheep.halive.core.TranscriptionEntry
 import uk.co.mrsheep.halive.services.camera.CameraFacing
-import uk.co.mrsheep.halive.services.camera.CameraHelper
+import uk.co.mrsheep.halive.services.CameraEntity
+import uk.co.mrsheep.halive.services.camera.VideoSource
+import uk.co.mrsheep.halive.services.camera.VideoSourceOption
+import uk.co.mrsheep.halive.services.camera.VideoSourceType
 
 // Define the different states our UI can be in
 sealed class UiState {
@@ -75,6 +78,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _cameraFacing = MutableStateFlow(CameraFacing.FRONT)
     val cameraFacing: StateFlow<CameraFacing> = _cameraFacing.asStateFlow()
+
+    // Available HA cameras (from LiveSessionService)
+    private val _availableHACameras = MutableStateFlow<List<CameraEntity>>(emptyList())
+    val availableHACameras: StateFlow<List<CameraEntity>> = _availableHACameras.asStateFlow()
 
     // Track if user has ever started a chat in this session (for layout transition)
     private val _hasEverChatted = MutableStateFlow(false)
@@ -246,6 +253,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _cameraFacing.value = facing
                 }
             }
+
+            // Collect available HA cameras
+            viewModelScope.launch {
+                service.availableHACameras.collect { cameras ->
+                    _availableHACameras.value = cameras
+                }
+            }
         }
     }
 
@@ -392,19 +406,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Start video capture with the provided camera helper.
-     * Called by MainActivity when camera toggle is enabled.
+     * Start video capture with the provided video source.
+     * Called by MainActivity when camera is selected.
      *
-     * @param camera The CameraHelper instance to use for video capture
+     * @param source The VideoSource instance to use for video capture
      */
-    fun startVideoCapture(camera: CameraHelper) {
+    fun startVideoCapture(source: VideoSource) {
         if (!isSessionActive()) {
             Log.w(TAG, "Cannot start video capture - no active session")
             return
         }
 
-        liveSessionService?.startVideoCapture(camera)
-        Log.d(TAG, "Video capture started via ViewModel")
+        liveSessionService?.startVideoCapture(source)
+        Log.d(TAG, "Video capture started via ViewModel from source: ${source.sourceId}")
     }
 
     /**
@@ -424,6 +438,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun setCameraFacing(facing: CameraFacing) {
         liveSessionService?.setCameraFacing(facing)
+    }
+
+    /**
+     * Get list of available video source options for the UI selector.
+     * Includes device cameras and any available Home Assistant cameras.
+     */
+    fun getAvailableVideoSources(): List<VideoSourceOption> {
+        val options = mutableListOf<VideoSourceOption>()
+
+        // Always add "Off" option first
+        options.add(VideoSourceOption(
+            type = VideoSourceType.None,
+            displayName = "Off"
+        ))
+
+        // Add device cameras
+        options.add(VideoSourceOption(
+            type = VideoSourceType.DeviceCamera(CameraFacing.FRONT),
+            displayName = "Phone Camera (Front)"
+        ))
+        options.add(VideoSourceOption(
+            type = VideoSourceType.DeviceCamera(CameraFacing.BACK),
+            displayName = "Phone Camera (Back)"
+        ))
+
+        // Add HA cameras (filtered to available ones)
+        _availableHACameras.value
+            .filter { it.state != "unavailable" }
+            .forEach { camera ->
+                options.add(VideoSourceOption(
+                    type = VideoSourceType.HACamera(camera.entityId, camera.friendlyName),
+                    displayName = camera.friendlyName
+                ))
+            }
+
+        return options
     }
 
     /**

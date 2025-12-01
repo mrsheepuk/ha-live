@@ -32,7 +32,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
-import uk.co.mrsheep.halive.services.camera.CameraHelper
+import uk.co.mrsheep.halive.services.camera.VideoSource
 import uk.co.mrsheep.halive.services.geminidirect.protocol.AudioTranscriptionConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.RealtimeInputConfig
 import java.util.concurrent.TimeoutException
@@ -124,8 +124,8 @@ class GeminiLiveSession(
     /** Whether we own the microphoneHelper and should release it on close */
     private var ownsMicrophoneHelper: Boolean = true
 
-    // Video capture (camera input)
-    private var cameraHelper: CameraHelper? = null
+    // Video capture (from any video source)
+    private var videoSource: VideoSource? = null
     /** Whether video capture is currently active */
     private var isVideoCapturing = false
 
@@ -358,17 +358,17 @@ class GeminiLiveSession(
     }
 
     /**
-     * Start capturing and sending video frames from the camera.
+     * Start capturing and sending video frames from any video source.
      *
-     * @param camera The CameraHelper instance to capture frames from
+     * @param source The VideoSource instance to capture frames from
      */
-    fun startVideoCapture(camera: CameraHelper) {
+    fun startVideoCapture(source: VideoSource) {
         if (isVideoCapturing) {
             Log.w(TAG, "Video capture already active")
             return
         }
 
-        cameraHelper = camera
+        videoSource = source
         isVideoCapturing = true
 
         // Launch video recording coroutine
@@ -376,7 +376,7 @@ class GeminiLiveSession(
             recordVideo()
         }
 
-        Log.i(TAG, "Video capture started")
+        Log.i(TAG, "Video capture started from source: ${source.sourceId}")
     }
 
     /**
@@ -386,14 +386,14 @@ class GeminiLiveSession(
         if (!isVideoCapturing) return
 
         isVideoCapturing = false
-        cameraHelper = null
+        videoSource = null
 
         Log.i(TAG, "Video capture stopped")
     }
 
-    /** Listen to the camera frames and send them to the model. */
+    /** Listen to the video source frames and send them to the model. */
     private suspend fun recordVideo() {
-        cameraHelper?.frameFlow
+        videoSource?.frameFlow
             ?.onEach { frame ->
                 if (isVideoCapturing && isSessionActive) {
                     sendVideoRealtime(frame)
@@ -732,7 +732,7 @@ class GeminiLiveSession(
 
         isSessionActive = false
 
-        // Stop video capture (camera is managed externally, we just stop using it)
+        // Stop video capture (video source is managed externally, we just stop using it)
         stopVideoCapture()
 
         // Shutdown the new audio playback pipeline

@@ -12,6 +12,7 @@ import uk.co.mrsheep.halive.core.ToolFilterMode
 import uk.co.mrsheep.halive.services.conversation.ConversationService
 import uk.co.mrsheep.halive.services.mcp.McpTool
 import uk.co.mrsheep.halive.services.mcp.McpToolsListResult
+import uk.co.mrsheep.halive.services.CameraEntity
 
 /**
  * Encapsulates the heavy initialization logic for preparing a conversation session. Extracts all
@@ -43,13 +44,13 @@ class SessionPreparer(
      *
      * @param profile The active profile (may be null to use defaults)
      * @param conversationService The conversation service to initialize with tools and prompt
-     * @param defaultSystemPrompt Fallback system prompt if profile is null
+     * @return List of available Home Assistant cameras for video source selection
      * @throws Exception on any failure (caller handles state transitions)
      */
     suspend fun prepareAndInitialize(
             profile: Profile,
             conversationService: ConversationService,
-    ) {
+    ): List<CameraEntity> {
         val timestamp = createTimestamp()
 
         try {
@@ -58,6 +59,9 @@ class SessionPreparer(
 
             // Create McpToolsListResult with filtered tools
             val mcpToolsResult = McpToolsListResult(filteredTools ?: emptyList())
+
+            // Fetch available HA cameras for video source selection
+            val haCameras = fetchHACameras()
 
             // Render background info template if present
             val renderedBackgroundInfo = renderTemplate(profile?.backgroundInfo)
@@ -138,6 +142,9 @@ class SessionPreparer(
                     interruptable = profile?.interruptable ?: true,
                     onAudioLevel = onAudioLevel
             )
+
+            // Return HA cameras for caller to use
+            return haCameras
         } catch (e: Exception) {
             // Log initialization error to tool log
             logger.addLogEntry(
@@ -266,6 +273,21 @@ class SessionPreparer(
                     )
             )
             "" // Continue without live context on error
+        }
+    }
+
+    /**
+     * Fetches available camera entities from Home Assistant.
+     * Returns empty list on error (graceful degradation).
+     *
+     * @return List of camera entities
+     */
+    private suspend fun fetchHACameras(): List<CameraEntity> {
+        return try {
+            haApiClient.getCameraEntities()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to fetch HA cameras: ${e.message}")
+            emptyList()
         }
     }
 
