@@ -285,6 +285,9 @@ class ProfileService(
     /**
      * Ensure at least one profile exists.
      * Creates a default local profile if needed.
+     *
+     * Note: Only validates/resets active profile when we have full visibility
+     * (i.e., when remote repo is available or if active profile is local).
      */
     suspend fun ensureDefaultProfileExists() {
         refreshProfiles()
@@ -295,9 +298,22 @@ class ProfileService(
             createProfile(defaultProfile, ProfileSource.LOCAL)
         }
 
-        // Ensure active profile is set
-        if (getActiveProfileId() == null || getProfileById(getActiveProfileId()!!) == null) {
+        // Ensure active profile is set and valid
+        val activeId = getActiveProfileId()
+        if (activeId == null) {
+            // No active profile set - pick the first one
             getAllProfiles().firstOrNull()?.let { setActiveProfile(it.id) }
+        } else {
+            // Active profile is set - validate it exists
+            // Only reset if we have full visibility (remote available) or profile is definitely missing
+            val profile = getProfileById(activeId)
+            if (profile == null && remoteRepo != null) {
+                // We have full visibility and profile doesn't exist - reset to first
+                Log.d(TAG, "Active profile $activeId not found, resetting to first available")
+                getAllProfiles().firstOrNull()?.let { setActiveProfile(it.id) }
+            }
+            // If remoteRepo is null, we might just not have loaded remote profiles yet
+            // Don't reset in that case - the profile might be a valid remote profile
         }
     }
 
