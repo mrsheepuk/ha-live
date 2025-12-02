@@ -290,7 +290,7 @@ app/src/main/java/uk/co/mrsheep/halive/
 │   ├── GeminiConfig.kt     # Gemini API key storage
 │   ├── CameraConfig.kt     # Camera resolution/frame rate settings
 │   ├── Profile.kt          # Profile data model
-│   └── ProfileManager.kt   # Profile CRUD operations
+│   └── ProfileService.kt   # Profile management (local + remote)
 ├── services/
 │   ├── audio/              # Audio capture
 │   │   └── MicrophoneHelper.kt  # Microphone with echo cancellation

@@ -47,7 +47,7 @@ The app uses a `ConversationService` interface implemented by `DirectConversatio
 - `ConversationServicePreference.kt` - Provider preference (simplified, single provider)
 
 **User Features:**
-- `ProfileManager.kt` - Multiple conversation profiles
+- `ProfileService.kt` - Profile management (local + remote via HA)
 - `Profile.kt` - System prompt, personality, model, voice, tool filtering, allowed cameras
 - `WakeWordService.kt` - Foreground wake word detection
 - `ProfileExportImport.kt` - Share profiles via JSON
@@ -338,7 +338,10 @@ app/app/src/main/java/uk/co/mrsheep/halive/
 │   ├── HAConfig.kt                     # HA credentials persistence
 │   ├── CameraConfig.kt                 # Camera resolution/frame rate settings
 │   ├── Profile.kt                      # Profile data model (includes allowedModelCameras)
-│   ├── ProfileManager.kt               # Profile CRUD + migration
+│   ├── ProfileRepository.kt            # Profile storage interface
+│   ├── LocalProfileRepository.kt       # Local profile storage (SharedPreferences)
+│   ├── RemoteProfileRepository.kt      # Remote profile storage (Home Assistant)
+│   ├── ProfileService.kt               # Combines local + remote repos
 │   ├── ConversationServicePreference.kt # Provider preference (simplified)
 │   ├── WakeWordConfig.kt               # Wake word settings
 │   ├── SystemPromptConfig.kt           # Default prompts
