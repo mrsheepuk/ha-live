@@ -11,8 +11,9 @@ object GeminiConfig {
     private const val PREFS_NAME = "gemini_config"
     private const val KEY_API_KEY = "gemini_api_key"
     private const val KEY_USE_SHARED = "use_shared_key"
+    private const val KEY_SHARED_API_KEY = "shared_gemini_api_key"
 
-    // Cached shared key (set by app on config fetch from HA)
+    // In-memory cache of shared key (also persisted to prefs)
     private var cachedSharedKey: String? = null
 
     private fun getPrefs(context: Context): SharedPreferences {
@@ -20,11 +21,28 @@ object GeminiConfig {
     }
 
     /**
+     * Initialize shared key from persisted storage.
+     * Call this on app startup before checking isConfigured().
+     */
+    fun initialize(context: Context) {
+        if (cachedSharedKey == null) {
+            cachedSharedKey = getPrefs(context).getString(KEY_SHARED_API_KEY, null)
+        }
+    }
+
+    /**
      * Update the cached shared key from Home Assistant.
      * Called when shared config is fetched from HA.
+     * Persists to SharedPreferences so it survives app restart.
      */
-    fun updateSharedKey(key: String?) {
+    fun updateSharedKey(key: String?, context: Context? = null) {
         cachedSharedKey = key
+        // Persist to prefs if context available
+        context?.let {
+            getPrefs(it).edit()
+                .putString(KEY_SHARED_API_KEY, key)
+                .apply()
+        }
     }
 
     /**
@@ -42,6 +60,9 @@ object GeminiConfig {
      * Priority: Shared key (if available and enabled) > Local key
      */
     fun getApiKey(context: Context): String? {
+        // Ensure shared key is loaded from prefs
+        initialize(context)
+
         val prefs = getPrefs(context)
         val useShared = prefs.getBoolean(KEY_USE_SHARED, true)
 
@@ -111,16 +132,23 @@ object GeminiConfig {
     }
 
     /**
-     * Clears all Gemini configuration data (local key only, shared key remains cached).
+     * Clears all Gemini configuration data (local key only, shared key remains).
      */
     fun clearConfig(context: Context) {
-        getPrefs(context).edit().clear().apply()
+        getPrefs(context).edit()
+            .remove(KEY_API_KEY)
+            .apply()
     }
 
     /**
      * Clear cached shared key (call when logging out of HA).
      */
-    fun clearSharedKey() {
+    fun clearSharedKey(context: Context? = null) {
         cachedSharedKey = null
+        context?.let {
+            getPrefs(it).edit()
+                .remove(KEY_SHARED_API_KEY)
+                .apply()
+        }
     }
 }

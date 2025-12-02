@@ -25,7 +25,6 @@ import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.Profile
-import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.ProfileSource
 import uk.co.mrsheep.halive.core.ShortcutHelper
 import uk.co.mrsheep.halive.ui.adapters.ProfileAdapter
@@ -145,8 +144,14 @@ class ProfileManagementActivity : AppCompatActivity() {
                         .setTitle("Offline")
                         .setMessage("Cannot edit shared profiles while offline. You can save a local copy instead.")
                         .setPositiveButton("Save Local Copy") { _, _ ->
-                            val localCopy = viewModel.downloadToLocal(profile)
-                            Toast.makeText(this, "Saved as '${localCopy.name}'", Toast.LENGTH_SHORT).show()
+                            viewModel.downloadToLocal(profile,
+                                onSuccess = { localCopy ->
+                                    Toast.makeText(this, "Saved as '${localCopy.name}'", Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { error ->
+                                    Toast.makeText(this, "Failed to save: $error", Toast.LENGTH_SHORT).show()
+                                }
+                            )
                         }
                         .setNegativeButton("Cancel", null)
                         .show()
@@ -177,8 +182,14 @@ class ProfileManagementActivity : AppCompatActivity() {
             },
             onDownloadToLocal = { profile ->
                 if (profile.source == ProfileSource.SHARED) {
-                    val localCopy = viewModel.downloadToLocal(profile)
-                    Toast.makeText(this, "Saved as '${localCopy.name}'", Toast.LENGTH_SHORT).show()
+                    viewModel.downloadToLocal(profile,
+                        onSuccess = { localCopy ->
+                            Toast.makeText(this, "Saved as '${localCopy.name}'", Toast.LENGTH_SHORT).show()
+                        },
+                        onError = { error ->
+                            Toast.makeText(this, "Failed to save: $error", Toast.LENGTH_SHORT).show()
+                        }
+                    )
                 }
             },
             onDelete = { profile ->
@@ -477,8 +488,9 @@ class ProfileManagementActivity : AppCompatActivity() {
         val migrationPromptShown = prefs.getBoolean("upload_prompt_shown", false)
 
         if (!migrationPromptShown && app.isSharedConfigAvailable()) {
-            val localProfiles = ProfileManager.getLocalProfiles()
-            val sharedProfiles = ProfileManager.getSharedProfiles()
+            val allProfiles = app.profileService.getAllProfiles()
+            val localProfiles = allProfiles.filter { it.source == ProfileSource.LOCAL }
+            val sharedProfiles = allProfiles.filter { it.source == ProfileSource.SHARED }
 
             if (localProfiles.isNotEmpty() && sharedProfiles.isEmpty()) {
                 showMigrationDialog(localProfiles)

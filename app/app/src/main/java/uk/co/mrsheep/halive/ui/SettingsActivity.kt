@@ -919,30 +919,15 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun setupCacheSection() {
         val app = application as HAGeminiApp
-        val cache = app.sharedConfigCache
 
-        if (cache != null && cache.isIntegrationInstalled()) {
+        if (app.isSharedConfigAvailable()) {
             syncCacheSection.visibility = View.VISIBLE
 
-            val lastFetch = cache.getLastFetchTime()
-            if (lastFetch > 0) {
-                lastSyncText.text = uk.co.mrsheep.halive.core.TimeFormatter.formatTime(lastFetch)
-            } else {
-                lastSyncText.text = "Never synced"
-            }
+            // No caching anymore - profiles are always fetched fresh
+            lastSyncText.text = "Profiles load fresh from Home Assistant"
 
-            clearCacheButton.setOnClickListener {
-                AlertDialog.Builder(this)
-                    .setTitle("Clear Cache")
-                    .setMessage("This will clear cached shared profiles. They will be re-fetched from Home Assistant on next launch.")
-                    .setPositiveButton("Clear") { _, _ ->
-                        cache.clearProfileCache()
-                        Toast.makeText(this, "Cache cleared", Toast.LENGTH_SHORT).show()
-                        lastSyncText.text = "Never synced"
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
-            }
+            // Clear cache button is no longer needed
+            clearCacheButton.visibility = View.GONE
 
             forceSyncButton.setOnClickListener {
                 forceSync()
@@ -960,8 +945,8 @@ class SettingsActivity : AppCompatActivity() {
             try {
                 val app = application as HAGeminiApp
                 app.fetchSharedConfig()
+                app.profileService.refreshProfiles()
                 Toast.makeText(this@SettingsActivity, "Sync complete", Toast.LENGTH_SHORT).show()
-                setupCacheSection() // Refresh display
             } catch (e: Exception) {
                 Toast.makeText(
                     this@SettingsActivity,

@@ -12,7 +12,6 @@ import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
-import uk.co.mrsheep.halive.core.ProfileManager
 import uk.co.mrsheep.halive.core.WakeWordConfig
 import uk.co.mrsheep.halive.services.LiveSessionService
 import uk.co.mrsheep.halive.services.WakeWordService
@@ -49,7 +48,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     var currentProfileId: String = ""
-    val profiles = ProfileManager.profiles // Expose for UI
+    val profiles get() = app.profileService.profiles // Expose for UI
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState
@@ -131,10 +130,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
-        // Load the active profile
-        val activeProfile = ProfileManager.getActiveOrFirstProfile()
-        if (activeProfile != null) {
-            currentProfileId = activeProfile.id
+        // Load the active profile (async)
+        viewModelScope.launch {
+            val activeProfile = app.profileService.getActiveProfile()
+            if (activeProfile != null) {
+                currentProfileId = activeProfile.id
+            }
         }
 
         // Load wake word preference
@@ -325,15 +326,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun startChat() {
-        // Get the profile
-        val profile = ProfileManager.getProfileById(currentProfileId)
-        if (profile == null) {
-            _uiState.value = UiState.Error("No profile set, choose a profile before starting")
-            return
-        }
-
         viewModelScope.launch {
             try {
+                // Get the profile
+                val profile = app.profileService.getProfileById(currentProfileId)
+                if (profile == null) {
+                    _uiState.value = UiState.Error("No profile set, choose a profile before starting")
+                    return@launch
+                }
+
                 // Yield MicrophoneHelper from wake word service for seamless handover
                 val microphoneHelper = wakeWordService.yieldMicrophoneHelper()
                 if (microphoneHelper != null) {
@@ -537,9 +538,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        val profile = ProfileManager.getProfileById(profileId) ?: return
-        currentProfileId = profileId
-        ProfileManager.setActiveProfile(profileId)
+        viewModelScope.launch {
+            val profile = app.profileService.getProfileById(profileId) ?: return@launch
+            currentProfileId = profileId
+            app.profileService.setActiveProfile(profileId)
+        }
     }
 
     /**
@@ -551,13 +554,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Check if auto-start chat is enabled and set the flag.
      * Only checks once per ViewModel instance (survives activity recreation but not process death).
      */
-    private fun checkAutoStart() {
+    private suspend fun checkAutoStart() {
         // Only check once per ViewModel instance (app cold start)
         if (hasCheckedAutoStart) return
         hasCheckedAutoStart = true
 
         // Check if active profile has auto-start enabled
-        val profile = ProfileManager.getProfileById(currentProfileId)
+        val profile = app.profileService.getProfileById(currentProfileId)
         if (profile?.autoStartChat == true) {
             _shouldAttemptAutoStart.value = true
         }
@@ -570,9 +573,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun onActivityResume() {
         // Reload active profile (in case it was changed in ProfileManagementActivity)
-        val activeProfile = ProfileManager.getActiveOrFirstProfile()
-        if (activeProfile != null && activeProfile.id != currentProfileId) {
-            currentProfileId = activeProfile.id
+        viewModelScope.launch {
+            val activeProfile = app.profileService.getActiveProfile()
+            if (activeProfile != null && activeProfile.id != currentProfileId) {
+                currentProfileId = activeProfile.id
+            }
         }
 
         if (_uiState.value == UiState.ReadyToTalk) {
