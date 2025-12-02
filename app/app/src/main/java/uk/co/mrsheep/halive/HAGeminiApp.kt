@@ -38,6 +38,9 @@ class HAGeminiApp : Application() {
             // Initialize auth system
             homeAssistantAuth = HomeAssistantAuth(this)
 
+            // Initialize GeminiConfig to restore persisted shared key
+            GeminiConfig.initialize(this)
+
             // Initialize ProfileService with local repository
             val localRepo = LocalProfileRepository(this)
             profileService = ProfileService(this, localRepo)
@@ -124,7 +127,7 @@ class HAGeminiApp : Application() {
         val config = repo.getSharedConfig()
         if (config != null) {
             Log.d(TAG, "Fetched shared config: hasApiKey=${config.geminiApiKey != null}, profiles=${config.profiles.size}")
-            GeminiConfig.updateSharedKey(config.geminiApiKey)
+            GeminiConfig.updateSharedKey(config.geminiApiKey, this)
         } else {
             Log.w(TAG, "getSharedConfig returned null")
         }
