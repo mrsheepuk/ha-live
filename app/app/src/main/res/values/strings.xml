@@ -102,4 +102,5 @@
     <!-- Video auto-start toasts -->
     <string name="video_source_unavailable">Camera unavailable, starting without video</string>
     <string name="video_permission_denied">Camera permission denied, starting without video</string>
+    <string name="camera_list_fetch_error">Could not load Home Assistant cameras</string>
 </resources>
