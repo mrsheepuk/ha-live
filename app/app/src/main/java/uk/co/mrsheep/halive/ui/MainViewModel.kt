@@ -496,10 +496,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Fetch available HA cameras from the Home Assistant API.
+     * Called on-demand when user opens the pre-chat video selector.
+     * Updates the _availableHACameras state flow.
+     *
+     * @return Result with list of cameras on success, or exception on failure
+     */
+    suspend fun fetchAvailableHACameras(): Result<List<CameraEntity>> {
+        return try {
+            val cameras = app.haApiClient?.getCameraEntities() ?: emptyList()
+            _availableHACameras.value = cameras
+            Log.d(TAG, "Fetched ${cameras.size} HA cameras for pre-chat selector")
+            Result.success(cameras)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch HA cameras: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Get list of available video source options for the UI selector.
      * Includes device cameras and any available Home Assistant cameras.
+     *
+     * @param haCameras Optional list of HA cameras to include. If null, uses cached value.
      */
-    fun getAvailableVideoSources(): List<VideoSourceOption> {
+    fun getAvailableVideoSources(haCameras: List<CameraEntity>? = null): List<VideoSourceOption> {
         val options = mutableListOf<VideoSourceOption>()
 
         // Always add "Off" option first
@@ -519,7 +540,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ))
 
         // Add HA cameras (filtered to available ones)
-        _availableHACameras.value
+        val cameras = haCameras ?: _availableHACameras.value
+        cameras
             .filter { it.state != "unavailable" }
             .forEach { camera ->
                 options.add(VideoSourceOption(
