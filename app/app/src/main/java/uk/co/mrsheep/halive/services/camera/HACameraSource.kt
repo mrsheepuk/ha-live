@@ -38,6 +38,10 @@ class HACameraSource(
 
     private var captureScope: CoroutineScope? = null
     private var captureJob: Job? = null
+
+    // These flags are accessed from multiple threads (main thread sets, IO dispatcher reads)
+    // so they must be volatile for memory visibility
+    @Volatile
     private var _isActive = false
 
     // Flag to prevent start() from running if stop() was called before start() executed
@@ -61,10 +65,14 @@ class HACameraSource(
     var lastFrame: ByteArray? = null
         private set
 
-    /** Callback for when a new frame is available (for preview updates) */
+    /** Callback for when a new frame is available (for preview updates).
+     *  Volatile for visibility - set on main thread, invoked on IO dispatcher. */
+    @Volatile
     var onFrameAvailable: ((ByteArray) -> Unit)? = null
 
-    /** Callback for errors during capture */
+    /** Callback for errors during capture.
+     *  Volatile for visibility - set on main thread, invoked on IO dispatcher. */
+    @Volatile
     var onError: ((Exception) -> Unit)? = null
 
     override suspend fun start() {
@@ -127,6 +135,13 @@ class HACameraSource(
         // Set cancelled flag FIRST to prevent any pending start() from running
         // This handles the race condition where stop() is called before start() executes
         _isCancelled = true
+
+        // Clear callbacks immediately to prevent late invocations during shutdown.
+        // The capture loop may still complete one more iteration before cancellation
+        // takes effect at the next suspension point (delay), so we null these out
+        // to prevent preview interleaving when switching cameras.
+        onFrameAvailable = null
+        onError = null
 
         if (!_isActive) {
             Log.i(TAG, "HACameraSource stop() called before active: $entityId (marked cancelled)")
