@@ -372,8 +372,10 @@ class GeminiLiveSession(
      * Start capturing and sending video frames from any video source.
      *
      * @param source The VideoSource instance to capture frames from
+     * @param onFrameSent Optional callback invoked when a frame is actually sent to the model.
+     *                    Use this to update preview UI to show exactly what the model sees.
      */
-    fun startVideoCapture(source: VideoSource) {
+    fun startVideoCapture(source: VideoSource, onFrameSent: ((ByteArray) -> Unit)? = null) {
         if (isVideoCapturing) {
             Log.w(TAG, "Video capture already active")
             return
@@ -395,6 +397,8 @@ class GeminiLiveSession(
                 // Check capture ID to ignore frames from old/cancelled sessions
                 if (captureId == currentCaptureId.get() && isVideoCapturing && isSessionActive) {
                     sendVideoRealtime(frame)
+                    // Notify callback that this frame was sent - for preview sync
+                    onFrameSent?.invoke(frame)
                 }
             }
             .launchIn(sessionScope)

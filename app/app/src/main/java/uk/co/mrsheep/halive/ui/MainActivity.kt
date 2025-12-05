@@ -1016,16 +1016,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Set up frame callback for preview.
-        // Check that this source is still the current one to prevent interleaving
-        // when switching cameras - late frames from the old source should be ignored.
-        source.onFrameAvailable = { frame ->
-            if (currentVideoSource === source) {
-                runOnUiThread {
-                    updateHACameraPreview(frame)
-                }
-            }
-        }
+        // Note: We don't use source.onFrameAvailable for preview anymore.
+        // Instead, we use the onFrameSent callback from startVideoCapture to ensure
+        // the preview shows exactly what frames are sent to the model.
 
         currentVideoSource = source
         currentSourceType = sourceType
@@ -1033,7 +1026,12 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 source.start()
-                viewModel.startVideoCapture(source)
+                // Pass onFrameSent callback to update preview with exactly what the model sees
+                viewModel.startVideoCapture(source) { frame ->
+                    runOnUiThread {
+                        updateHACameraPreview(frame)
+                    }
+                }
 
                 // Show preview card
                 cameraPreviewCard.visibility = View.VISIBLE
