@@ -73,8 +73,10 @@ interface ConversationService {
      * Start video capture and streaming to the AI.
      *
      * @param source VideoSource instance providing video frames
+     * @param onFrameSent Optional callback invoked when a frame is actually sent to the model.
+     *                    Use this to update preview UI to show exactly what the model sees.
      */
-    fun startVideoCapture(source: VideoSource)
+    fun startVideoCapture(source: VideoSource, onFrameSent: ((ByteArray) -> Unit)? = null)
 
     /**
      * Stop video capture and streaming.
