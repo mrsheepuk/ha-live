@@ -87,7 +87,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraToggleButton: MaterialButton
     private lateinit var cameraFlipButton: MaterialButton
 
-    // Current video source (created on demand)
+    // Current video source (created on demand).
+    // Volatile for visibility - updated on main thread, read from IO dispatcher in callbacks.
+    @Volatile
     private var currentVideoSource: VideoSource? = null
     private var currentSourceType: VideoSourceType = VideoSourceType.None
 
