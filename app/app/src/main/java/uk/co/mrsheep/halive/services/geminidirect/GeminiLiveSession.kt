@@ -12,6 +12,7 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
@@ -128,6 +129,8 @@ class GeminiLiveSession(
     private var videoSource: VideoSource? = null
     /** Whether video capture is currently active */
     private var isVideoCapturing = false
+    /** Job for the video recording coroutine - must be cancelled on stop */
+    private var videoRecordingJob: Job? = null
 
     // New audio pipeline components for playback
     private var jitterBuffer: JitterBuffer? = null
@@ -371,10 +374,16 @@ class GeminiLiveSession(
         videoSource = source
         isVideoCapturing = true
 
-        // Launch video recording coroutine
-        sessionScope.launch {
-            recordVideo()
-        }
+        // Launch video recording coroutine and store the Job for cancellation
+        // Note: We store the Job returned by launchIn directly, not a wrapper launch,
+        // because launchIn creates a job parented to sessionScope, not to any outer launch
+        videoRecordingJob = source.frameFlow
+            .onEach { frame ->
+                if (isVideoCapturing && isSessionActive) {
+                    sendVideoRealtime(frame)
+                }
+            }
+            .launchIn(sessionScope)
 
         Log.i(TAG, "Video capture started from source: ${source.sourceId}")
     }
@@ -385,21 +394,13 @@ class GeminiLiveSession(
     fun stopVideoCapture() {
         if (!isVideoCapturing) return
 
+        // Cancel the video recording coroutine to prevent interleaving when switching cameras
+        videoRecordingJob?.cancel()
+        videoRecordingJob = null
         isVideoCapturing = false
         videoSource = null
 
         Log.i(TAG, "Video capture stopped")
-    }
-
-    /** Listen to the video source frames and send them to the model. */
-    private suspend fun recordVideo() {
-        videoSource?.frameFlow
-            ?.onEach { frame ->
-                if (isVideoCapturing && isSessionActive) {
-                    sendVideoRealtime(frame)
-                }
-            }
-            ?.launchIn(sessionScope)
     }
 
     /**
