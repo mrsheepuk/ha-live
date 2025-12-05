@@ -127,15 +127,18 @@ class GeminiLiveSession(
 
     // Video capture (from any video source)
     private var videoSource: VideoSource? = null
-    /** Whether video capture is currently active */
+    /** Whether video capture is currently active.
+     *  Volatile for visibility - set on main thread, read from Default dispatcher. */
+    @Volatile
     private var isVideoCapturing = false
     /** Job for the video recording coroutine - must be cancelled on stop */
     private var videoRecordingJob: Job? = null
     /**
      * Unique ID for the current capture session. Used to ignore frames from
      * old/cancelled capture sessions that may still be in-flight.
+     * AtomicLong ensures thread-safe increment and visibility across dispatchers.
      */
-    private var currentCaptureId = 0L
+    private val currentCaptureId = AtomicLong(0)
 
     // New audio pipeline components for playback
     private var jitterBuffer: JitterBuffer? = null
@@ -382,7 +385,7 @@ class GeminiLiveSession(
         // Get a unique capture ID for this session. The closure captures this value,
         // so even if frames from a previous capture are still in-flight after cancellation,
         // they'll be ignored because their captured ID won't match currentCaptureId.
-        val captureId = ++currentCaptureId
+        val captureId = currentCaptureId.incrementAndGet()
 
         // Launch video recording coroutine and store the Job for cancellation
         // Note: We store the Job returned by launchIn directly, not a wrapper launch,
@@ -390,7 +393,7 @@ class GeminiLiveSession(
         videoRecordingJob = source.frameFlow
             .onEach { frame ->
                 // Check capture ID to ignore frames from old/cancelled sessions
-                if (captureId == currentCaptureId && isVideoCapturing && isSessionActive) {
+                if (captureId == currentCaptureId.get() && isVideoCapturing && isSessionActive) {
                     sendVideoRealtime(frame)
                 }
             }
@@ -406,7 +409,7 @@ class GeminiLiveSession(
         if (!isVideoCapturing) return
 
         // Increment capture ID to invalidate any in-flight frames from the old session
-        currentCaptureId++
+        val invalidatedId = currentCaptureId.incrementAndGet()
 
         // Cancel the video recording coroutine to prevent interleaving when switching cameras
         videoRecordingJob?.cancel()
@@ -414,7 +417,7 @@ class GeminiLiveSession(
         isVideoCapturing = false
         videoSource = null
 
-        Log.i(TAG, "Video capture stopped (captureId invalidated to $currentCaptureId)")
+        Log.i(TAG, "Video capture stopped (captureId invalidated to $invalidatedId)")
     }
 
     /**
