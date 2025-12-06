@@ -371,14 +371,18 @@ class GeminiLiveSession(
     /**
      * Start capturing and sending video frames from any video source.
      *
+     * If video capture is already active, this will stop the old capture and start
+     * the new one, ensuring the onFrameSent callback is properly updated.
+     *
      * @param source The VideoSource instance to capture frames from
      * @param onFrameSent Optional callback invoked when a frame is actually sent to the model.
      *                    Use this to update preview UI to show exactly what the model sees.
      */
     fun startVideoCapture(source: VideoSource, onFrameSent: ((ByteArray) -> Unit)? = null) {
+        // If already capturing, stop first to ensure clean switch with new callback
         if (isVideoCapturing) {
-            Log.w(TAG, "Video capture already active")
-            return
+            Log.i(TAG, "Video capture already active - stopping old capture to switch sources")
+            stopVideoCapture()
         }
 
         videoSource = source
