@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
+import uk.co.mrsheep.halive.core.CameraConfig
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.WakeWordConfig
@@ -86,6 +87,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _modelWatchingCamera = MutableStateFlow<String?>(null)
     val modelWatchingCamera: StateFlow<String?> = _modelWatchingCamera.asStateFlow()
 
+    // Pre-chat video selection state
+    private val _videoStartEnabled = MutableStateFlow(false)
+    val videoStartEnabled: StateFlow<Boolean> = _videoStartEnabled.asStateFlow()
+
+    private val _selectedVideoSource = MutableStateFlow<VideoSourceType>(VideoSourceType.None)
+    val selectedVideoSource: StateFlow<VideoSourceType> = _selectedVideoSource.asStateFlow()
+
     // Track if user has ever started a chat in this session (for layout transition)
     private val _hasEverChatted = MutableStateFlow(false)
     val hasEverChatted: StateFlow<Boolean> = _hasEverChatted
@@ -140,6 +148,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // Load wake word preference
         _wakeWordEnabled.value = WakeWordConfig.isEnabled(getApplication())
+
+        // Load video start preference
+        _videoStartEnabled.value = CameraConfig.isVideoStartEnabled(getApplication())
+        _selectedVideoSource.value = CameraConfig.getLastVideoSource(getApplication()) ?: VideoSourceType.None
 
         checkConfiguration()
     }
@@ -422,14 +434,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Called by MainActivity when camera is selected.
      *
      * @param source The VideoSource instance to use for video capture
+     * @param onFrameSent Optional callback invoked when a frame is actually sent to the model.
+     *                    Use this to update preview UI to show exactly what the model sees.
      */
-    fun startVideoCapture(source: VideoSource) {
+    fun startVideoCapture(source: VideoSource, onFrameSent: ((ByteArray) -> Unit)? = null) {
         if (!isSessionActive()) {
             Log.w(TAG, "Cannot start video capture - no active session")
             return
         }
 
-        liveSessionService?.startVideoCapture(source)
+        liveSessionService?.startVideoCapture(source, onFrameSent)
         Log.d(TAG, "Video capture started via ViewModel from source: ${source.sourceId}")
     }
 
@@ -453,6 +467,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Set the video source for pre-chat selection.
+     * Selecting None disables video start, any other source enables it.
+     * Persists the selection to CameraConfig.
+     */
+    fun setPreChatVideoSource(sourceType: VideoSourceType) {
+        _selectedVideoSource.value = sourceType
+        CameraConfig.saveLastVideoSource(getApplication(), sourceType)
+
+        val enabled = sourceType != VideoSourceType.None
+        _videoStartEnabled.value = enabled
+        CameraConfig.setVideoStartEnabled(getApplication(), enabled)
+    }
+
+    /**
      * Set callback for model camera requests.
      * Called by MainActivity to handle camera switch dialogs when model requests a view.
      */
@@ -470,10 +498,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Fetch available HA cameras from the Home Assistant API.
+     * Called on-demand when user opens the pre-chat video selector.
+     * Updates the _availableHACameras state flow.
+     *
+     * @return Result with list of cameras on success, or exception on failure
+     */
+    suspend fun fetchAvailableHACameras(): Result<List<CameraEntity>> {
+        return try {
+            val cameras = app.haApiClient?.getCameraEntities() ?: emptyList()
+            _availableHACameras.value = cameras
+            Log.d(TAG, "Fetched ${cameras.size} HA cameras for pre-chat selector")
+            Result.success(cameras)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch HA cameras: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Get list of available video source options for the UI selector.
      * Includes device cameras and any available Home Assistant cameras.
+     *
+     * @param haCameras Optional list of HA cameras to include. If null, uses cached value.
      */
-    fun getAvailableVideoSources(): List<VideoSourceOption> {
+    fun getAvailableVideoSources(haCameras: List<CameraEntity>? = null): List<VideoSourceOption> {
         val options = mutableListOf<VideoSourceOption>()
 
         // Always add "Off" option first
@@ -493,7 +542,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ))
 
         // Add HA cameras (filtered to available ones)
-        _availableHACameras.value
+        val cameras = haCameras ?: _availableHACameras.value
+        cameras
             .filter { it.state != "unavailable" }
             .forEach { camera ->
                 options.add(VideoSourceOption(

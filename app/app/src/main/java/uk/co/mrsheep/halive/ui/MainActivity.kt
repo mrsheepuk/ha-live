@@ -72,7 +72,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mainButton: Button
     private lateinit var retryButton: Button
     private lateinit var audioVisualizer: AudioVisualizerView
-    private lateinit var wakeWordChip: MaterialButton
+    private lateinit var preVideoButton: MaterialButton
 
     private lateinit var transcriptionRecyclerView: RecyclerView
     private lateinit var transcriptionAdapter: TranscriptionAdapter
@@ -87,7 +87,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraToggleButton: MaterialButton
     private lateinit var cameraFlipButton: MaterialButton
 
-    // Current video source (created on demand)
+    // Current video source (created on demand).
+    // Volatile for visibility - updated on main thread, read from IO dispatcher in callbacks.
+    @Volatile
     private var currentVideoSource: VideoSource? = null
     private var currentSourceType: VideoSourceType = VideoSourceType.None
 
@@ -221,6 +223,8 @@ class MainActivity : AppCompatActivity() {
 
     // Store pending source type for permission callback
     private var pendingSourceType: VideoSourceType? = null
+    // Track if current permission request is from auto-start (to handle denial differently)
+    private var isAutoStartPermissionRequest = false
 
     // Activity Result Launcher for camera permission
     private val requestCameraPermissionLauncher = registerForActivityResult(
@@ -232,9 +236,18 @@ class MainActivity : AppCompatActivity() {
                 startDeviceCameraSource(sourceType.facing)
             }
         } else {
-            Toast.makeText(this, "Camera permission is required to use this feature", Toast.LENGTH_SHORT).show()
+            // Permission denied - check if this was from auto-start or manual selection
+            if (isAutoStartPermissionRequest) {
+                // Auto-start failed - use specific message and reset preference
+                Toast.makeText(this, R.string.video_permission_denied, Toast.LENGTH_SHORT).show()
+                viewModel.setPreChatVideoSource(VideoSourceType.None)
+            } else {
+                // Manual selection during chat - generic message, don't reset preference
+                Toast.makeText(this, "Camera permission is required to use this feature", Toast.LENGTH_SHORT).show()
+            }
         }
         pendingSourceType = null
+        isAutoStartPermissionRequest = false
     }
 
     override fun onResume() {
@@ -288,12 +301,7 @@ class MainActivity : AppCompatActivity() {
         retryButton = findViewById(R.id.retryButton)
         clearButton = findViewById(R.id.clearButton)
         audioVisualizer = findViewById(R.id.audioVisualizer)
-        wakeWordChip = findViewById(R.id.wakeWordChip)
-
-        // Hide wake word chip if wake word feature is not available
-        if (!BuildConfig.HAS_WAKE_WORD) {
-            wakeWordChip.visibility = View.GONE
-        }
+        preVideoButton = findViewById(R.id.preVideoButton)
 
         transcriptionRecyclerView = findViewById(R.id.transcriptionRecyclerView)
 
@@ -324,12 +332,17 @@ class MainActivity : AppCompatActivity() {
         // Observe flows and update UI - only when activity is in STARTED state
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                // Observe wake word state from ViewModel and update chip appearance
-                if (BuildConfig.HAS_WAKE_WORD) {
-                    launch {
-                        viewModel.wakeWordEnabled.collect { enabled ->
-                            updateWakeWordChipAppearance(enabled)
-                        }
+                // Observe video start enabled state
+                launch {
+                    viewModel.videoStartEnabled.collect { enabled ->
+                        updatePreVideoButtonAppearance(enabled)
+                    }
+                }
+
+                // Observe selected video source for button text
+                launch {
+                    viewModel.selectedVideoSource.collect { source ->
+                        updatePreVideoButtonText(source)
                     }
                 }
 
@@ -389,6 +402,20 @@ class MainActivity : AppCompatActivity() {
                         handleModelCameraStateChange(entityId)
                     }
                 }
+
+                // Auto-start video when chat becomes active (if pre-selected)
+                launch {
+                    // Initialize based on current state to avoid re-triggering on activity recreation
+                    var wasActive = viewModel.uiState.value == UiState.ChatActive
+                    viewModel.uiState.collect { state ->
+                        val isNowActive = state == UiState.ChatActive
+                        if (isNowActive && !wasActive && viewModel.videoStartEnabled.value) {
+                            // Just transitioned to ChatActive with video enabled
+                            autoStartPreSelectedVideo()
+                        }
+                        wasActive = isNowActive
+                    }
+                }
             }
         }
 
@@ -402,11 +429,9 @@ class MainActivity : AppCompatActivity() {
             switchCamera()
         }
 
-        // Handle user clicking the wake word chip (only if wake word feature is available)
-        if (BuildConfig.HAS_WAKE_WORD) {
-            wakeWordChip.setOnClickListener {
-                viewModel.toggleWakeWord(!viewModel.wakeWordEnabled.value)
-            }
+        // Handle user clicking the pre-video button - opens camera selector
+        preVideoButton.setOnClickListener {
+            showPreChatCameraSourceMenu()
         }
 
         // Handle widget auto-start intent
@@ -425,6 +450,11 @@ class MainActivity : AppCompatActivity() {
         menuInflater.inflate(R.menu.main_menu, menu)
         // Set checked state for dummy tools menu item
         menu.findItem(R.id.action_dummy_tools)?.isChecked = DummyToolsConfig.isEnabled(this)
+        // Set wake word menu item state
+        menu.findItem(R.id.action_wake_word)?.let { item ->
+            item.isChecked = viewModel.wakeWordEnabled.value
+            item.isVisible = BuildConfig.HAS_WAKE_WORD
+        }
         return true
     }
 
@@ -460,6 +490,12 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
                 true
             }
+            R.id.action_wake_word -> {
+                val newState = !item.isChecked
+                viewModel.toggleWakeWord(newState)
+                item.isChecked = newState
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
     }
@@ -472,8 +508,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 statusText.text = "Loading..."
-                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
-                wakeWordChip.isEnabled = false
+                preVideoButton.visibility = View.GONE
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
                 cameraToggleButton.visibility = View.GONE
@@ -485,8 +520,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 statusText.text = "Please complete onboarding"
-                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
-                wakeWordChip.isEnabled = false
+                preVideoButton.visibility = View.GONE
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
                 cameraToggleButton.visibility = View.GONE
@@ -498,8 +532,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.isEnabled = false
                 mainButton.visibility = View.VISIBLE
                 statusText.text = "Please complete onboarding"
-                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
-                wakeWordChip.isEnabled = false
+                preVideoButton.visibility = View.GONE
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
                 cameraToggleButton.visibility = View.GONE
@@ -511,8 +544,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 statusText.text = "Initializing..."
-                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
-                wakeWordChip.isEnabled = false
+                preVideoButton.visibility = View.GONE
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
                 cameraToggleButton.visibility = View.GONE
@@ -524,13 +556,9 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.GONE
                 mainButton.text = "Start Chat"
-                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
-                wakeWordChip.isEnabled = true
-                statusText.text = if (BuildConfig.HAS_WAKE_WORD && viewModel.wakeWordEnabled.value) {
-                    "Listening for wake word..."
-                } else {
-                    "Ready to chat"
-                }
+                preVideoButton.visibility = View.VISIBLE
+                preVideoButton.isEnabled = true
+                statusText.text = "Ready to chat"
                 mainButton.setOnTouchListener(null) // Remove touch listener
                 mainButton.setOnClickListener(chatButtonClickListener)
                 quickMessageScrollView.visibility = View.GONE
@@ -546,8 +574,8 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Chat active - listening..."
-                // Hide wake button during chat, show video button instead
-                wakeWordChip.visibility = View.GONE
+                // Hide pre-video button during chat
+                preVideoButton.visibility = View.GONE
                 clearButton.visibility = View.GONE
 
                 // Show camera toggle button during active chat
@@ -574,8 +602,8 @@ class MainActivity : AppCompatActivity() {
                 retryButton.visibility = View.GONE
                 mainButton.text = "Stop Chat"
                 statusText.text = "Executing ${state.tool}..."
-                // Hide wake button during chat, show video button instead
-                wakeWordChip.visibility = View.GONE
+                // Hide pre-video button during chat
+                preVideoButton.visibility = View.GONE
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
                 // Keep camera visible and enabled during action execution
@@ -588,8 +616,7 @@ class MainActivity : AppCompatActivity() {
                 mainButton.visibility = View.VISIBLE
                 retryButton.visibility = View.VISIBLE
                 statusText.text = state.message
-                wakeWordChip.visibility = if (BuildConfig.HAS_WAKE_WORD) View.VISIBLE else View.GONE
-                wakeWordChip.isEnabled = false
+                preVideoButton.visibility = View.GONE
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
                 cameraToggleButton.visibility = View.GONE
@@ -754,22 +781,6 @@ class MainActivity : AppCompatActivity() {
             transcriptionRecyclerView.post {
                 transcriptionRecyclerView.smoothScrollToPosition(turns.size - 1)
             }
-        }
-    }
-
-    private fun updateWakeWordChipAppearance(enabled: Boolean) {
-        if (enabled) {
-            // Filled style when enabled
-            wakeWordChip.backgroundTintList = ContextCompat.getColorStateList(this, R.color.orange_accent)
-            wakeWordChip.setTextColor(ContextCompat.getColor(this, R.color.white))
-            wakeWordChip.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.white))
-            wakeWordChip.strokeWidth = 0
-        } else {
-            // Outlined style when disabled
-            wakeWordChip.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.transparent)
-            wakeWordChip.setTextColor(ContextCompat.getColor(this, R.color.teal_primary))
-            wakeWordChip.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.teal_primary))
-            wakeWordChip.strokeWidth = (1 * resources.displayMetrics.density).toInt() // 1dp stroke
         }
     }
 
@@ -996,20 +1007,19 @@ class MainActivity : AppCompatActivity() {
             frameIntervalMs = settings.frameRate.intervalMs
         )
 
-        // Set up error callback
+        // Set up error callback - also check source is still current
         source.onError = { e ->
-            runOnUiThread {
-                Toast.makeText(this, getString(R.string.camera_error_fetch_failed), Toast.LENGTH_SHORT).show()
-                stopCurrentVideoSource()
+            if (currentVideoSource === source) {
+                runOnUiThread {
+                    Toast.makeText(this, getString(R.string.camera_error_fetch_failed), Toast.LENGTH_SHORT).show()
+                    stopCurrentVideoSource()
+                }
             }
         }
 
-        // Set up frame callback for preview
-        source.onFrameAvailable = { frame ->
-            runOnUiThread {
-                updateHACameraPreview(frame)
-            }
-        }
+        // Note: We don't use source.onFrameAvailable for preview anymore.
+        // Instead, we use the onFrameSent callback from startVideoCapture to ensure
+        // the preview shows exactly what frames are sent to the model.
 
         currentVideoSource = source
         currentSourceType = sourceType
@@ -1017,7 +1027,12 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 source.start()
-                viewModel.startVideoCapture(source)
+                // Pass onFrameSent callback to update preview with exactly what the model sees
+                viewModel.startVideoCapture(source) { frame ->
+                    runOnUiThread {
+                        updateHACameraPreview(frame)
+                    }
+                }
 
                 // Show preview card
                 cameraPreviewCard.visibility = View.VISIBLE
@@ -1165,6 +1180,130 @@ class MainActivity : AppCompatActivity() {
             cameraToggleButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.teal_primary))
             cameraToggleButton.setTextColor(ContextCompat.getColor(this, R.color.teal_primary))
             cameraToggleButton.strokeWidth = (1 * resources.displayMetrics.density).toInt()
+        }
+    }
+
+    /**
+     * Show camera source selector for pre-chat video selection.
+     * Fetches HA cameras on-demand before showing the selector.
+     */
+    private fun showPreChatCameraSourceMenu() {
+        // Disable button while loading to prevent double-taps
+        preVideoButton.isEnabled = false
+
+        lifecycleScope.launch {
+            // Fetch HA cameras on-demand
+            val result = viewModel.fetchAvailableHACameras()
+
+            // Re-enable button
+            preVideoButton.isEnabled = true
+
+            // Show error toast if fetch failed (but still show selector with device cameras)
+            if (result.isFailure) {
+                Toast.makeText(
+                    this@MainActivity,
+                    R.string.camera_list_fetch_error,
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+
+            // Get options (will use fetched cameras or empty list on failure)
+            val options = viewModel.getAvailableVideoSources()
+
+            val bottomSheet = BottomSheetDialog(this@MainActivity)
+            val sheetView = layoutInflater.inflate(R.layout.bottom_sheet_camera_source, null)
+
+            val recyclerView = sheetView.findViewById<RecyclerView>(R.id.sourceList)
+            recyclerView.layoutManager = LinearLayoutManager(this@MainActivity)
+            recyclerView.adapter = CameraSourceAdapter(options) { selectedType ->
+                bottomSheet.dismiss()
+                viewModel.setPreChatVideoSource(selectedType)
+            }
+
+            bottomSheet.setContentView(sheetView)
+            bottomSheet.show()
+        }
+    }
+
+    /**
+     * Update pre-video button appearance based on enabled state.
+     */
+    private fun updatePreVideoButtonAppearance(enabled: Boolean) {
+        if (enabled) {
+            // Video enabled - filled style
+            preVideoButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.teal_primary)
+            preVideoButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.white))
+            preVideoButton.setTextColor(ContextCompat.getColor(this, R.color.white))
+            preVideoButton.strokeWidth = 0
+        } else {
+            // Video disabled - outlined style
+            preVideoButton.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.transparent)
+            preVideoButton.iconTint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.teal_primary))
+            preVideoButton.setTextColor(ContextCompat.getColor(this, R.color.teal_primary))
+            preVideoButton.strokeWidth = (1 * resources.displayMetrics.density).toInt()
+        }
+    }
+
+    /**
+     * Update pre-video button text based on selected source.
+     */
+    private fun updatePreVideoButtonText(source: VideoSourceType) {
+        preVideoButton.text = when (source) {
+            is VideoSourceType.None -> "Video"
+            is VideoSourceType.DeviceCamera -> if (source.facing == CameraFacing.FRONT) "Front" else "Back"
+            is VideoSourceType.HACamera -> source.friendlyName.take(10) // Truncate long names
+        }
+    }
+
+    /**
+     * Auto-start video capture with the pre-selected source.
+     * Called when chat becomes active and video start is enabled.
+     */
+    private fun autoStartPreSelectedVideo() {
+        val source = viewModel.selectedVideoSource.value
+        if (source == VideoSourceType.None) return
+
+        lifecycleScope.launch {
+            // Small delay to ensure session is fully initialized
+            kotlinx.coroutines.delay(500)
+
+            // Verify session is still active after delay - user may have stopped chat
+            if (viewModel.uiState.value != UiState.ChatActive) {
+                Log.d("MainActivity", "Auto-start video cancelled - session no longer active")
+                return@launch
+            }
+
+            when (source) {
+                is VideoSourceType.DeviceCamera -> {
+                    // Check camera permission
+                    if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CAMERA)
+                        == PackageManager.PERMISSION_GRANTED) {
+                        startDeviceCameraSource(source.facing)
+                    } else {
+                        // Request permission - store pending source and mark as auto-start
+                        pendingSourceType = source
+                        isAutoStartPermissionRequest = true
+                        requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    }
+                }
+                is VideoSourceType.HACamera -> {
+                    // Fetch fresh camera status before checking availability
+                    val fetchResult = viewModel.fetchAvailableHACameras()
+
+                    // Check if HA camera is available using fresh data
+                    val available = viewModel.availableHACameras.value.any {
+                        it.entityId == source.entityId && it.state != "unavailable"
+                    }
+
+                    if (fetchResult.isSuccess && available) {
+                        startHACameraSource(source)
+                    } else {
+                        Toast.makeText(this@MainActivity, R.string.video_source_unavailable, Toast.LENGTH_SHORT).show()
+                        viewModel.setPreChatVideoSource(VideoSourceType.None)
+                    }
+                }
+                is VideoSourceType.None -> { /* Do nothing */ }
+            }
         }
     }
 

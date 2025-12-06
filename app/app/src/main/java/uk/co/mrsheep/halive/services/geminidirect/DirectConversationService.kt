@@ -194,8 +194,9 @@ class DirectConversationService(private val context: Context) :
      * Start video capture and streaming to the AI.
      *
      * @param source VideoSource instance providing video frames
+     * @param onFrameSent Optional callback invoked when a frame is actually sent to the model
      */
-    override fun startVideoCapture(source: VideoSource) {
+    override fun startVideoCapture(source: VideoSource, onFrameSent: ((ByteArray) -> Unit)?) {
         try {
             val activeSession = session
             if (activeSession == null) {
@@ -203,7 +204,7 @@ class DirectConversationService(private val context: Context) :
                 return
             }
 
-            activeSession.startVideoCapture(source)
+            activeSession.startVideoCapture(source, onFrameSent)
             Log.d(TAG, "Video capture started from source: ${source.sourceId}")
         } catch (e: Exception) {
             Log.e(TAG, "Error starting video capture", e)

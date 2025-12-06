@@ -135,18 +135,19 @@
             app:iconGravity="start" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/wakeWordChip"
+            android:id="@+id/preVideoButton"
             android:layout_width="wrap_content"
             android:layout_height="56dp"
-            android:text="Wake"
+            android:text="Video"
             android:textSize="14sp"
             android:layout_marginStart="8dp"
             android:visibility="visible"
-            android:enabled="false"
-            android:contentDescription="Toggle wake word listening"
+            android:enabled="true"
+            android:contentDescription="@string/pre_video_button_description"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            app:icon="@drawable/ic_hearing"
-            app:iconSize="18dp" />
+            app:icon="@drawable/ic_videocam"
+            app:iconSize="18dp"
+            app:iconGravity="start" />
     </LinearLayout>
 
     <!-- Quick message chips - now fixed row in layout -->

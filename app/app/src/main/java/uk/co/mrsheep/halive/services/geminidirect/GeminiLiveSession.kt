@@ -12,6 +12,7 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
@@ -126,8 +127,20 @@ class GeminiLiveSession(
 
     // Video capture (from any video source)
     private var videoSource: VideoSource? = null
-    /** Whether video capture is currently active */
+    /** Whether video capture is currently active.
+     *  Volatile for visibility - set on main thread, read from Default dispatcher. */
+    @Volatile
     private var isVideoCapturing = false
+    /** Job for the video recording coroutine - must be cancelled on stop.
+     *  Volatile for visibility - written on main thread, read from coroutine context for cancellation. */
+    @Volatile
+    private var videoRecordingJob: Job? = null
+    /**
+     * Unique ID for the current capture session. Used to ignore frames from
+     * old/cancelled capture sessions that may still be in-flight.
+     * AtomicLong ensures thread-safe increment and visibility across dispatchers.
+     */
+    private val currentCaptureId = AtomicLong(0)
 
     // New audio pipeline components for playback
     private var jitterBuffer: JitterBuffer? = null
@@ -360,23 +373,46 @@ class GeminiLiveSession(
     /**
      * Start capturing and sending video frames from any video source.
      *
+     * If video capture is already active, this will stop the old capture and start
+     * the new one, ensuring the onFrameSent callback is properly updated.
+     *
+     * **Threading**: Must be called from the main thread only. Concurrent calls could result
+     * in orphaned capture coroutines since the check-then-act pattern is not atomic.
+     *
      * @param source The VideoSource instance to capture frames from
+     * @param onFrameSent Optional callback invoked when a frame is actually sent to the model.
+     *                    Use this to update preview UI to show exactly what the model sees.
      */
-    fun startVideoCapture(source: VideoSource) {
+    fun startVideoCapture(source: VideoSource, onFrameSent: ((ByteArray) -> Unit)? = null) {
+        // If already capturing, stop first to ensure clean switch with new callback
         if (isVideoCapturing) {
-            Log.w(TAG, "Video capture already active")
-            return
+            Log.i(TAG, "Video capture already active - stopping old capture to switch sources")
+            stopVideoCapture()
         }
 
         videoSource = source
         isVideoCapturing = true
 
-        // Launch video recording coroutine
-        sessionScope.launch {
-            recordVideo()
-        }
+        // Get a unique capture ID for this session. The closure captures this value,
+        // so even if frames from a previous capture are still in-flight after cancellation,
+        // they'll be ignored because their captured ID won't match currentCaptureId.
+        val captureId = currentCaptureId.incrementAndGet()
 
-        Log.i(TAG, "Video capture started from source: ${source.sourceId}")
+        // Launch video recording coroutine and store the Job for cancellation
+        // Note: We store the Job returned by launchIn directly, not a wrapper launch,
+        // because launchIn creates a job parented to sessionScope, not to any outer launch
+        videoRecordingJob = source.frameFlow
+            .onEach { frame ->
+                // Check capture ID to ignore frames from old/cancelled sessions
+                if (captureId == currentCaptureId.get() && isVideoCapturing && isSessionActive) {
+                    sendVideoRealtime(frame)
+                    // Notify callback that this frame was sent - for preview sync
+                    onFrameSent?.invoke(frame)
+                }
+            }
+            .launchIn(sessionScope)
+
+        Log.i(TAG, "Video capture started from source: ${source.sourceId} (captureId=$captureId)")
     }
 
     /**
@@ -385,21 +421,16 @@ class GeminiLiveSession(
     fun stopVideoCapture() {
         if (!isVideoCapturing) return
 
+        // Increment capture ID to invalidate any in-flight frames from the old session
+        val invalidatedId = currentCaptureId.incrementAndGet()
+
+        // Cancel the video recording coroutine to prevent interleaving when switching cameras
+        videoRecordingJob?.cancel()
+        videoRecordingJob = null
         isVideoCapturing = false
         videoSource = null
 
-        Log.i(TAG, "Video capture stopped")
-    }
-
-    /** Listen to the video source frames and send them to the model. */
-    private suspend fun recordVideo() {
-        videoSource?.frameFlow
-            ?.onEach { frame ->
-                if (isVideoCapturing && isSessionActive) {
-                    sendVideoRealtime(frame)
-                }
-            }
-            ?.launchIn(sessionScope)
+        Log.i(TAG, "Video capture stopped (captureId invalidated to $invalidatedId)")
     }
 
     /**
