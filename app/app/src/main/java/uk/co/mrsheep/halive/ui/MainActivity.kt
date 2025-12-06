@@ -405,7 +405,8 @@ class MainActivity : AppCompatActivity() {
 
                 // Auto-start video when chat becomes active (if pre-selected)
                 launch {
-                    var wasActive = false
+                    // Initialize based on current state to avoid re-triggering on activity recreation
+                    var wasActive = viewModel.uiState.value == UiState.ChatActive
                     viewModel.uiState.collect { state ->
                         val isNowActive = state == UiState.ChatActive
                         if (isNowActive && !wasActive && viewModel.videoStartEnabled.value) {
@@ -1266,6 +1267,12 @@ class MainActivity : AppCompatActivity() {
             // Small delay to ensure session is fully initialized
             kotlinx.coroutines.delay(500)
 
+            // Verify session is still active after delay - user may have stopped chat
+            if (viewModel.uiState.value != UiState.ChatActive) {
+                Log.d("MainActivity", "Auto-start video cancelled - session no longer active")
+                return@launch
+            }
+
             when (source) {
                 is VideoSourceType.DeviceCamera -> {
                     // Check camera permission
@@ -1280,11 +1287,15 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 is VideoSourceType.HACamera -> {
-                    // Check if HA camera is available
+                    // Fetch fresh camera status before checking availability
+                    val fetchResult = viewModel.fetchAvailableHACameras()
+
+                    // Check if HA camera is available using fresh data
                     val available = viewModel.availableHACameras.value.any {
                         it.entityId == source.entityId && it.state != "unavailable"
                     }
-                    if (available) {
+
+                    if (fetchResult.isSuccess && available) {
                         startHACameraSource(source)
                     } else {
                         Toast.makeText(this@MainActivity, R.string.video_source_unavailable, Toast.LENGTH_SHORT).show()
