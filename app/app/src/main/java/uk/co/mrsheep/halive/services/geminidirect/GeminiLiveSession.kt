@@ -131,7 +131,9 @@ class GeminiLiveSession(
      *  Volatile for visibility - set on main thread, read from Default dispatcher. */
     @Volatile
     private var isVideoCapturing = false
-    /** Job for the video recording coroutine - must be cancelled on stop */
+    /** Job for the video recording coroutine - must be cancelled on stop.
+     *  Volatile for visibility - written on main thread, read from coroutine context for cancellation. */
+    @Volatile
     private var videoRecordingJob: Job? = null
     /**
      * Unique ID for the current capture session. Used to ignore frames from
@@ -373,6 +375,9 @@ class GeminiLiveSession(
      *
      * If video capture is already active, this will stop the old capture and start
      * the new one, ensuring the onFrameSent callback is properly updated.
+     *
+     * **Threading**: Must be called from the main thread only. Concurrent calls could result
+     * in orphaned capture coroutines since the check-then-act pattern is not atomic.
      *
      * @param source The VideoSource instance to capture frames from
      * @param onFrameSent Optional callback invoked when a frame is actually sent to the model.
