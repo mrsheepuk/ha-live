@@ -98,9 +98,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _hasEverChatted = MutableStateFlow(false)
     val hasEverChatted: StateFlow<Boolean> = _hasEverChatted
 
-    // Guard to prevent multiple concurrent startChat() calls
-    private val _isStartingChat = MutableStateFlow(false)
-
     // Track if this is the first initialization (survives activity recreation, not process death)
     private var hasCheckedAutoStart = false
 
@@ -331,30 +328,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onChatButtonClicked() {
         val isActive = liveSessionService?.isSessionActive?.value ?: false
-        val isStarting = _isStartingChat.value
-        if (isActive || isStarting) {
-            if (isActive) {
-                // Stop the chat session
-                stopChat()
-            }
-            // If isStarting but not active, ignore (already starting)
-            return
+        if (isActive) {
+            // Stop the chat session
+            stopChat()
+        } else {
+            // Start the chat session
+            startChat()
         }
-        // Start the chat session
-        startChat()
     }
 
     private fun startChat() {
-        // Set flag immediately BEFORE launching coroutine to prevent concurrent calls
-        _isStartingChat.value = true
-
         viewModelScope.launch {
             try {
                 // Get the profile
                 val profile = app.profileService.getProfileById(currentProfileId)
                 if (profile == null) {
                     _uiState.value = UiState.Error("No profile set, choose a profile before starting")
-                    _isStartingChat.value = false
                     return@launch
                 }
 
@@ -387,18 +376,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 if (!serviceBound) {
                     _uiState.value = UiState.Error("Failed to bind to session service")
-                    _isStartingChat.value = false
                     return@launch
                 }
 
                 // Start the session in the service with audio helper for handover
                 liveSessionService?.startSession(profile, externalMicrophoneHelper = microphoneHelper)
 
-                // Reset flag after successful start (service will set isSessionActive)
-                _isStartingChat.value = false
-
             } catch (e: Exception) {
-                _isStartingChat.value = false
                 _uiState.value = UiState.Error("Failed to start session: ${e.message}")
                 // Restart wake word listening on failure
                 startWakeWordListening()

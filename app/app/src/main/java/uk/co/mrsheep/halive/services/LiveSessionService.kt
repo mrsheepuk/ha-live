@@ -225,12 +225,6 @@ class LiveSessionService : Service(), AppLogger {
      * @param externalMicrophoneHelper Optional MicrophoneHelper to handover from external source
      */
     fun startSession(profile: Profile, externalMicrophoneHelper: MicrophoneHelper? = null) {
-        // Guard against duplicate session starts
-        if (_isSessionActive.value) {
-            Log.w(TAG, "startSession called but session already active - ignoring")
-            return
-        }
-
         serviceScope.launch {
             try {
                 _connectionState.value = UiState.Initializing
