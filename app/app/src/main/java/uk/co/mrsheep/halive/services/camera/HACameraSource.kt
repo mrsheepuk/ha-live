@@ -38,10 +38,6 @@ class HACameraSource(
 
     private var captureScope: CoroutineScope? = null
     private var captureJob: Job? = null
-
-    // These flags are accessed from multiple threads (main thread sets, IO dispatcher reads)
-    // so they must be volatile for memory visibility
-    @Volatile
     private var _isActive = false
 
     // Flag to prevent start() from running if stop() was called before start() executed
@@ -65,14 +61,10 @@ class HACameraSource(
     var lastFrame: ByteArray? = null
         private set
 
-    /** Callback for when a new frame is available (for preview updates).
-     *  Volatile for visibility - set on main thread, invoked on IO dispatcher. */
-    @Volatile
+    /** Callback for when a new frame is available (for preview updates) */
     var onFrameAvailable: ((ByteArray) -> Unit)? = null
 
-    /** Callback for errors during capture.
-     *  Volatile for visibility - set on main thread, invoked on IO dispatcher. */
-    @Volatile
+    /** Callback for errors during capture */
     var onError: ((Exception) -> Unit)? = null
 
     override suspend fun start() {
