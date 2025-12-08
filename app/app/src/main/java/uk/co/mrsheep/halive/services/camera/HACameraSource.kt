@@ -40,11 +40,6 @@ class HACameraSource(
     private var captureJob: Job? = null
     private var _isActive = false
 
-    // Flag to prevent start() from running if stop() was called before start() executed
-    // This handles the race condition where stop() is called during the async delay before start()
-    @Volatile
-    private var _isCancelled = false
-
     // Flow for emitting JPEG frames
     private val _frameFlow = MutableSharedFlow<ByteArray>(
         replay = 0,
@@ -68,12 +63,6 @@ class HACameraSource(
     var onError: ((Exception) -> Unit)? = null
 
     override suspend fun start() {
-        // Check if stop() was called before we even started
-        if (_isCancelled) {
-            Log.i(TAG, "HACameraSource start() aborted - already cancelled: $entityId")
-            return
-        }
-
         if (_isActive) {
             Log.w(TAG, "HACameraSource already active: $entityId")
             return
@@ -124,14 +113,7 @@ class HACameraSource(
     }
 
     override fun stop() {
-        // Set cancelled flag FIRST to prevent any pending start() from running
-        // This handles the race condition where stop() is called before start() executes
-        _isCancelled = true
-
-        if (!_isActive) {
-            Log.i(TAG, "HACameraSource stop() called before active: $entityId (marked cancelled)")
-            return
-        }
+        if (!_isActive) return
 
         Log.i(TAG, "Stopping HA camera capture: $entityId")
         _isActive = false
