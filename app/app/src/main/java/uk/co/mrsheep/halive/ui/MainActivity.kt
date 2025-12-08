@@ -1178,44 +1178,23 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Show camera source selector for pre-chat video selection.
-     * Fetches HA cameras on-demand before showing the selector.
+     * Similar to showCameraSourceMenu but for pre-chat state.
      */
     private fun showPreChatCameraSourceMenu() {
-        // Disable button while loading to prevent double-taps
-        preVideoButton.isEnabled = false
+        val options = viewModel.getAvailableVideoSources()
 
-        lifecycleScope.launch {
-            // Fetch HA cameras on-demand
-            val result = viewModel.fetchAvailableHACameras()
+        val bottomSheet = BottomSheetDialog(this)
+        val sheetView = layoutInflater.inflate(R.layout.bottom_sheet_camera_source, null)
 
-            // Re-enable button
-            preVideoButton.isEnabled = true
-
-            // Show error toast if fetch failed (but still show selector with device cameras)
-            if (result.isFailure) {
-                Toast.makeText(
-                    this@MainActivity,
-                    R.string.camera_list_fetch_error,
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-
-            // Get options (will use fetched cameras or empty list on failure)
-            val options = viewModel.getAvailableVideoSources()
-
-            val bottomSheet = BottomSheetDialog(this@MainActivity)
-            val sheetView = layoutInflater.inflate(R.layout.bottom_sheet_camera_source, null)
-
-            val recyclerView = sheetView.findViewById<RecyclerView>(R.id.sourceList)
-            recyclerView.layoutManager = LinearLayoutManager(this@MainActivity)
-            recyclerView.adapter = CameraSourceAdapter(options) { selectedType ->
-                bottomSheet.dismiss()
-                viewModel.setPreChatVideoSource(selectedType)
-            }
-
-            bottomSheet.setContentView(sheetView)
-            bottomSheet.show()
+        val recyclerView = sheetView.findViewById<RecyclerView>(R.id.sourceList)
+        recyclerView.layoutManager = LinearLayoutManager(this)
+        recyclerView.adapter = CameraSourceAdapter(options) { selectedType ->
+            bottomSheet.dismiss()
+            viewModel.setPreChatVideoSource(selectedType)
         }
+
+        bottomSheet.setContentView(sheetView)
+        bottomSheet.show()
     }
 
     /**
