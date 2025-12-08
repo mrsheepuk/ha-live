@@ -16,9 +16,4 @@
         android:id="@+id/action_dummy_tools"
         android:title="Use Dummy Tools"
         android:checkable="true" />
-    <item
-        android:id="@+id/action_wake_word"
-        android:title="@string/menu_wake_word"
-        android:checkable="true"
-        app:showAsAction="never" />
 </menu>

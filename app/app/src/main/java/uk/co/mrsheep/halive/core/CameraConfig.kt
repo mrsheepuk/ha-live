@@ -2,7 +2,6 @@ package uk.co.mrsheep.halive.core
 
 import android.content.Context
 import uk.co.mrsheep.halive.services.camera.CameraFacing
-import uk.co.mrsheep.halive.services.camera.VideoSourceType
 
 /**
  * Camera resolution options for video streaming.
@@ -54,8 +53,6 @@ object CameraConfig {
     private const val KEY_RESOLUTION = "resolution"
     private const val KEY_FRAME_RATE = "frame_rate"
     private const val KEY_FACING = "facing"
-    private const val KEY_VIDEO_START_ENABLED = "video_start_enabled"
-    private const val KEY_LAST_VIDEO_SOURCE = "last_video_source"
 
     /**
      * Load camera settings from SharedPreferences.
@@ -115,71 +112,5 @@ object CameraConfig {
     fun saveFacing(context: Context, facing: CameraFacing) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putString(KEY_FACING, facing.name).apply()
-    }
-
-    /**
-     * Get whether video should auto-start on session initialization.
-     * Defaults to false if not set.
-     */
-    fun isVideoStartEnabled(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getBoolean(KEY_VIDEO_START_ENABLED, false)
-    }
-
-    /**
-     * Save whether video should auto-start on session initialization.
-     */
-    fun setVideoStartEnabled(context: Context, enabled: Boolean) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putBoolean(KEY_VIDEO_START_ENABLED, enabled).apply()
-    }
-
-    /**
-     * Save the last used video source.
-     * Serialization scheme:
-     * - VideoSourceType.None → "NONE"
-     * - VideoSourceType.DeviceCamera(FRONT) → "DEVICE_FRONT"
-     * - VideoSourceType.DeviceCamera(BACK) → "DEVICE_BACK"
-     * - VideoSourceType.HACamera(entityId, friendlyName) → "HA:$entityId:$friendlyName"
-     */
-    fun saveLastVideoSource(context: Context, sourceType: VideoSourceType) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val serialized = when (sourceType) {
-            is VideoSourceType.None -> "NONE"
-            is VideoSourceType.DeviceCamera -> {
-                if (sourceType.facing == CameraFacing.FRONT) "DEVICE_FRONT" else "DEVICE_BACK"
-            }
-            is VideoSourceType.HACamera -> "HA:${sourceType.entityId}:${sourceType.friendlyName}"
-        }
-        prefs.edit().putString(KEY_LAST_VIDEO_SOURCE, serialized).apply()
-    }
-
-    /**
-     * Get the last used video source.
-     * Returns null if none has been saved or if the saved value is invalid.
-     * Deserialization scheme matches [saveLastVideoSource].
-     */
-    fun getLastVideoSource(context: Context): VideoSourceType? {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val serialized = prefs.getString(KEY_LAST_VIDEO_SOURCE, null) ?: return null
-
-        return when {
-            serialized == "NONE" -> VideoSourceType.None
-            serialized == "DEVICE_FRONT" -> VideoSourceType.DeviceCamera(CameraFacing.FRONT)
-            serialized == "DEVICE_BACK" -> VideoSourceType.DeviceCamera(CameraFacing.BACK)
-            serialized.startsWith("HA:") -> {
-                try {
-                    val parts = serialized.substring(3).split(":", limit = 2)
-                    if (parts.size == 2) {
-                        VideoSourceType.HACamera(parts[0], parts[1])
-                    } else {
-                        null
-                    }
-                } catch (e: Exception) {
-                    null
-                }
-            }
-            else -> null
-        }
     }
 }

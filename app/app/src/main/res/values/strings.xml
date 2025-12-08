@@ -91,15 +91,4 @@
     <string name="shortcut_not_supported">Shortcuts are not supported on this device</string>
     <string name="shortcut_created">Shortcut for \"%s\" created</string>
     <string name="shortcut_failed">Failed to create shortcut</string>
-
-    <!-- Pre-chat video button -->
-    <string name="pre_video_button_description">Select video source for next chat</string>
-    <string name="pre_video_button_text_off">Video</string>
-
-    <!-- Wake word menu item -->
-    <string name="menu_wake_word">Wake word detection</string>
-
-    <!-- Video auto-start toasts -->
-    <string name="video_source_unavailable">Camera unavailable, starting without video</string>
-    <string name="video_permission_denied">Camera permission denied, starting without video</string>
 </resources>

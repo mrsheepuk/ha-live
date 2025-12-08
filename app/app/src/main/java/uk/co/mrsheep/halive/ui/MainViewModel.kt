@@ -10,7 +10,6 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
-import uk.co.mrsheep.halive.core.CameraConfig
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.core.WakeWordConfig
@@ -87,13 +86,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _modelWatchingCamera = MutableStateFlow<String?>(null)
     val modelWatchingCamera: StateFlow<String?> = _modelWatchingCamera.asStateFlow()
 
-    // Pre-chat video selection state
-    private val _videoStartEnabled = MutableStateFlow(false)
-    val videoStartEnabled: StateFlow<Boolean> = _videoStartEnabled.asStateFlow()
-
-    private val _selectedVideoSource = MutableStateFlow<VideoSourceType>(VideoSourceType.None)
-    val selectedVideoSource: StateFlow<VideoSourceType> = _selectedVideoSource.asStateFlow()
-
     // Track if user has ever started a chat in this session (for layout transition)
     private val _hasEverChatted = MutableStateFlow(false)
     val hasEverChatted: StateFlow<Boolean> = _hasEverChatted
@@ -148,10 +140,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // Load wake word preference
         _wakeWordEnabled.value = WakeWordConfig.isEnabled(getApplication())
-
-        // Load video start preference
-        _videoStartEnabled.value = CameraConfig.isVideoStartEnabled(getApplication())
-        _selectedVideoSource.value = CameraConfig.getLastVideoSource(getApplication()) ?: VideoSourceType.None
 
         checkConfiguration()
     }
@@ -462,20 +450,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun setCameraFacing(facing: CameraFacing) {
         liveSessionService?.setCameraFacing(facing)
-    }
-
-    /**
-     * Set the video source for pre-chat selection.
-     * Selecting None disables video start, any other source enables it.
-     * Persists the selection to CameraConfig.
-     */
-    fun setPreChatVideoSource(sourceType: VideoSourceType) {
-        _selectedVideoSource.value = sourceType
-        CameraConfig.saveLastVideoSource(getApplication(), sourceType)
-
-        val enabled = sourceType != VideoSourceType.None
-        _videoStartEnabled.value = enabled
-        CameraConfig.setVideoStartEnabled(getApplication(), enabled)
     }
 
     /**
