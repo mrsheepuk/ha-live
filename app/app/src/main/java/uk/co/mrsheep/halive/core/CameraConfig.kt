@@ -140,7 +140,7 @@ object CameraConfig {
      * - VideoSourceType.None → "NONE"
      * - VideoSourceType.DeviceCamera(FRONT) → "DEVICE_FRONT"
      * - VideoSourceType.DeviceCamera(BACK) → "DEVICE_BACK"
-     * - VideoSourceType.HACamera(entityId, friendlyName) → "HA|$entityId|$friendlyName"
+     * - VideoSourceType.HACamera(entityId, friendlyName) → "HA:$entityId:$friendlyName"
      */
     fun saveLastVideoSource(context: Context, sourceType: VideoSourceType) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -149,7 +149,7 @@ object CameraConfig {
             is VideoSourceType.DeviceCamera -> {
                 if (sourceType.facing == CameraFacing.FRONT) "DEVICE_FRONT" else "DEVICE_BACK"
             }
-            is VideoSourceType.HACamera -> "HA|${sourceType.entityId}|${sourceType.friendlyName}"
+            is VideoSourceType.HACamera -> "HA:${sourceType.entityId}:${sourceType.friendlyName}"
         }
         prefs.edit().putString(KEY_LAST_VIDEO_SOURCE, serialized).apply()
     }
@@ -167,9 +167,9 @@ object CameraConfig {
             serialized == "NONE" -> VideoSourceType.None
             serialized == "DEVICE_FRONT" -> VideoSourceType.DeviceCamera(CameraFacing.FRONT)
             serialized == "DEVICE_BACK" -> VideoSourceType.DeviceCamera(CameraFacing.BACK)
-            serialized.startsWith("HA|") -> {
+            serialized.startsWith("HA:") -> {
                 try {
-                    val parts = serialized.substring(3).split("|", limit = 2)
+                    val parts = serialized.substring(3).split(":", limit = 2)
                     if (parts.size == 2) {
                         VideoSourceType.HACamera(parts[0], parts[1])
                     } else {
