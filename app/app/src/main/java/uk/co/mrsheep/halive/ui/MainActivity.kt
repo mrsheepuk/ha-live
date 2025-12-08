@@ -238,9 +238,9 @@ class MainActivity : AppCompatActivity() {
         } else {
             // Permission denied - check if this was from auto-start or manual selection
             if (isAutoStartPermissionRequest) {
-                // Auto-start failed - use specific message and reset preference
+                // Auto-start failed - show message but keep saved preference for next session
                 Toast.makeText(this, R.string.video_permission_denied, Toast.LENGTH_SHORT).show()
-                viewModel.setPreChatVideoSource(VideoSourceType.None)
+                // Don't clear the preference - user can try again next session after granting permission
             } else {
                 // Manual selection during chat - generic message, don't reset preference
                 Toast.makeText(this, "Camera permission is required to use this feature", Toast.LENGTH_SHORT).show()
@@ -1260,9 +1260,6 @@ class MainActivity : AppCompatActivity() {
      * Called when chat becomes active and video start is enabled.
      */
     private fun autoStartPreSelectedVideo() {
-        val source = viewModel.selectedVideoSource.value
-        if (source == VideoSourceType.None) return
-
         lifecycleScope.launch {
             // Small delay to ensure session is fully initialized
             kotlinx.coroutines.delay(500)
@@ -1272,6 +1269,10 @@ class MainActivity : AppCompatActivity() {
                 Log.d("MainActivity", "Auto-start video cancelled - session no longer active")
                 return@launch
             }
+
+            // Read source AFTER delay to ensure we get the latest user selection
+            val source = viewModel.selectedVideoSource.value
+            if (source == VideoSourceType.None) return@launch
 
             when (source) {
                 is VideoSourceType.DeviceCamera -> {

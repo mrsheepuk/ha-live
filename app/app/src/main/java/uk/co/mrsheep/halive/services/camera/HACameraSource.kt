@@ -65,11 +65,6 @@ class HACameraSource(
     var lastFrame: ByteArray? = null
         private set
 
-    /** Callback for when a new frame is available (for preview updates).
-     *  Volatile for visibility - set on main thread, invoked on IO dispatcher. */
-    @Volatile
-    var onFrameAvailable: ((ByteArray) -> Unit)? = null
-
     /** Callback for errors during capture.
      *  Volatile for visibility - set on main thread, invoked on IO dispatcher. */
     @Volatile
@@ -110,9 +105,6 @@ class HACameraSource(
                     // Emit to flow
                     _frameFlow.tryEmit(processedJpeg)
 
-                    // Notify preview callback
-                    onFrameAvailable?.invoke(processedJpeg)
-
                     Log.d(TAG, "HA camera frame: $entityId, ${processedJpeg.size} bytes")
 
                 } catch (e: CancellationException) {
@@ -140,7 +132,6 @@ class HACameraSource(
         // The capture loop may still complete one more iteration before cancellation
         // takes effect at the next suspension point (delay), so we null these out
         // to prevent preview interleaving when switching cameras.
-        onFrameAvailable = null
         onError = null
 
         if (!_isActive) {
