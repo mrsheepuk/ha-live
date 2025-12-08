@@ -384,6 +384,11 @@ class GeminiLiveSession(
      *                    Use this to update preview UI to show exactly what the model sees.
      */
     fun startVideoCapture(source: VideoSource, onFrameSent: ((ByteArray) -> Unit)? = null) {
+        if (!isSessionActive) {
+            Log.w(TAG, "Cannot start video capture - session not active")
+            return
+        }
+
         // If already capturing, stop first to ensure clean switch with new callback
         if (isVideoCapturing) {
             Log.i(TAG, "Video capture already active - stopping old capture to switch sources")
