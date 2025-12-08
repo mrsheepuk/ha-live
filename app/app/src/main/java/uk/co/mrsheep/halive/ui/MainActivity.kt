@@ -1004,24 +1004,18 @@ class MainActivity : AppCompatActivity() {
             frameIntervalMs = settings.frameRate.intervalMs
         )
 
-        // Set up error callback - also check source is still current
+        // Set up error callback
         source.onError = { e ->
-            if (currentVideoSource === source) {
-                runOnUiThread {
-                    Toast.makeText(this, getString(R.string.camera_error_fetch_failed), Toast.LENGTH_SHORT).show()
-                    stopCurrentVideoSource()
-                }
+            runOnUiThread {
+                Toast.makeText(this, getString(R.string.camera_error_fetch_failed), Toast.LENGTH_SHORT).show()
+                stopCurrentVideoSource()
             }
         }
 
-        // Set up frame callback for preview.
-        // Check that this source is still the current one to prevent interleaving
-        // when switching cameras - late frames from the old source should be ignored.
+        // Set up frame callback for preview
         source.onFrameAvailable = { frame ->
-            if (currentVideoSource === source) {
-                runOnUiThread {
-                    updateHACameraPreview(frame)
-                }
+            runOnUiThread {
+                updateHACameraPreview(frame)
             }
         }
 

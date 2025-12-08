@@ -131,11 +131,6 @@ class GeminiLiveSession(
     private var isVideoCapturing = false
     /** Job for the video recording coroutine - must be cancelled on stop */
     private var videoRecordingJob: Job? = null
-    /**
-     * Unique ID for the current capture session. Used to ignore frames from
-     * old/cancelled capture sessions that may still be in-flight.
-     */
-    private var currentCaptureId = 0L
 
     // New audio pipeline components for playback
     private var jitterBuffer: JitterBuffer? = null
@@ -379,24 +374,18 @@ class GeminiLiveSession(
         videoSource = source
         isVideoCapturing = true
 
-        // Get a unique capture ID for this session. The closure captures this value,
-        // so even if frames from a previous capture are still in-flight after cancellation,
-        // they'll be ignored because their captured ID won't match currentCaptureId.
-        val captureId = ++currentCaptureId
-
         // Launch video recording coroutine and store the Job for cancellation
         // Note: We store the Job returned by launchIn directly, not a wrapper launch,
         // because launchIn creates a job parented to sessionScope, not to any outer launch
         videoRecordingJob = source.frameFlow
             .onEach { frame ->
-                // Check capture ID to ignore frames from old/cancelled sessions
-                if (captureId == currentCaptureId && isVideoCapturing && isSessionActive) {
+                if (isVideoCapturing && isSessionActive) {
                     sendVideoRealtime(frame)
                 }
             }
             .launchIn(sessionScope)
 
-        Log.i(TAG, "Video capture started from source: ${source.sourceId} (captureId=$captureId)")
+        Log.i(TAG, "Video capture started from source: ${source.sourceId}")
     }
 
     /**
@@ -405,16 +394,13 @@ class GeminiLiveSession(
     fun stopVideoCapture() {
         if (!isVideoCapturing) return
 
-        // Increment capture ID to invalidate any in-flight frames from the old session
-        currentCaptureId++
-
         // Cancel the video recording coroutine to prevent interleaving when switching cameras
         videoRecordingJob?.cancel()
         videoRecordingJob = null
         isVideoCapturing = false
         videoSource = null
 
-        Log.i(TAG, "Video capture stopped (captureId invalidated to $currentCaptureId)")
+        Log.i(TAG, "Video capture stopped")
     }
 
     /**
