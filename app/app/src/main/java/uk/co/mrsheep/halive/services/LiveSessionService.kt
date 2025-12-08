@@ -414,17 +414,15 @@ class LiveSessionService : Service(), AppLogger {
      * Start video capture and streaming to the conversation.
      *
      * @param source The VideoSource instance to use for video capture
-     * @param onFrameSent Optional callback invoked when a frame is actually sent to the model.
-     *                    Use this to update preview UI to show exactly what the model sees.
      */
-    fun startVideoCapture(source: VideoSource, onFrameSent: ((ByteArray) -> Unit)? = null) {
+    fun startVideoCapture(source: VideoSource) {
         if (!_isSessionActive.value) {
             Log.w(TAG, "Cannot start video capture - no active session")
             return
         }
 
         videoSource = source
-        conversationService?.startVideoCapture(source, onFrameSent)
+        conversationService?.startVideoCapture(source)
         _isCameraEnabled.value = true
 
         Log.d(TAG, "Video capture started from source: ${source.sourceId}")

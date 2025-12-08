@@ -434,16 +434,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Called by MainActivity when camera is selected.
      *
      * @param source The VideoSource instance to use for video capture
-     * @param onFrameSent Optional callback invoked when a frame is actually sent to the model.
-     *                    Use this to update preview UI to show exactly what the model sees.
      */
-    fun startVideoCapture(source: VideoSource, onFrameSent: ((ByteArray) -> Unit)? = null) {
+    fun startVideoCapture(source: VideoSource) {
         if (!isSessionActive()) {
             Log.w(TAG, "Cannot start video capture - no active session")
             return
         }
 
-        liveSessionService?.startVideoCapture(source, onFrameSent)
+        liveSessionService?.startVideoCapture(source)
         Log.d(TAG, "Video capture started via ViewModel from source: ${source.sourceId}")
     }
 
