@@ -128,13 +128,6 @@ class HACameraSource(
         // This handles the race condition where stop() is called before start() executes
         _isCancelled = true
 
-        // Clear callbacks immediately to prevent late invocations during shutdown.
-        // The capture loop may still complete one more iteration before cancellation
-        // takes effect at the next suspension point (delay), so we null these out
-        // to prevent preview interleaving when switching cameras.
-        onFrameAvailable = null
-        onError = null
-
         if (!_isActive) {
             Log.i(TAG, "HACameraSource stop() called before active: $entityId (marked cancelled)")
             return
