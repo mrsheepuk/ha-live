@@ -72,7 +72,9 @@ internal class CircularAudioBuffer(
 class MicrophoneHelper(
     /** AudioRecord for recording from the system microphone. */
     private val recorder: AudioRecord,
-    val sampleRate: Int
+    val sampleRate: Int,
+    /** AcousticEchoCanceler instance - must be retained to keep AEC active. */
+    private val echoCanceler: AcousticEchoCanceler? = null
 ) {
     private var released: Boolean = false
     private var preBuffer: CircularAudioBuffer? = null
@@ -101,6 +103,10 @@ class MicrophoneHelper(
             // Already stopped
         }
         recorder.release()
+
+        // Release the echo canceler to free audio effect resources
+        echoCanceler?.release()
+
         Log.d(TAG, "MicrophoneHelper released")
     }
 
@@ -214,12 +220,18 @@ class MicrophoneHelper(
                 )
 
             // Enable echo cancellation if available
-            if (AcousticEchoCanceler.isAvailable()) {
-                AcousticEchoCanceler.create(recorder.audioSessionId)?.enabled = true
-                Log.d(TAG, "Acoustic Echo Canceler enabled")
+            // IMPORTANT: We must retain the AEC reference - if it gets GC'd, the effect is disabled!
+            val aec = if (AcousticEchoCanceler.isAvailable()) {
+                AcousticEchoCanceler.create(recorder.audioSessionId)?.also { echoCanceler ->
+                    echoCanceler.enabled = true
+                    Log.d(TAG, "Acoustic Echo Canceler enabled (sessionId=${recorder.audioSessionId})")
+                }
+            } else {
+                Log.w(TAG, "Acoustic Echo Canceler not available on this device")
+                null
             }
 
-            return MicrophoneHelper(recorder, sampleRate)
+            return MicrophoneHelper(recorder, sampleRate, aec)
         }
     }
 }
