@@ -45,6 +45,7 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.FunctionResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.GenerationConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.MediaChunk
 import uk.co.mrsheep.halive.services.geminidirect.protocol.PrebuiltVoiceConfig
+import uk.co.mrsheep.halive.services.geminidirect.protocol.ProactivtyConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.RealtimeInput
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ServerMessage
 import uk.co.mrsheep.halive.services.geminidirect.protocol.SetupMessage
@@ -238,16 +239,14 @@ class GeminiLiveSession(
                             // TODO: Make language code configurable
                             languageCode = "en-US"
                         ),
-                        // rejected by API in setup, probably not supported yet:
-                        //enableAffectiveDialog = true,
+                        enableAffectiveDialog = true,
                     ),
                     systemInstruction = Content(
                         role = null,
                         parts = listOf(TextPart(systemPrompt))
                     ),
                     tools = tools.takeIf { it.isNotEmpty() },
-                    // rejected by API in setup, probably not supported yet:
-                    //proactivity = ProactivtyConfig(proactiveAudio = true),
+                    proactivity = ProactivtyConfig(proactiveAudio = true),
                     inputAudioTranscription = if (onTranscription != null) AudioTranscriptionConfig() else null,
                     outputAudioTranscription = if (onTranscription != null) AudioTranscriptionConfig() else null,
                     realtimeInputConfig = if (!interruptable) {
