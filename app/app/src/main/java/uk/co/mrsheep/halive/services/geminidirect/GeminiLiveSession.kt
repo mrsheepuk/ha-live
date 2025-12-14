@@ -183,6 +183,8 @@ class GeminiLiveSession(
         tools: List<ToolDeclaration>,
         voiceName: String,
         interruptable: Boolean = true,
+        enableAffectiveDialog: Boolean = false,
+        enableProactivity: Boolean = false,
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
         onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null,
         externalMicrophoneHelper: MicrophoneHelper? = null
@@ -239,14 +241,14 @@ class GeminiLiveSession(
                             // TODO: Make language code configurable
                             languageCode = "en-US"
                         ),
-                        enableAffectiveDialog = true,
+                        enableAffectiveDialog = if (enableAffectiveDialog) true else null,
                     ),
                     systemInstruction = Content(
                         role = null,
                         parts = listOf(TextPart(systemPrompt))
                     ),
                     tools = tools.takeIf { it.isNotEmpty() },
-                    proactivity = ProactivtyConfig(proactiveAudio = true),
+                    proactivity = if (enableProactivity) ProactivtyConfig(proactiveAudio = true) else null,
                     inputAudioTranscription = if (onTranscription != null) AudioTranscriptionConfig() else null,
                     outputAudioTranscription = if (onTranscription != null) AudioTranscriptionConfig() else null,
                     realtimeInputConfig = if (!interruptable) {
