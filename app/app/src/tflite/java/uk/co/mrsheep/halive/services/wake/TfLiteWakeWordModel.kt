@@ -21,7 +21,7 @@ import java.nio.ByteOrder
  * @param wakeWordFile ByteArray containing the TFLite wake word detection model
  * @param settings WakeWordSettings configuring thread count and other parameters
  *
- * @author Home Assistant Live
+ * @author HA Live
  */
 class TfLiteWakeWordModel(
     melSpectrogramFile: ByteArray,
