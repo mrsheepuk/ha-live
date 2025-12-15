@@ -45,6 +45,7 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.FunctionResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.GenerationConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.MediaChunk
 import uk.co.mrsheep.halive.services.geminidirect.protocol.PrebuiltVoiceConfig
+import uk.co.mrsheep.halive.services.geminidirect.protocol.ProactivtyConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.RealtimeInput
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ServerMessage
 import uk.co.mrsheep.halive.services.geminidirect.protocol.SetupMessage
@@ -182,6 +183,8 @@ class GeminiLiveSession(
         tools: List<ToolDeclaration>,
         voiceName: String,
         interruptable: Boolean = true,
+        enableAffectiveDialog: Boolean = false,
+        enableProactivity: Boolean = false,
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
         onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null,
         externalMicrophoneHelper: MicrophoneHelper? = null
@@ -238,16 +241,14 @@ class GeminiLiveSession(
                             // TODO: Make language code configurable
                             languageCode = "en-US"
                         ),
-                        // rejected by API in setup, probably not supported yet:
-                        //enableAffectiveDialog = true,
+                        enableAffectiveDialog = if (enableAffectiveDialog) true else null,
                     ),
                     systemInstruction = Content(
                         role = null,
                         parts = listOf(TextPart(systemPrompt))
                     ),
                     tools = tools.takeIf { it.isNotEmpty() },
-                    // rejected by API in setup, probably not supported yet:
-                    //proactivity = ProactivtyConfig(proactiveAudio = true),
+                    proactivity = if (enableProactivity) ProactivtyConfig(proactiveAudio = true) else null,
                     inputAudioTranscription = if (onTranscription != null) AudioTranscriptionConfig() else null,
                     outputAudioTranscription = if (onTranscription != null) AudioTranscriptionConfig() else null,
                     realtimeInputConfig = if (!interruptable) {

@@ -128,6 +128,40 @@
             android:textAppearance="?attr/textAppearanceCaption"
             android:textColor="?android:attr/textColorSecondary" />
 
+        <!-- Affective Dialog Switch -->
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/affectiveDialogSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:text="Enable Affective Dialog"
+            android:checked="false" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="Allow the model to detect and respond to emotional cues (v1alpha feature)"
+            android:textAppearance="?attr/textAppearanceCaption"
+            android:textColor="?android:attr/textColorSecondary" />
+
+        <!-- Proactivity Switch -->
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/proactivitySwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:text="Enable Proactive Responses"
+            android:checked="false" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="Allow the model to proactively speak without waiting for input (v1alpha feature)"
+            android:textAppearance="?attr/textAppearanceCaption"
+            android:textColor="?android:attr/textColorSecondary" />
+
         <!-- System Prompt Expansion Panel -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/systemPromptCard"

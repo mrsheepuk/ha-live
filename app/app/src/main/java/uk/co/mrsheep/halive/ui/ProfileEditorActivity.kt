@@ -96,6 +96,8 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
     private lateinit var enableTranscriptionCheckbox: MaterialCheckBox
     private lateinit var autoStartChatCheckbox: MaterialCheckBox
     private lateinit var interruptableSwitch: SwitchMaterial
+    private lateinit var affectiveDialogSwitch: SwitchMaterial
+    private lateinit var proactivitySwitch: SwitchMaterial
 
     // Tool Filtering UI components
     private lateinit var toolFilterModeGroup: RadioGroup
@@ -217,8 +219,8 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         voiceLayout = findViewById(R.id.voiceLayout)
         voiceInput = findViewById(R.id.voiceInput)
 
-        // Setup model dropdown - hardcoded single option for now
-        val modelOptions = arrayOf("gemini-2.5-flash-native-audio-preview-09-2025", "gemini-live-2.5-flash-preview")
+        // Setup model dropdown
+        val modelOptions = arrayOf("gemini-2.5-flash-native-audio-preview-12-2025", "gemini-2.5-flash-native-audio-preview-09-2025", "gemini-live-2.5-flash-preview")
         val modelAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, modelOptions)
         modelInput.setAdapter(modelAdapter)
         modelInput.setText(modelOptions[0], false) // Set default
@@ -271,6 +273,8 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         enableTranscriptionCheckbox = findViewById(R.id.enableTranscriptionCheckbox)
         autoStartChatCheckbox = findViewById(R.id.autoStartChatCheckbox)
         interruptableSwitch = findViewById(R.id.interruptableSwitch)
+        affectiveDialogSwitch = findViewById(R.id.affectiveDialogSwitch)
+        proactivitySwitch = findViewById(R.id.proactivitySwitch)
 
         // Tool Filtering UI
         toolFilterModeGroup = findViewById(R.id.toolFilterModeGroup)
@@ -448,6 +452,8 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
                 enableTranscriptionCheckbox.isChecked = state.profile.enableTranscription
                 autoStartChatCheckbox.isChecked = state.profile.autoStartChat
                 interruptableSwitch.isChecked = state.profile.interruptable
+                affectiveDialogSwitch.isChecked = state.profile.enableAffectiveDialog
+                proactivitySwitch.isChecked = state.profile.enableProactivity
 
                 // Store original lastModified for conflict detection
                 originalLastModified = state.profile.lastModified
@@ -712,12 +718,14 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         val enableTranscription = enableTranscriptionCheckbox.isChecked
         val autoStartChat = autoStartChatCheckbox.isChecked
         val interruptable = interruptableSwitch.isChecked
+        val enableAffectiveDialog = affectiveDialogSwitch.isChecked
+        val enableProactivity = proactivitySwitch.isChecked
         val allowedModelCameras = selectedCameraEntityIds.toSet()
         viewModel.saveProfile(
             name, prompt, personality, backgroundInfo, initialMessageToAgent,
             model, voice, includeLiveContext, enableTranscription, autoStartChat, interruptable, currentToolFilterMode,
             selectedToolNames.toSet(), allowedModelCameras, editingProfileId, targetSource,
-            originalLastModified, forceOverwrite
+            originalLastModified, forceOverwrite, enableAffectiveDialog, enableProactivity
         )
     }
 
@@ -761,6 +769,8 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
             enableTranscription = enableTranscriptionCheckbox.isChecked,
             autoStartChat = false, // Irrelevant for testing
             interruptable = interruptableSwitch.isChecked,
+            enableAffectiveDialog = affectiveDialogSwitch.isChecked,
+            enableProactivity = proactivitySwitch.isChecked,
             toolFilterMode = currentToolFilterMode,
             selectedToolNames = selectedToolNames.toSet(),
             allowedModelCameras = selectedCameraEntityIds.toSet()
@@ -892,6 +902,8 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         enableTranscriptionCheckbox.isEnabled = enabled
         autoStartChatCheckbox.isEnabled = enabled
         interruptableSwitch.isEnabled = enabled
+        affectiveDialogSwitch.isEnabled = enabled
+        proactivitySwitch.isEnabled = enabled
         radioAllTools.isEnabled = enabled
         radioSelectedTools.isEnabled = enabled
         toolSearchBox.isEnabled = enabled

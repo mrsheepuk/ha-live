@@ -38,6 +38,10 @@ data class SharedProfile(
     @SerialName("initial_message")
     val initialMessage: String = "",
     val interruptable: Boolean = true,
+    @SerialName("enable_affective_dialog")
+    val enableAffectiveDialog: Boolean = false,
+    @SerialName("enable_proactivity")
+    val enableProactivity: Boolean = false,
     @SerialName("last_modified")
     val lastModified: String? = null,
     @SerialName("modified_by")

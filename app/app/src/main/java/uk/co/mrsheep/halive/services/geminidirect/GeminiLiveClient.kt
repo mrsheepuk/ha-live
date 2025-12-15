@@ -29,7 +29,7 @@ class GeminiLiveClient(
 
     companion object {
         private const val TAG = "GeminiLiveClient"
-        private const val API_ENDPOINT_V1BETA = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+        private const val API_ENDPOINT_V1ALPHA = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
         private const val MESSAGE_QUEUE_CAPACITY = 512
         private const val CONNECTION_TIMEOUT_MS = 5000L
     }
@@ -85,7 +85,7 @@ class GeminiLiveClient(
                 // Create a new deferred for this connection attempt
                 connectionDeferred = CompletableDeferred()
 
-                val url = "$API_ENDPOINT_V1BETA?key=$apiKey"
+                val url = "$API_ENDPOINT_V1ALPHA?key=$apiKey"
                 val request = Request.Builder()
                     .url(url)
                     .build()

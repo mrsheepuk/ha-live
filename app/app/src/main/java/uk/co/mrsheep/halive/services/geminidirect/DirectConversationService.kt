@@ -47,6 +47,8 @@ class DirectConversationService(private val context: Context) :
     private var transcriptor: ((String?, String?, Boolean) -> Unit)? = null
     private var onAudioLevel: ((Float) -> Unit)? = null
     private var interruptable: Boolean = true
+    private var enableAffectiveDialog: Boolean = false
+    private var enableProactivity: Boolean = false
 
     private val json = Json {
         encodeDefaults = true
@@ -73,6 +75,8 @@ class DirectConversationService(private val context: Context) :
         toolExecutor: ToolExecutor,
         transcriptor: ((String?, String?, Boolean) -> Unit)?,
         interruptable: Boolean,
+        enableAffectiveDialog: Boolean,
+        enableProactivity: Boolean,
         onAudioLevel: ((Float) -> Unit)?
     ) {
         try {
@@ -89,6 +93,8 @@ class DirectConversationService(private val context: Context) :
             this.modelName = modelName
             this.voiceName = voiceName
             this.interruptable = interruptable
+            this.enableAffectiveDialog = enableAffectiveDialog
+            this.enableProactivity = enableProactivity
 
             Log.d(
                 TAG,
@@ -136,6 +142,8 @@ class DirectConversationService(private val context: Context) :
                 tools = toolDeclarations ?: emptyList(),
                 voiceName = voiceName ?: "Aoede",
                 interruptable = interruptable,
+                enableAffectiveDialog = enableAffectiveDialog,
+                enableProactivity = enableProactivity,
                 onToolCall = protocolToolCallHandler,
                 onTranscription = transcriptor,
                 externalMicrophoneHelper = microphoneHelper
