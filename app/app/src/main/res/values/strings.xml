@@ -1,8 +1,8 @@
 <resources>
-    <string name="app_name">Home Assistant Live</string>
+    <string name="app_name">HA Live</string>
 
     <!-- Onboarding -->
-    <string name="onboarding_title">Welcome to HA Gemini</string>
+    <string name="onboarding_title">Welcome to HA Live</string>
     <string name="onboarding_step_1_title">Step 1: Gemini API Configuration</string>
     <string name="onboarding_step_1_desc">Enter your Gemini API key to enable Gemini Live.</string>
     <string name="onboarding_step_2_title">Step 2: Home Assistant</string>

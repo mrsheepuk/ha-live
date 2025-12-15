@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Home Assistant Live"
+rootProject.name = "HA Live"
 include(":app")
  

@@ -14,7 +14,7 @@ package uk.co.mrsheep.halive.services.wake
  * Implementations are responsible for managing internal buffers, feature extraction,
  * and model inference.
  *
- * @author Home Assistant Live
+ * @author HA Live
  */
 interface WakeWordModel : AutoCloseable {
 
