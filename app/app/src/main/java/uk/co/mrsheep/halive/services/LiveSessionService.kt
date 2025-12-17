@@ -5,7 +5,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -75,6 +77,11 @@ class LiveSessionService : Service(), AppLogger {
     private var toolExecutor: ToolExecutor? = null
     private var currentProfile: Profile? = null
     private var allowedModelCameras: Set<String> = emptySet()
+
+    // Audio routing management for echo cancellation
+    private var audioManager: AudioManager? = null
+    private var previousAudioMode: Int = AudioManager.MODE_NORMAL
+    private var previousSpeakerphoneState: Boolean = false
 
     // State flows
     private val _transcriptionLogs = MutableStateFlow<List<TranscriptionEntry>>(emptyList())
@@ -295,6 +302,16 @@ class LiveSessionService : Service(), AppLogger {
                 val notificationManager = getSystemService(NotificationManager::class.java)
                 notificationManager.notify(NOTIFICATION_ID, createNotification(profile))
 
+                // Configure audio routing for voice communication with echo cancellation
+                audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                previousAudioMode = audioManager?.mode ?: AudioManager.MODE_NORMAL
+                previousSpeakerphoneState = audioManager?.isSpeakerphoneOn ?: false
+
+                // Set MODE_IN_COMMUNICATION for echo cancellation and enable speakerphone
+                audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
+                audioManager?.isSpeakerphoneOn = true
+                Log.d(TAG, "Audio routing configured: MODE_IN_COMMUNICATION with speakerphone enabled")
+
                 _isSessionActive.value = true
                 _connectionState.value = UiState.ChatActive
                 conversationService!!.startSession(microphoneHelper = externalMicrophoneHelper)
@@ -399,6 +416,12 @@ class LiveSessionService : Service(), AppLogger {
 
         // Clear model camera state
         _modelWatchingCamera.value = null
+
+        // Restore previous audio routing state
+        audioManager?.mode = previousAudioMode
+        audioManager?.isSpeakerphoneOn = previousSpeakerphoneState
+        audioManager = null
+        Log.d(TAG, "Audio routing restored to previous state")
 
         _isSessionActive.value = false
         _connectionState.value = UiState.ReadyToTalk
@@ -533,6 +556,14 @@ class LiveSessionService : Service(), AppLogger {
 
         // Clear profile
         currentProfile = null
+
+        // Restore audio routing if not already restored
+        if (audioManager != null) {
+            audioManager?.mode = previousAudioMode
+            audioManager?.isSpeakerphoneOn = previousSpeakerphoneState
+            audioManager = null
+            Log.d(TAG, "Audio routing restored in onDestroy()")
+        }
 
         // Cancel all coroutines
         serviceScope.cancel()
