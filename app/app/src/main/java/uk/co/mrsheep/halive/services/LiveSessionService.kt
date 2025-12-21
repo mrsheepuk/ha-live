@@ -699,40 +699,58 @@ class LiveSessionService : Service(), AppLogger {
             return
         }
 
-        Log.d(TAG, "Switching audio output to: ${mode.displayName}")
+        Log.d(TAG, "=== Audio Output Mode Change Request ===")
+        Log.d(TAG, "Requested mode: ${mode.displayName}")
+        Log.d(TAG, "Current AudioManager state BEFORE change:")
+        Log.d(TAG, "  - Mode: ${am.mode} (0=NORMAL, 1=RINGTONE, 2=IN_CALL, 3=IN_COMMUNICATION)")
+        Log.d(TAG, "  - isSpeakerphoneOn: ${am.isSpeakerphoneOn}")
+        Log.d(TAG, "  - isBluetoothScoOn: ${am.isBluetoothScoOn}")
+        Log.d(TAG, "  - isBluetoothScoAvailableOffCall: ${am.isBluetoothScoAvailableOffCall}")
 
         when (mode) {
             AudioOutputMode.SPEAKERPHONE -> {
+                Log.d(TAG, "Switching to SPEAKERPHONE mode")
                 // Disable Bluetooth SCO
                 if (am.isBluetoothScoOn) {
+                    Log.d(TAG, "  - Stopping Bluetooth SCO")
                     am.stopBluetoothSco()
                     am.isBluetoothScoOn = false
                 }
                 // Enable speakerphone
+                Log.d(TAG, "  - Enabling speakerphone")
                 am.isSpeakerphoneOn = true
-                Log.d(TAG, "Speakerphone enabled")
             }
 
             AudioOutputMode.EARPIECE -> {
+                Log.d(TAG, "Switching to EARPIECE mode")
                 // Disable Bluetooth SCO
                 if (am.isBluetoothScoOn) {
+                    Log.d(TAG, "  - Stopping Bluetooth SCO")
                     am.stopBluetoothSco()
                     am.isBluetoothScoOn = false
                 }
                 // Disable speakerphone (routes to earpiece)
+                Log.d(TAG, "  - Disabling speakerphone (routes to earpiece)")
                 am.isSpeakerphoneOn = false
-                Log.d(TAG, "Earpiece enabled (speakerphone disabled)")
             }
 
             AudioOutputMode.BLUETOOTH -> {
+                Log.d(TAG, "Switching to BLUETOOTH mode")
                 // Disable speakerphone
+                Log.d(TAG, "  - Disabling speakerphone")
                 am.isSpeakerphoneOn = false
                 // Enable Bluetooth SCO
+                Log.d(TAG, "  - Starting Bluetooth SCO")
                 am.startBluetoothSco()
                 am.isBluetoothScoOn = true
-                Log.d(TAG, "Bluetooth SCO enabled")
             }
         }
+
+        Log.d(TAG, "Current AudioManager state AFTER change:")
+        Log.d(TAG, "  - Mode: ${am.mode}")
+        Log.d(TAG, "  - isSpeakerphoneOn: ${am.isSpeakerphoneOn}")
+        Log.d(TAG, "  - isBluetoothScoOn: ${am.isBluetoothScoOn}")
+        Log.d(TAG, "========================================")
 
         _audioOutputMode.value = mode
         AudioConfig.setOutputMode(this, mode)
