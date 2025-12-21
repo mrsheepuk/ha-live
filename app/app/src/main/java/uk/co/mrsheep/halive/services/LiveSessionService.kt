@@ -29,6 +29,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.R
 import uk.co.mrsheep.halive.core.AppLogger
+import uk.co.mrsheep.halive.core.AudioConfig
+import uk.co.mrsheep.halive.core.AudioOutputMode
 import uk.co.mrsheep.halive.services.CameraEntity
 import uk.co.mrsheep.halive.core.DummyToolsConfig
 import uk.co.mrsheep.halive.core.LogEntry
@@ -82,8 +84,12 @@ class LiveSessionService : Service(), AppLogger {
     private var audioManager: AudioManager? = null
     private var previousAudioMode: Int = AudioManager.MODE_NORMAL
     private var previousSpeakerphoneState: Boolean = false
+    private var previousBluetoothScoState: Boolean = false
 
     // State flows
+    private val _audioOutputMode = MutableStateFlow(AudioOutputMode.SPEAKERPHONE)
+    val audioOutputMode: StateFlow<AudioOutputMode> = _audioOutputMode.asStateFlow()
+
     private val _transcriptionLogs = MutableStateFlow<List<TranscriptionEntry>>(emptyList())
     val transcriptionLogs: StateFlow<List<TranscriptionEntry>> = _transcriptionLogs.asStateFlow()
 
@@ -306,11 +312,15 @@ class LiveSessionService : Service(), AppLogger {
                 audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                 previousAudioMode = audioManager?.mode ?: AudioManager.MODE_NORMAL
                 previousSpeakerphoneState = audioManager?.isSpeakerphoneOn ?: false
+                previousBluetoothScoState = audioManager?.isBluetoothScoOn ?: false
 
-                // Set MODE_IN_COMMUNICATION for echo cancellation and enable speakerphone
+                // Set MODE_IN_COMMUNICATION for echo cancellation
                 audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
-                audioManager?.isSpeakerphoneOn = true
-                Log.d(TAG, "Audio routing configured: MODE_IN_COMMUNICATION with speakerphone enabled")
+
+                // Apply saved audio output preference
+                val savedMode = AudioConfig.getOutputMode(this@LiveSessionService)
+                setAudioOutputMode(savedMode)
+                Log.d(TAG, "Audio routing configured: MODE_IN_COMMUNICATION with ${savedMode.displayName}")
 
                 _isSessionActive.value = true
                 _connectionState.value = UiState.ChatActive
@@ -418,8 +428,14 @@ class LiveSessionService : Service(), AppLogger {
         _modelWatchingCamera.value = null
 
         // Restore previous audio routing state
-        audioManager?.mode = previousAudioMode
-        audioManager?.isSpeakerphoneOn = previousSpeakerphoneState
+        audioManager?.apply {
+            // Stop Bluetooth SCO if it was started
+            if (isBluetoothScoOn && !previousBluetoothScoState) {
+                stopBluetoothSco()
+            }
+            mode = previousAudioMode
+            isSpeakerphoneOn = previousSpeakerphoneState
+        }
         audioManager = null
         Log.d(TAG, "Audio routing restored to previous state")
 
@@ -559,8 +575,14 @@ class LiveSessionService : Service(), AppLogger {
 
         // Restore audio routing if not already restored
         if (audioManager != null) {
-            audioManager?.mode = previousAudioMode
-            audioManager?.isSpeakerphoneOn = previousSpeakerphoneState
+            audioManager?.apply {
+                // Stop Bluetooth SCO if it was started
+                if (isBluetoothScoOn && !previousBluetoothScoState) {
+                    stopBluetoothSco()
+                }
+                mode = previousAudioMode
+                isSpeakerphoneOn = previousSpeakerphoneState
+            }
             audioManager = null
             Log.d(TAG, "Audio routing restored in onDestroy()")
         }
@@ -663,6 +685,57 @@ class LiveSessionService : Service(), AppLogger {
      */
     fun clearModelWatchingCamera() {
         _modelWatchingCamera.value = null
+    }
+
+    /**
+     * Set the audio output mode for the current session.
+     * Can be called during an active session to switch audio routing.
+     *
+     * @param mode The desired audio output mode (SPEAKERPHONE, EARPIECE, or BLUETOOTH)
+     */
+    fun setAudioOutputMode(mode: AudioOutputMode) {
+        val am = audioManager ?: run {
+            Log.w(TAG, "Cannot set audio output mode - no active session")
+            return
+        }
+
+        Log.d(TAG, "Switching audio output to: ${mode.displayName}")
+
+        when (mode) {
+            AudioOutputMode.SPEAKERPHONE -> {
+                // Disable Bluetooth SCO
+                if (am.isBluetoothScoOn) {
+                    am.stopBluetoothSco()
+                    am.isBluetoothScoOn = false
+                }
+                // Enable speakerphone
+                am.isSpeakerphoneOn = true
+                Log.d(TAG, "Speakerphone enabled")
+            }
+
+            AudioOutputMode.EARPIECE -> {
+                // Disable Bluetooth SCO
+                if (am.isBluetoothScoOn) {
+                    am.stopBluetoothSco()
+                    am.isBluetoothScoOn = false
+                }
+                // Disable speakerphone (routes to earpiece)
+                am.isSpeakerphoneOn = false
+                Log.d(TAG, "Earpiece enabled (speakerphone disabled)")
+            }
+
+            AudioOutputMode.BLUETOOTH -> {
+                // Disable speakerphone
+                am.isSpeakerphoneOn = false
+                // Enable Bluetooth SCO
+                am.startBluetoothSco()
+                am.isBluetoothScoOn = true
+                Log.d(TAG, "Bluetooth SCO enabled")
+            }
+        }
+
+        _audioOutputMode.value = mode
+        AudioConfig.setOutputMode(this, mode)
     }
 
     /**
