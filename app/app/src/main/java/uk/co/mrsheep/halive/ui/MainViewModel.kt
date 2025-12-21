@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import uk.co.mrsheep.halive.HAGeminiApp
+import uk.co.mrsheep.halive.core.AudioOutputMode
 import uk.co.mrsheep.halive.core.CameraConfig
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
@@ -86,6 +87,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Model watching camera state (from LiveSessionService)
     private val _modelWatchingCamera = MutableStateFlow<String?>(null)
     val modelWatchingCamera: StateFlow<String?> = _modelWatchingCamera.asStateFlow()
+
+    // Audio output mode (from LiveSessionService)
+    private val _audioOutputMode = MutableStateFlow(AudioOutputMode.SPEAKERPHONE)
+    val audioOutputMode: StateFlow<AudioOutputMode> = _audioOutputMode.asStateFlow()
 
     // Pre-chat video selection state
     private val _videoStartEnabled = MutableStateFlow(false)
@@ -285,6 +290,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 service.modelWatchingCamera.collect { entityId ->
                     _modelWatchingCamera.value = entityId
+                }
+            }
+
+            // Collect audio output mode
+            viewModelScope.launch {
+                service.audioOutputMode.collect { mode ->
+                    _audioOutputMode.value = mode
                 }
             }
         }
@@ -511,6 +523,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun clearModelWatchingCamera() {
         liveSessionService?.clearModelWatchingCamera()
+    }
+
+    /**
+     * Set the audio output mode for the current session.
+     * Can be called during an active session to switch between speakerphone, earpiece, and Bluetooth.
+     *
+     * @param mode The desired audio output mode
+     */
+    fun setAudioOutputMode(mode: AudioOutputMode) {
+        liveSessionService?.setAudioOutputMode(mode)
     }
 
     /**
