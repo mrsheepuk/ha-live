@@ -42,6 +42,7 @@ import androidx.transition.TransitionManager
 import androidx.transition.TransitionSet
 import com.google.android.material.button.MaterialButton
 import uk.co.mrsheep.halive.R
+import uk.co.mrsheep.halive.core.AudioOutputMode
 import uk.co.mrsheep.halive.core.DummyToolsConfig
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
