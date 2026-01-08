@@ -315,6 +315,20 @@ class LiveSessionService : Service(), AppLogger {
                 previousSpeakerphoneState = audioManager?.isSpeakerphoneOn ?: false
                 previousBluetoothScoState = audioManager?.isBluetoothScoOn ?: false
 
+                val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                    .format(java.util.Date())
+
+                // Log initial state to UI
+                addLogEntry(
+                    LogEntry(
+                        timestamp = timestamp,
+                        toolName = "Audio Setup Start",
+                        parameters = "Configuring audio for session",
+                        success = true,
+                        result = "Initial Mode: ${audioManager?.mode}\nInitial Speakerphone: ${audioManager?.isSpeakerphoneOn}"
+                    )
+                )
+
                 // Request audio focus for voice communication
                 audioFocusRequest = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
                     .setAudioAttributes(
@@ -324,12 +338,34 @@ class LiveSessionService : Service(), AppLogger {
                             .build()
                     )
                     .build()
-                audioFocusRequest?.let { audioManager?.requestAudioFocus(it) }
-                Log.d(TAG, "Audio focus requested for voice communication")
+                val focusResult = audioFocusRequest?.let { audioManager?.requestAudioFocus(it) }
+                Log.d(TAG, "Audio focus requested for voice communication, result: $focusResult")
+
+                // Log focus result to UI
+                addLogEntry(
+                    LogEntry(
+                        timestamp = timestamp,
+                        toolName = "Audio Focus Request",
+                        parameters = "Requesting audio focus",
+                        success = true,
+                        result = "Focus result: $focusResult (1=GRANTED, 0=FAILED)"
+                    )
+                )
 
                 // Set MODE_IN_COMMUNICATION for echo cancellation
                 audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
                 Log.d(TAG, "AudioManager mode set to IN_COMMUNICATION (3), current mode: ${audioManager?.mode}")
+
+                // Log mode change to UI
+                addLogEntry(
+                    LogEntry(
+                        timestamp = timestamp,
+                        toolName = "Audio Mode Set",
+                        parameters = "Setting mode to IN_COMMUNICATION (3)",
+                        success = true,
+                        result = "Mode after setting: ${audioManager?.mode}\nExpected: 3 (IN_COMMUNICATION)"
+                    )
+                )
 
                 // Apply saved audio output preference
                 val savedMode = AudioConfig.getOutputMode(this@LiveSessionService)
