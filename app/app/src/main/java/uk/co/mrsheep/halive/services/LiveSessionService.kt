@@ -82,6 +82,7 @@ class LiveSessionService : Service(), AppLogger {
 
     // Audio routing management for echo cancellation
     private var audioManager: AudioManager? = null
+    private var audioFocusRequest: android.media.AudioFocusRequest? = null
     private var previousAudioMode: Int = AudioManager.MODE_NORMAL
     private var previousSpeakerphoneState: Boolean = false
     private var previousBluetoothScoState: Boolean = false
@@ -314,8 +315,21 @@ class LiveSessionService : Service(), AppLogger {
                 previousSpeakerphoneState = audioManager?.isSpeakerphoneOn ?: false
                 previousBluetoothScoState = audioManager?.isBluetoothScoOn ?: false
 
+                // Request audio focus for voice communication
+                audioFocusRequest = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                    .setAudioAttributes(
+                        android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .build()
+                audioFocusRequest?.let { audioManager?.requestAudioFocus(it) }
+                Log.d(TAG, "Audio focus requested for voice communication")
+
                 // Set MODE_IN_COMMUNICATION for echo cancellation
                 audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
+                Log.d(TAG, "AudioManager mode set to IN_COMMUNICATION (3), current mode: ${audioManager?.mode}")
 
                 // Apply saved audio output preference
                 val savedMode = AudioConfig.getOutputMode(this@LiveSessionService)
@@ -436,6 +450,10 @@ class LiveSessionService : Service(), AppLogger {
 
         // Clear model camera state
         _modelWatchingCamera.value = null
+
+        // Abandon audio focus
+        audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+        audioFocusRequest = null
 
         // Restore previous audio routing state
         audioManager?.apply {
@@ -585,6 +603,10 @@ class LiveSessionService : Service(), AppLogger {
 
         // Restore audio routing if not already restored
         if (audioManager != null) {
+            // Abandon audio focus
+            audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+            audioFocusRequest = null
+
             audioManager?.apply {
                 // Stop Bluetooth SCO if it was started
                 if (isBluetoothScoOn && !previousBluetoothScoState) {
