@@ -709,6 +709,10 @@ class LiveSessionService : Service(), AppLogger {
             return
         }
 
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+            .format(java.util.Date())
+
+        // Log to logcat
         Log.d(TAG, "=== Audio Output Mode Change Request ===")
         Log.d(TAG, "Requested mode: ${mode.displayName}")
         Log.d(TAG, "Current AudioManager state BEFORE change:")
@@ -716,6 +720,33 @@ class LiveSessionService : Service(), AppLogger {
         Log.d(TAG, "  - isSpeakerphoneOn: ${am.isSpeakerphoneOn}")
         Log.d(TAG, "  - isBluetoothScoOn: ${am.isBluetoothScoOn}")
         Log.d(TAG, "  - isBluetoothScoAvailableOffCall: ${am.isBluetoothScoAvailableOffCall}")
+
+        // Log to UI
+        val beforeState = buildString {
+            append("BEFORE:\n")
+            append("Mode: ${am.mode} (")
+            append(when (am.mode) {
+                0 -> "NORMAL"
+                1 -> "RINGTONE"
+                2 -> "IN_CALL"
+                3 -> "IN_COMMUNICATION"
+                else -> "UNKNOWN"
+            })
+            append(")\n")
+            append("Speakerphone: ${am.isSpeakerphoneOn}\n")
+            append("Bluetooth SCO: ${am.isBluetoothScoOn}\n")
+            append("BT Available: ${am.isBluetoothScoAvailableOffCall}")
+        }
+
+        addLogEntry(
+            LogEntry(
+                timestamp = timestamp,
+                toolName = "Audio Output Switch",
+                parameters = "Switching to ${mode.displayName}",
+                success = true,
+                result = beforeState
+            )
+        )
 
         when (mode) {
             AudioOutputMode.SPEAKERPHONE -> {
@@ -761,6 +792,32 @@ class LiveSessionService : Service(), AppLogger {
         Log.d(TAG, "  - isSpeakerphoneOn: ${am.isSpeakerphoneOn}")
         Log.d(TAG, "  - isBluetoothScoOn: ${am.isBluetoothScoOn}")
         Log.d(TAG, "========================================")
+
+        // Log AFTER state to UI
+        val afterState = buildString {
+            append("AFTER:\n")
+            append("Mode: ${am.mode} (")
+            append(when (am.mode) {
+                0 -> "NORMAL"
+                1 -> "RINGTONE"
+                2 -> "IN_CALL"
+                3 -> "IN_COMMUNICATION"
+                else -> "UNKNOWN"
+            })
+            append(")\n")
+            append("Speakerphone: ${am.isSpeakerphoneOn}\n")
+            append("Bluetooth SCO: ${am.isBluetoothScoOn}")
+        }
+
+        addLogEntry(
+            LogEntry(
+                timestamp = timestamp,
+                toolName = "Audio Output Result",
+                parameters = "Applied ${mode.displayName}",
+                success = true,
+                result = afterState
+            )
+        )
 
         _audioOutputMode.value = mode
         AudioConfig.setOutputMode(this, mode)
