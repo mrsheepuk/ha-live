@@ -295,21 +295,7 @@ class LiveSessionService : Service(), AppLogger {
                     onAudioLevel = { level -> _audioLevel.value = level }
                 )
 
-                val haCameras = sessionPreparer.prepareAndInitialize(profile, conversationService!!)
-                _availableHACameras.value = haCameras
-                Log.d(TAG, "Fetched ${haCameras.size} HA cameras for video source selection")
-
-                // Store current profile for notification
-                currentProfile = profile
-
-                // Store allowed cameras for this session
-                allowedModelCameras = profile.allowedModelCameras
-
-                // Update notification with profile information
-                val notificationManager = getSystemService(NotificationManager::class.java)
-                notificationManager.notify(NOTIFICATION_ID, createNotification(profile))
-
-                // Configure audio routing for voice communication with echo cancellation
+                // Configure audio routing BEFORE creating AudioTrack (must happen before prepareAndInitialize)
                 audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                 previousAudioMode = audioManager?.mode ?: AudioManager.MODE_NORMAL
                 previousSpeakerphoneState = audioManager?.isSpeakerphoneOn ?: false
@@ -352,7 +338,7 @@ class LiveSessionService : Service(), AppLogger {
                     )
                 )
 
-                // Set MODE_IN_COMMUNICATION for echo cancellation
+                // Set MODE_IN_COMMUNICATION for echo cancellation BEFORE AudioTrack creation
                 audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
                 Log.d(TAG, "AudioManager mode set to IN_COMMUNICATION (3), current mode: ${audioManager?.mode}")
 
@@ -371,6 +357,21 @@ class LiveSessionService : Service(), AppLogger {
                 val savedMode = AudioConfig.getOutputMode(this@LiveSessionService)
                 setAudioOutputMode(savedMode)
                 Log.d(TAG, "Audio routing configured: MODE_IN_COMMUNICATION with ${savedMode.displayName}")
+
+                // NOW create AudioTrack (via prepareAndInitialize) - it will inherit the correct mode
+                val haCameras = sessionPreparer.prepareAndInitialize(profile, conversationService!!)
+                _availableHACameras.value = haCameras
+                Log.d(TAG, "Fetched ${haCameras.size} HA cameras for video source selection")
+
+                // Store current profile for notification
+                currentProfile = profile
+
+                // Store allowed cameras for this session
+                allowedModelCameras = profile.allowedModelCameras
+
+                // Update notification with profile information
+                val notificationManager = getSystemService(NotificationManager::class.java)
+                notificationManager.notify(NOTIFICATION_ID, createNotification(profile))
 
                 _isSessionActive.value = true
                 _connectionState.value = UiState.ChatActive
