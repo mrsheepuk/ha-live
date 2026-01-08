@@ -996,11 +996,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Update the audio output button text to reflect the current mode.
+     * Update the audio output button icon to reflect the current mode.
      */
     private fun updateAudioOutputButtonText(mode: AudioOutputMode) {
         runOnUiThread {
-            audioOutputButton.text = mode.displayName
+            val iconRes = when (mode) {
+                AudioOutputMode.SPEAKERPHONE -> android.R.drawable.ic_lock_silent_mode_off
+                AudioOutputMode.EARPIECE -> android.R.drawable.stat_sys_phone_call
+                AudioOutputMode.BLUETOOTH -> android.R.drawable.stat_sys_data_bluetooth
+            }
+            audioOutputButton.setIconResource(iconRes)
+            audioOutputButton.contentDescription = "Audio output: ${mode.displayName}"
         }
     }
 

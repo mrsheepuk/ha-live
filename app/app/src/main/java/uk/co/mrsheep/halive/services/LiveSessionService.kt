@@ -377,16 +377,6 @@ class LiveSessionService : Service(), AppLogger {
                 _connectionState.value = UiState.ChatActive
                 conversationService!!.startSession(microphoneHelper = externalMicrophoneHelper)
 
-                // WORKAROUND: Re-apply audio routing after a delay to override Android's default
-                // When AudioTrack with USAGE_VOICE_COMMUNICATION starts playing, Android may
-                // reset routing to earpiece. We re-apply our preference after playback has started.
-                serviceScope.launch {
-                    delay(2500) // Wait for AudioTrack to start (typically 1-3s for first audio)
-                    val currentMode = _audioOutputMode.value
-                    Log.d(TAG, "Re-applying audio mode ${currentMode.displayName} after playback started")
-                    setAudioOutputMode(currentMode)
-                }
-
                 // Play ready beep to indicate session is active
                 BeepHelper.playReadyBeep(this@LiveSessionService)
 
