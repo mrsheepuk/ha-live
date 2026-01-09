@@ -977,17 +977,28 @@ class MainActivity : AppCompatActivity() {
      * Show dialog for audio output selection.
      */
     private fun showAudioOutputDialog() {
-        val modes = AudioOutputMode.entries.toTypedArray()
+        // Check if Bluetooth audio is available
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        val isBluetoothAvailable = audioManager.isBluetoothScoAvailableOffCall
+
+        // Filter modes based on Bluetooth availability
+        val allModes = AudioOutputMode.entries
+        val availableModes = if (isBluetoothAvailable) {
+            allModes
+        } else {
+            allModes.filter { it != AudioOutputMode.BLUETOOTH }
+        }
+
         val currentMode = viewModel.audioOutputMode.value
-        val currentIndex = modes.indexOf(currentMode)
+        val currentIndex = availableModes.indexOf(currentMode)
 
         android.app.AlertDialog.Builder(this)
             .setTitle("Audio Output")
             .setSingleChoiceItems(
-                modes.map { it.displayName }.toTypedArray(),
+                availableModes.map { it.displayName }.toTypedArray(),
                 currentIndex
             ) { dialog, which ->
-                val selectedMode = modes[which]
+                val selectedMode = availableModes[which]
                 viewModel.setAudioOutputMode(selectedMode)
                 dialog.dismiss()
             }

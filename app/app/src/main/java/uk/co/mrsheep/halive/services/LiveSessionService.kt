@@ -80,9 +80,8 @@ class LiveSessionService : Service(), AppLogger {
     private var currentProfile: Profile? = null
     private var allowedModelCameras: Set<String> = emptySet()
 
-    // Audio routing management for echo cancellation
+    // Audio routing management
     private var audioManager: AudioManager? = null
-    private var audioFocusRequest: android.media.AudioFocusRequest? = null
     private var previousAudioMode: Int = AudioManager.MODE_NORMAL
     private var previousSpeakerphoneState: Boolean = false
     private var previousBluetoothScoState: Boolean = false
@@ -295,70 +294,18 @@ class LiveSessionService : Service(), AppLogger {
                     onAudioLevel = { level -> _audioLevel.value = level }
                 )
 
-                // Configure audio routing BEFORE creating AudioTrack (must happen before prepareAndInitialize)
+                // Configure audio routing for speakerphone control
                 audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                 previousAudioMode = audioManager?.mode ?: AudioManager.MODE_NORMAL
                 previousSpeakerphoneState = audioManager?.isSpeakerphoneOn ?: false
                 previousBluetoothScoState = audioManager?.isBluetoothScoOn ?: false
 
-                val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-                    .format(java.util.Date())
-
-                // Log initial state to UI
-                addLogEntry(
-                    LogEntry(
-                        timestamp = timestamp,
-                        toolName = "Audio Setup Start",
-                        parameters = "Configuring audio for session",
-                        success = true,
-                        result = "Initial Mode: ${audioManager?.mode}\nInitial Speakerphone: ${audioManager?.isSpeakerphoneOn}"
-                    )
-                )
-
-                // Request audio focus for voice communication
-                audioFocusRequest = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                    .setAudioAttributes(
-                        android.media.AudioAttributes.Builder()
-                            .setUsage(android.media.AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build()
-                    )
-                    .build()
-                val focusResult = audioFocusRequest?.let { audioManager?.requestAudioFocus(it) }
-                Log.d(TAG, "Audio focus requested for voice communication, result: $focusResult")
-
-                // Log focus result to UI
-                addLogEntry(
-                    LogEntry(
-                        timestamp = timestamp,
-                        toolName = "Audio Focus Request",
-                        parameters = "Requesting audio focus",
-                        success = true,
-                        result = "Focus result: $focusResult (1=GRANTED, 0=FAILED)"
-                    )
-                )
-
-                // Set MODE_IN_COMMUNICATION for echo cancellation BEFORE AudioTrack creation
-                audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
-                Log.d(TAG, "AudioManager mode set to IN_COMMUNICATION (3), current mode: ${audioManager?.mode}")
-
-                // Log mode change to UI
-                addLogEntry(
-                    LogEntry(
-                        timestamp = timestamp,
-                        toolName = "Audio Mode Set",
-                        parameters = "Setting mode to IN_COMMUNICATION (3)",
-                        success = true,
-                        result = "Mode after setting: ${audioManager?.mode}\nExpected: 3 (IN_COMMUNICATION)"
-                    )
-                )
-
                 // Apply saved audio output preference
                 val savedMode = AudioConfig.getOutputMode(this@LiveSessionService)
                 setAudioOutputMode(savedMode)
-                Log.d(TAG, "Audio routing configured: MODE_IN_COMMUNICATION with ${savedMode.displayName}")
+                Log.d(TAG, "Audio routing configured: ${savedMode.displayName}")
 
-                // NOW create AudioTrack (via prepareAndInitialize) - it will inherit the correct mode
+                // Create AudioTrack (via prepareAndInitialize) with USAGE_VOICE_COMMUNICATION for AEC
                 val haCameras = sessionPreparer.prepareAndInitialize(profile, conversationService!!)
                 _availableHACameras.value = haCameras
                 Log.d(TAG, "Fetched ${haCameras.size} HA cameras for video source selection")
@@ -477,10 +424,6 @@ class LiveSessionService : Service(), AppLogger {
 
         // Clear model camera state
         _modelWatchingCamera.value = null
-
-        // Abandon audio focus
-        audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
-        audioFocusRequest = null
 
         // Restore previous audio routing state
         audioManager?.apply {
@@ -630,10 +573,6 @@ class LiveSessionService : Service(), AppLogger {
 
         // Restore audio routing if not already restored
         if (audioManager != null) {
-            // Abandon audio focus
-            audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
-            audioFocusRequest = null
-
             audioManager?.apply {
                 // Stop Bluetooth SCO if it was started
                 if (isBluetoothScoOn && !previousBluetoothScoState) {
@@ -758,115 +697,37 @@ class LiveSessionService : Service(), AppLogger {
             return
         }
 
-        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-            .format(java.util.Date())
-
-        // Log to logcat
-        Log.d(TAG, "=== Audio Output Mode Change Request ===")
-        Log.d(TAG, "Requested mode: ${mode.displayName}")
-        Log.d(TAG, "Current AudioManager state BEFORE change:")
-        Log.d(TAG, "  - Mode: ${am.mode} (0=NORMAL, 1=RINGTONE, 2=IN_CALL, 3=IN_COMMUNICATION)")
-        Log.d(TAG, "  - isSpeakerphoneOn: ${am.isSpeakerphoneOn}")
-        Log.d(TAG, "  - isBluetoothScoOn: ${am.isBluetoothScoOn}")
-        Log.d(TAG, "  - isBluetoothScoAvailableOffCall: ${am.isBluetoothScoAvailableOffCall}")
-
-        // Log to UI
-        val beforeState = buildString {
-            append("BEFORE:\n")
-            append("Mode: ${am.mode} (")
-            append(when (am.mode) {
-                0 -> "NORMAL"
-                1 -> "RINGTONE"
-                2 -> "IN_CALL"
-                3 -> "IN_COMMUNICATION"
-                else -> "UNKNOWN"
-            })
-            append(")\n")
-            append("Speakerphone: ${am.isSpeakerphoneOn}\n")
-            append("Bluetooth SCO: ${am.isBluetoothScoOn}\n")
-            append("BT Available: ${am.isBluetoothScoAvailableOffCall}")
-        }
-
-        addLogEntry(
-            LogEntry(
-                timestamp = timestamp,
-                toolName = "Audio Output Switch",
-                parameters = "Switching to ${mode.displayName}",
-                success = true,
-                result = beforeState
-            )
-        )
+        Log.d(TAG, "Switching audio output to: ${mode.displayName}")
 
         when (mode) {
             AudioOutputMode.SPEAKERPHONE -> {
-                Log.d(TAG, "Switching to SPEAKERPHONE mode")
                 // Disable Bluetooth SCO
                 if (am.isBluetoothScoOn) {
-                    Log.d(TAG, "  - Stopping Bluetooth SCO")
                     am.stopBluetoothSco()
                     am.isBluetoothScoOn = false
                 }
                 // Enable speakerphone
-                Log.d(TAG, "  - Enabling speakerphone")
                 am.isSpeakerphoneOn = true
             }
 
             AudioOutputMode.EARPIECE -> {
-                Log.d(TAG, "Switching to EARPIECE mode")
                 // Disable Bluetooth SCO
                 if (am.isBluetoothScoOn) {
-                    Log.d(TAG, "  - Stopping Bluetooth SCO")
                     am.stopBluetoothSco()
                     am.isBluetoothScoOn = false
                 }
                 // Disable speakerphone (routes to earpiece)
-                Log.d(TAG, "  - Disabling speakerphone (routes to earpiece)")
                 am.isSpeakerphoneOn = false
             }
 
             AudioOutputMode.BLUETOOTH -> {
-                Log.d(TAG, "Switching to BLUETOOTH mode")
                 // Disable speakerphone
-                Log.d(TAG, "  - Disabling speakerphone")
                 am.isSpeakerphoneOn = false
                 // Enable Bluetooth SCO
-                Log.d(TAG, "  - Starting Bluetooth SCO")
                 am.startBluetoothSco()
                 am.isBluetoothScoOn = true
             }
         }
-
-        Log.d(TAG, "Current AudioManager state AFTER change:")
-        Log.d(TAG, "  - Mode: ${am.mode}")
-        Log.d(TAG, "  - isSpeakerphoneOn: ${am.isSpeakerphoneOn}")
-        Log.d(TAG, "  - isBluetoothScoOn: ${am.isBluetoothScoOn}")
-        Log.d(TAG, "========================================")
-
-        // Log AFTER state to UI
-        val afterState = buildString {
-            append("AFTER:\n")
-            append("Mode: ${am.mode} (")
-            append(when (am.mode) {
-                0 -> "NORMAL"
-                1 -> "RINGTONE"
-                2 -> "IN_CALL"
-                3 -> "IN_COMMUNICATION"
-                else -> "UNKNOWN"
-            })
-            append(")\n")
-            append("Speakerphone: ${am.isSpeakerphoneOn}\n")
-            append("Bluetooth SCO: ${am.isBluetoothScoOn}")
-        }
-
-        addLogEntry(
-            LogEntry(
-                timestamp = timestamp,
-                toolName = "Audio Output Result",
-                parameters = "Applied ${mode.displayName}",
-                success = true,
-                result = afterState
-            )
-        )
 
         _audioOutputMode.value = mode
         AudioConfig.setOutputMode(this, mode)
