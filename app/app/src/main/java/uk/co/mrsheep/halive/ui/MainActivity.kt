@@ -1,6 +1,7 @@
 package uk.co.mrsheep.halive.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
@@ -42,6 +43,7 @@ import androidx.transition.TransitionManager
 import androidx.transition.TransitionSet
 import com.google.android.material.button.MaterialButton
 import uk.co.mrsheep.halive.R
+import uk.co.mrsheep.halive.core.AudioOutputMode
 import uk.co.mrsheep.halive.core.DummyToolsConfig
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
@@ -86,6 +88,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraPreview: PreviewView
     private lateinit var cameraToggleButton: MaterialButton
     private lateinit var cameraFlipButton: MaterialButton
+
+    // Audio output control
+    private lateinit var audioOutputButton: MaterialButton
 
     // Current video source (created on demand).
     // Volatile for visibility - updated on main thread, read from IO dispatcher in callbacks.
@@ -321,6 +326,9 @@ class MainActivity : AppCompatActivity() {
         cameraToggleButton = findViewById(R.id.cameraToggleButton)
         cameraFlipButton = findViewById(R.id.cameraFlipButton)
 
+        // Audio output control
+        audioOutputButton = findViewById(R.id.audioOutputButton)
+
         retryButton.setOnClickListener {
             viewModel.retryInitialization()
         }
@@ -403,6 +411,13 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
+                // Observe audio output mode
+                launch {
+                    viewModel.audioOutputMode.collect { mode ->
+                        updateAudioOutputButtonText(mode)
+                    }
+                }
+
                 // Auto-start video when chat becomes active (if pre-selected)
                 launch {
                     // Initialize based on current state to avoid re-triggering on activity recreation
@@ -432,6 +447,11 @@ class MainActivity : AppCompatActivity() {
         // Handle user clicking the pre-video button - opens camera selector
         preVideoButton.setOnClickListener {
             showPreChatCameraSourceMenu()
+        }
+
+        // Audio output button click handler - shows audio output selection dialog
+        audioOutputButton.setOnClickListener {
+            showAudioOutputDialog()
         }
 
         // Handle widget auto-start intent
@@ -512,6 +532,7 @@ class MainActivity : AppCompatActivity() {
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
                 cameraToggleButton.visibility = View.GONE
+                audioOutputButton.visibility = View.GONE
                 hideCameraPreview()
             }
             UiState.ProviderConfigNeeded -> {
@@ -524,6 +545,7 @@ class MainActivity : AppCompatActivity() {
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
                 cameraToggleButton.visibility = View.GONE
+                audioOutputButton.visibility = View.GONE
                 hideCameraPreview()
             }
             UiState.HAConfigNeeded -> {
@@ -536,6 +558,7 @@ class MainActivity : AppCompatActivity() {
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
                 cameraToggleButton.visibility = View.GONE
+                audioOutputButton.visibility = View.GONE
                 hideCameraPreview()
             }
             UiState.Initializing -> {
@@ -548,6 +571,7 @@ class MainActivity : AppCompatActivity() {
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
                 cameraToggleButton.visibility = View.GONE
+                audioOutputButton.visibility = View.GONE
                 hideCameraPreview()
             }
             UiState.ReadyToTalk -> {
@@ -565,6 +589,7 @@ class MainActivity : AppCompatActivity() {
                 // Show clear button if we have transcription logs from previous chats
                 clearButton.visibility = if (viewModel.transcriptionLogs.value.isNotEmpty()) View.VISIBLE else View.GONE
                 cameraToggleButton.visibility = View.GONE
+                audioOutputButton.visibility = View.GONE
                 hideCameraPreview()
             }
             UiState.ChatActive -> {
@@ -578,9 +603,10 @@ class MainActivity : AppCompatActivity() {
                 preVideoButton.visibility = View.GONE
                 clearButton.visibility = View.GONE
 
-                // Show camera toggle button during active chat
+                // Show camera toggle button and audio output button during active chat
                 cameraToggleButton.visibility = View.VISIBLE
                 cameraToggleButton.isEnabled = true
+                audioOutputButton.visibility = View.VISIBLE
 
                 // Animate one-time layout transition to top-aligned mode (if first chat)
                 if (!viewModel.hasEverChatted.value) {
@@ -606,9 +632,10 @@ class MainActivity : AppCompatActivity() {
                 preVideoButton.visibility = View.GONE
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
-                // Keep camera visible and enabled during action execution
+                // Keep camera and audio output visible and enabled during action execution
                 cameraToggleButton.visibility = View.VISIBLE
                 cameraToggleButton.isEnabled = true
+                audioOutputButton.visibility = View.VISIBLE
             }
             is UiState.Error -> {
                 audioVisualizer.setState(VisualizerState.DORMANT)
@@ -620,6 +647,7 @@ class MainActivity : AppCompatActivity() {
                 quickMessageScrollView.visibility = View.GONE
                 clearButton.visibility = View.GONE
                 cameraToggleButton.visibility = View.GONE
+                audioOutputButton.visibility = View.GONE
                 hideCameraPreview()
             }
         }
@@ -943,6 +971,45 @@ class MainActivity : AppCompatActivity() {
             is VideoSourceType.HACamera -> {
                 startHACameraSource(sourceType)
             }
+        }
+    }
+
+    /**
+     * Show dialog for audio output selection.
+     */
+    private fun showAudioOutputDialog() {
+        // Filter out Bluetooth for now - will revisit in separate thread
+        val availableModes = listOf(AudioOutputMode.SPEAKERPHONE, AudioOutputMode.EARPIECE)
+
+        val currentMode = viewModel.audioOutputMode.value
+        val currentIndex = availableModes.indexOf(currentMode)
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Audio Output")
+            .setSingleChoiceItems(
+                availableModes.map { it.displayName }.toTypedArray(),
+                currentIndex
+            ) { dialog, which ->
+                val selectedMode = availableModes[which]
+                viewModel.setAudioOutputMode(selectedMode)
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /**
+     * Update the audio output button icon to reflect the current mode.
+     */
+    private fun updateAudioOutputButtonText(mode: AudioOutputMode) {
+        runOnUiThread {
+            val iconRes = when (mode) {
+                AudioOutputMode.SPEAKERPHONE -> android.R.drawable.ic_lock_silent_mode_off
+                AudioOutputMode.EARPIECE -> android.R.drawable.stat_sys_phone_call
+                AudioOutputMode.BLUETOOTH -> android.R.drawable.stat_sys_data_bluetooth
+            }
+            audioOutputButton.setIconResource(iconRes)
+            audioOutputButton.contentDescription = "Audio output: ${mode.displayName}"
         }
     }
 
