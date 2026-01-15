@@ -76,6 +76,7 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
         private val parametersText: TextView = itemView.findViewById(R.id.parametersText)
         private val resultText: TextView = itemView.findViewById(R.id.resultText)
         private val detailsSection: View = itemView.findViewById(R.id.detailsSection)
+        private val expandIndicator: TextView = itemView.findViewById(R.id.expandIndicator)
 
         override fun bind(item: TranscriptDisplayItem, position: Int) {
             val toolCall = item as ToolCallItem
@@ -95,6 +96,7 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
             resultText.text = toolCall.result
 
             detailsSection.visibility = if (isExpanded) View.VISIBLE else View.GONE
+            expandIndicator.text = if (isExpanded) "\u25B2" else "\u25BC"  // ▲ or ▼
 
             itemView.setOnClickListener {
                 if (expandedToolCalls.contains(position)) {
