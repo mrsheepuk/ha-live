@@ -39,29 +39,44 @@ class AppToolExecutor(
             } else {
                 toolExecutor.callTool(name, arguments)
             }
+            val resultText = result.content
+                .filter { it.type == "text" }
+                .mapNotNull { it.text }
+                .joinToString("\n")
+            val success = result.isError != true
             logger.addLogEntry(
                 LogEntry(
                     timestamp = timestamp,
                     toolName = name,
                     parameters = arguments.toString(),
-                    success = result.isError != true,
-                    result = result.content
-                        .filter { it.type == "text" }
-                        .mapNotNull { it.text }
-                        .joinToString("\n")
+                    success = success,
+                    result = resultText
                 )
+            )
+            logger.addToolCallToTranscript(
+                toolName = name,
+                parameters = arguments.toString(),
+                success = success,
+                result = resultText
             )
             return result
         } catch (e: Exception) {
             // Log failed call
+            val errorResult = "Exception: ${e.message}"
             logger.addLogEntry(
                 LogEntry(
                     timestamp = timestamp,
                     toolName = name,
                     parameters = arguments.toString(),
                     success = false,
-                    result = "Exception: ${e.message}"
+                    result = errorResult
                 )
+            )
+            logger.addToolCallToTranscript(
+                toolName = name,
+                parameters = arguments.toString(),
+                success = false,
+                result = errorResult
             )
             throw e
         } finally {
