@@ -6,48 +6,55 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import uk.co.mrsheep.halive.R
+import uk.co.mrsheep.halive.core.TranscriptDisplayItem
+import uk.co.mrsheep.halive.core.TranscriptDisplayItem.SpeechTurn
+import uk.co.mrsheep.halive.core.TranscriptDisplayItem.ToolCallItem
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
-import uk.co.mrsheep.halive.core.TranscriptionTurn
 
 class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.TranscriptionViewHolder>() {
 
-    private val turns = mutableListOf<TranscriptionTurn>()
+    private val items = mutableListOf<TranscriptDisplayItem>()
     private val expandedThoughts = mutableSetOf<Int>()
+    private val expandedToolCalls = mutableSetOf<Int>()
 
     companion object {
         private const val VIEW_TYPE_USER = 1
         private const val VIEW_TYPE_MODEL = 2
         private const val VIEW_TYPE_MODEL_THOUGHT = 3
+        private const val VIEW_TYPE_TOOL_CALL = 4
     }
 
     abstract class TranscriptionViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        abstract fun bind(turn: TranscriptionTurn, position: Int)
+        abstract fun bind(item: TranscriptDisplayItem, position: Int)
     }
 
     class UserViewHolder(itemView: View) : TranscriptionViewHolder(itemView) {
         private val messageText: TextView = itemView.findViewById(R.id.messageText)
 
-        override fun bind(turn: TranscriptionTurn, position: Int) {
-            messageText.text = turn.fullText
+        override fun bind(item: TranscriptDisplayItem, position: Int) {
+            val speechTurn = item as SpeechTurn
+            messageText.text = speechTurn.fullText
         }
     }
 
     class ModelViewHolder(itemView: View) : TranscriptionViewHolder(itemView) {
         private val messageText: TextView = itemView.findViewById(R.id.messageText)
 
-        override fun bind(turn: TranscriptionTurn, position: Int) {
-            messageText.text = turn.fullText
+        override fun bind(item: TranscriptDisplayItem, position: Int) {
+            val speechTurn = item as SpeechTurn
+            messageText.text = speechTurn.fullText
         }
     }
 
     inner class ModelThoughtViewHolder(itemView: View) : TranscriptionViewHolder(itemView) {
         private val messageText: TextView = itemView.findViewById(R.id.messageText)
 
-        override fun bind(turn: TranscriptionTurn, position: Int) {
+        override fun bind(item: TranscriptDisplayItem, position: Int) {
+            val speechTurn = item as SpeechTurn
             val isExpanded = expandedThoughts.contains(position)
 
             messageText.text = if (isExpanded) {
-                turn.fullText.trim()
+                speechTurn.fullText.trim()
             } else {
                 "(thinking... tap to expand)"
             }
@@ -63,11 +70,87 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
         }
     }
 
+    inner class ToolCallViewHolder(itemView: View) : TranscriptionViewHolder(itemView) {
+        private val card: View = itemView.findViewById(R.id.toolCallCard)
+        private val toolNameText: TextView = itemView.findViewById(R.id.toolNameText)
+        private val statusIcon: TextView = itemView.findViewById(R.id.statusIcon)
+        private val actualToolNameText: TextView = itemView.findViewById(R.id.actualToolNameText)
+        private val parametersText: TextView = itemView.findViewById(R.id.parametersText)
+        private val resultText: TextView = itemView.findViewById(R.id.resultText)
+        private val detailsSection: View = itemView.findViewById(R.id.detailsSection)
+        private val expandIndicator: TextView = itemView.findViewById(R.id.expandIndicator)
+
+        override fun bind(item: TranscriptDisplayItem, position: Int) {
+            val toolCall = item as ToolCallItem
+            val isExpanded = expandedToolCalls.contains(position)
+
+            val humanizedName = humanizeToolName(toolCall.toolName)
+            val displayName = if (toolCall.targetName != null) {
+                "$humanizedName ${toolCall.targetName}"
+            } else {
+                humanizedName
+            }
+            toolNameText.text = displayName
+            actualToolNameText.text = toolCall.toolName
+
+            if (toolCall.success) {
+                statusIcon.text = "\u2713"
+                statusIcon.setTextColor(itemView.context.getColor(R.color.tool_call_success))
+            } else {
+                statusIcon.text = "\u2717"
+                statusIcon.setTextColor(itemView.context.getColor(R.color.tool_call_failure))
+            }
+
+            parametersText.text = toolCall.parameters
+            resultText.text = toolCall.result
+
+            detailsSection.visibility = if (isExpanded) View.VISIBLE else View.GONE
+            expandIndicator.text = if (isExpanded) "\u25B2" else "\u25BC"  // ▲ or ▼
+
+            card.setOnClickListener {
+                if (expandedToolCalls.contains(position)) {
+                    expandedToolCalls.remove(position)
+                } else {
+                    expandedToolCalls.add(position)
+                }
+                notifyItemChanged(position)
+            }
+        }
+
+        private fun humanizeToolName(toolName: String): String {
+            // Remove Hass prefix if present
+            var name = toolName
+            if (name.startsWith("Hass")) {
+                name = name.removePrefix("Hass")
+            }
+
+            // Split into words based on format
+            val words = when {
+                name.contains("_") -> name.split("_")  // snake_case
+                name.contains("-") -> name.split("-")  // kebab-case
+                else -> {
+                    // PascalCase/camelCase - split before uppercase followed by lowercase
+                    // This preserves acronyms like "XML" and handles "ALLCAPS" as single word
+                    name.split(Regex("(?=[A-Z][a-z])")).filter { it.isNotEmpty() }
+                }
+            }
+
+            // Join with spaces: capitalize first word, lowercase the rest
+            return words.mapIndexed { index, word ->
+                if (index == 0) word.replaceFirstChar { it.uppercaseChar() }
+                else word.lowercase()
+            }.joinToString(" ")
+        }
+    }
+
     override fun getItemViewType(position: Int): Int {
-        return when (turns[position].speaker) {
-            TranscriptionSpeaker.USER -> VIEW_TYPE_USER
-            TranscriptionSpeaker.MODEL -> VIEW_TYPE_MODEL
-            TranscriptionSpeaker.MODELTHOUGHT -> VIEW_TYPE_MODEL_THOUGHT
+        return when (val item = items[position]) {
+            is SpeechTurn -> when (item.speaker) {
+                TranscriptionSpeaker.USER -> VIEW_TYPE_USER
+                TranscriptionSpeaker.MODEL -> VIEW_TYPE_MODEL
+                TranscriptionSpeaker.MODELTHOUGHT -> VIEW_TYPE_MODEL_THOUGHT
+            }
+            is ToolCallItem -> VIEW_TYPE_TOOL_CALL
         }
     }
 
@@ -86,20 +169,25 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
                 val view = inflater.inflate(R.layout.item_transcription_model_thought, parent, false)
                 ModelThoughtViewHolder(view)
             }
+            VIEW_TYPE_TOOL_CALL -> {
+                val view = inflater.inflate(R.layout.item_transcription_tool_call, parent, false)
+                ToolCallViewHolder(view)
+            }
             else -> throw IllegalArgumentException("Unknown view type: $viewType")
         }
     }
 
     override fun onBindViewHolder(holder: TranscriptionViewHolder, position: Int) {
-        holder.bind(turns[position], position)
+        holder.bind(items[position], position)
     }
 
-    override fun getItemCount(): Int = turns.size
+    override fun getItemCount(): Int = items.size
 
-    fun updateTurns(newTurns: List<TranscriptionTurn>) {
-        turns.clear()
-        turns.addAll(newTurns)
+    fun updateItems(newItems: List<TranscriptDisplayItem>) {
+        items.clear()
+        items.addAll(newItems)
         expandedThoughts.clear()
+        expandedToolCalls.clear()
         notifyDataSetChanged()
     }
 }

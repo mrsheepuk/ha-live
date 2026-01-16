@@ -3,7 +3,10 @@ package uk.co.mrsheep.halive.services
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import uk.co.mrsheep.halive.core.AppLogger
 import uk.co.mrsheep.halive.core.LogEntry
@@ -39,29 +42,46 @@ class AppToolExecutor(
             } else {
                 toolExecutor.callTool(name, arguments)
             }
+            val resultText = result.content
+                .filter { it.type == "text" }
+                .mapNotNull { it.text }
+                .joinToString("\n")
+            val success = result.isError != true
             logger.addLogEntry(
                 LogEntry(
                     timestamp = timestamp,
                     toolName = name,
                     parameters = arguments.toString(),
-                    success = result.isError != true,
-                    result = result.content
-                        .filter { it.type == "text" }
-                        .mapNotNull { it.text }
-                        .joinToString("\n")
+                    success = success,
+                    result = resultText
                 )
+            )
+            logger.addToolCallToTranscript(
+                toolName = name,
+                targetName = extractTargetName(arguments),
+                parameters = arguments.toString(),
+                success = success,
+                result = resultText
             )
             return result
         } catch (e: Exception) {
             // Log failed call
+            val errorResult = "Exception: ${e.message}"
             logger.addLogEntry(
                 LogEntry(
                     timestamp = timestamp,
                     toolName = name,
                     parameters = arguments.toString(),
                     success = false,
-                    result = "Exception: ${e.message}"
+                    result = errorResult
                 )
+            )
+            logger.addToolCallToTranscript(
+                toolName = name,
+                targetName = extractTargetName(arguments),
+                parameters = arguments.toString(),
+                success = false,
+                result = errorResult
             )
             throw e
         } finally {
@@ -78,5 +98,34 @@ class AppToolExecutor(
     private fun createTimestamp(): String {
         return java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
             .format(java.util.Date())
+    }
+
+    /**
+     * Extracts a human-readable target name from tool arguments.
+     * Tries 'name' first (used by HA MCP tools), then 'entity_id' (used by local camera tools).
+     * Returns null if no recognizable target is found.
+     */
+    private fun extractTargetName(arguments: Map<String, JsonElement>): String? {
+        // Try 'name' first - HA MCP uses this, most human-readable
+        arguments["name"]?.let { element ->
+            if (element is JsonPrimitive && element.isString) {
+                element.content.takeIf { it.isNotBlank() }?.let { return it }
+            }
+        }
+
+        // Try 'entity_id' - local camera tools use this
+        arguments["entity_id"]?.let { element ->
+            val entityId = when (element) {
+                is JsonPrimitive -> element.contentOrNull
+                is JsonArray -> (element.firstOrNull() as? JsonPrimitive)?.contentOrNull
+                else -> null
+            }
+            entityId?.takeIf { it.contains(".") }?.let {
+                // "camera.front_door" → "front door"
+                return it.substringAfter(".").replace("_", " ")
+            }
+        }
+
+        return null
     }
 }

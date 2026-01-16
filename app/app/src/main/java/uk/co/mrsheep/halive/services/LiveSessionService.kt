@@ -35,7 +35,7 @@ import uk.co.mrsheep.halive.services.CameraEntity
 import uk.co.mrsheep.halive.core.DummyToolsConfig
 import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.core.Profile
-import uk.co.mrsheep.halive.core.TranscriptionEntry
+import uk.co.mrsheep.halive.core.TranscriptItem
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.camera.CameraFacing
@@ -90,8 +90,8 @@ class LiveSessionService : Service(), AppLogger {
     private val _audioOutputMode = MutableStateFlow(AudioOutputMode.SPEAKERPHONE)
     val audioOutputMode: StateFlow<AudioOutputMode> = _audioOutputMode.asStateFlow()
 
-    private val _transcriptionLogs = MutableStateFlow<List<TranscriptionEntry>>(emptyList())
-    val transcriptionLogs: StateFlow<List<TranscriptionEntry>> = _transcriptionLogs.asStateFlow()
+    private val _transcriptionLogs = MutableStateFlow<List<TranscriptItem>>(emptyList())
+    val transcriptionLogs: StateFlow<List<TranscriptItem>> = _transcriptionLogs.asStateFlow()
 
     private val _audioLevel = MutableStateFlow(0f)
     val audioLevel: StateFlow<Float> = _audioLevel.asStateFlow()
@@ -545,16 +545,27 @@ class LiveSessionService : Service(), AppLogger {
     }
 
     override fun addModelTranscription(chunk: String, isThought: Boolean) {
-        _transcriptionLogs.value += TranscriptionEntry(
-            spokenBy = if (isThought) TranscriptionSpeaker.MODELTHOUGHT else TranscriptionSpeaker.MODEL,
+        _transcriptionLogs.value += TranscriptItem.Speech(
+            speaker = if (isThought) TranscriptionSpeaker.MODELTHOUGHT else TranscriptionSpeaker.MODEL,
             chunk = chunk,
         )
     }
 
     override fun addUserTranscription(chunk: String) {
-        _transcriptionLogs.value += TranscriptionEntry(
-            spokenBy = TranscriptionSpeaker.USER,
+        _transcriptionLogs.value += TranscriptItem.Speech(
+            speaker = TranscriptionSpeaker.USER,
             chunk = chunk,
+        )
+    }
+
+    override fun addToolCallToTranscript(toolName: String, targetName: String?, parameters: String, success: Boolean, result: String) {
+        _transcriptionLogs.value += TranscriptItem.ToolCall(
+            toolName = toolName,
+            targetName = targetName,
+            parameters = parameters,
+            success = success,
+            result = result,
+            timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
         )
     }
 

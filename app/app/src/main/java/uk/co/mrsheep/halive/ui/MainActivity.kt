@@ -49,9 +49,9 @@ import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HAConfig
 import uk.co.mrsheep.halive.BuildConfig
 import kotlinx.coroutines.launch
-import uk.co.mrsheep.halive.core.TranscriptionEntry
+import uk.co.mrsheep.halive.core.TranscriptDisplayItem
+import uk.co.mrsheep.halive.core.TranscriptItem
 import uk.co.mrsheep.halive.core.TranscriptionSpeaker
-import uk.co.mrsheep.halive.core.TranscriptionTurn
 import uk.co.mrsheep.halive.core.CameraConfig
 import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.services.camera.CameraFacing
@@ -769,45 +769,58 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateTranscriptionLogs(logs: List<TranscriptionEntry>) {
-        // Group consecutive entries by speaker into "turns"
-        val turns = mutableListOf<TranscriptionTurn>()
+    private fun updateTranscriptionLogs(logs: List<TranscriptItem>) {
+        val items = mutableListOf<TranscriptDisplayItem>()
 
         if (logs.isEmpty()) {
-            transcriptionAdapter.updateTurns(emptyList())
+            transcriptionAdapter.updateItems(emptyList())
             return
         }
 
         var currentSpeaker: TranscriptionSpeaker? = null
         var currentText = StringBuilder()
 
-        logs.forEach { entry ->
-            if (entry.spokenBy != currentSpeaker) {
-                // Speaker changed - save previous turn if exists
-                if (currentSpeaker != null && currentText.isNotEmpty()) {
-                    turns.add(TranscriptionTurn(currentSpeaker!!, currentText.toString()))
-                }
-                // Start new turn
-                currentSpeaker = entry.spokenBy
-                currentText = StringBuilder(entry.chunk)
-            } else {
-                // Same speaker - append to current turn
-                currentText.append(entry.chunk)
+        fun flushCurrentSpeech() {
+            if (currentSpeaker != null && currentText.isNotEmpty()) {
+                items.add(TranscriptDisplayItem.SpeechTurn(currentSpeaker!!, currentText.toString()))
+                currentText = StringBuilder()
+                currentSpeaker = null
             }
         }
 
-        // Add final turn
-        if (currentSpeaker != null && currentText.isNotEmpty()) {
-            turns.add(TranscriptionTurn(currentSpeaker!!, currentText.toString()))
+        logs.forEach { item ->
+            when (item) {
+                is TranscriptItem.Speech -> {
+                    if (item.speaker != currentSpeaker) {
+                        flushCurrentSpeech()
+                        currentSpeaker = item.speaker
+                        currentText = StringBuilder(item.chunk)
+                    } else {
+                        currentText.append(item.chunk)
+                    }
+                }
+                is TranscriptItem.ToolCall -> {
+                    flushCurrentSpeech()  // Tool calls break speech grouping
+                    items.add(TranscriptDisplayItem.ToolCallItem(
+                        toolName = item.toolName,
+                        targetName = item.targetName,
+                        parameters = item.parameters,
+                        success = item.success,
+                        result = item.result
+                    ))
+                }
+            }
         }
 
+        flushCurrentSpeech()  // Don't forget final speech turn
+
         // Update adapter
-        transcriptionAdapter.updateTurns(turns)
+        transcriptionAdapter.updateItems(items)
 
         // Auto-scroll to bottom to show most recent message
-        if (turns.isNotEmpty()) {
+        if (items.isNotEmpty()) {
             transcriptionRecyclerView.post {
-                transcriptionRecyclerView.smoothScrollToPosition(turns.size - 1)
+                transcriptionRecyclerView.smoothScrollToPosition(items.size - 1)
             }
         }
     }

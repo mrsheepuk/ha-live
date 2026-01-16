@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.core.QuickMessage
 import uk.co.mrsheep.halive.core.QuickMessageConfig
-import uk.co.mrsheep.halive.core.TranscriptionEntry
+import uk.co.mrsheep.halive.core.TranscriptItem
 import uk.co.mrsheep.halive.services.camera.CameraFacing
 import uk.co.mrsheep.halive.services.CameraEntity
 import uk.co.mrsheep.halive.services.camera.VideoSource
@@ -59,8 +59,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _toolLogs = MutableStateFlow<List<LogEntry>>(emptyList())
     val toolLogs: StateFlow<List<LogEntry>> = _toolLogs
 
-    private val _transcriptionLogs = MutableStateFlow<List<TranscriptionEntry>>(emptyList())
-    val transcriptionLogs: StateFlow<List<TranscriptionEntry>> = _transcriptionLogs
+    private val _transcriptionLogs = MutableStateFlow<List<TranscriptItem>>(emptyList())
+    val transcriptionLogs: StateFlow<List<TranscriptItem>> = _transcriptionLogs
 
     private val _audioLevel = MutableStateFlow(0f)
     val audioLevel: StateFlow<Float> = _audioLevel.asStateFlow()
