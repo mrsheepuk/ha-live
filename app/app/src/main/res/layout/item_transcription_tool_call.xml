@@ -12,7 +12,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="start"
         android:layout_marginStart="8dp"
-        android:layout_marginEnd="48dp"
+        android:layout_marginEnd="16dp"
         app:cardBackgroundColor="@color/surface_light"
         app:cardCornerRadius="8dp"
         app:cardElevation="2dp"
@@ -59,11 +59,9 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:ellipsize="end"
-                        android:maxLines="1"
                         android:textAppearance="@style/TextAppearance.MaterialComponents.Body2"
                         android:textColor="@color/text_primary_light"
-                        tools:text="HassLightSet" />
+                        tools:text="Start watching camera front door" />
 
                     <!-- Status icon -->
                     <TextView
