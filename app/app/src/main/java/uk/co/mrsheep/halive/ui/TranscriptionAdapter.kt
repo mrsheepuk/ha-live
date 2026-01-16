@@ -123,8 +123,9 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
                 name.contains("_") -> name.split("_")  // snake_case
                 name.contains("-") -> name.split("-")  // kebab-case
                 else -> {
-                    // PascalCase or camelCase - split before uppercase letters
-                    name.split(Regex("(?=[A-Z])")).filter { it.isNotEmpty() }
+                    // PascalCase/camelCase - split before uppercase followed by lowercase
+                    // This preserves acronyms like "XML" and handles "ALLCAPS" as single word
+                    name.split(Regex("(?=[A-Z][a-z])")).filter { it.isNotEmpty() }
                 }
             }
 
