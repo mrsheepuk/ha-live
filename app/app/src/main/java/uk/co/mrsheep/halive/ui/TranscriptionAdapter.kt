@@ -74,6 +74,7 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
         private val card: View = itemView.findViewById(R.id.toolCallCard)
         private val toolNameText: TextView = itemView.findViewById(R.id.toolNameText)
         private val statusIcon: TextView = itemView.findViewById(R.id.statusIcon)
+        private val actualToolNameText: TextView = itemView.findViewById(R.id.actualToolNameText)
         private val parametersText: TextView = itemView.findViewById(R.id.parametersText)
         private val resultText: TextView = itemView.findViewById(R.id.resultText)
         private val detailsSection: View = itemView.findViewById(R.id.detailsSection)
@@ -83,7 +84,8 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
             val toolCall = item as ToolCallItem
             val isExpanded = expandedToolCalls.contains(position)
 
-            toolNameText.text = toolCall.toolName
+            toolNameText.text = humanizeToolName(toolCall.toolName)
+            actualToolNameText.text = toolCall.toolName
 
             if (toolCall.success) {
                 statusIcon.text = "\u2713"
@@ -107,6 +109,30 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
                 }
                 notifyItemChanged(position)
             }
+        }
+
+        private fun humanizeToolName(toolName: String): String {
+            // Remove Hass prefix if present
+            var name = toolName
+            if (name.startsWith("Hass")) {
+                name = name.removePrefix("Hass")
+            }
+
+            // Split into words based on format
+            val words = when {
+                name.contains("_") -> name.split("_")  // snake_case
+                name.contains("-") -> name.split("-")  // kebab-case
+                else -> {
+                    // PascalCase or camelCase - split before uppercase letters
+                    name.split(Regex("(?=[A-Z])")).filter { it.isNotEmpty() }
+                }
+            }
+
+            // Join with spaces: capitalize first word, lowercase the rest
+            return words.mapIndexed { index, word ->
+                if (index == 0) word.replaceFirstChar { it.uppercaseChar() }
+                else word.lowercase()
+            }.joinToString(" ")
         }
     }
 

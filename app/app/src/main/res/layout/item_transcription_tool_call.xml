@@ -106,6 +106,27 @@
                         android:layout_marginBottom="8dp"
                         android:background="@color/divider_light" />
 
+                    <!-- Tool name label -->
+                    <TextView
+                        android:id="@+id/actualToolNameLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Tool:"
+                        android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+                        android:textColor="@color/text_secondary_light" />
+
+                    <!-- Actual tool name -->
+                    <TextView
+                        android:id="@+id/actualToolNameText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:layout_marginBottom="8dp"
+                        android:fontFamily="monospace"
+                        android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+                        android:textColor="@color/text_primary_light"
+                        tools:text="HassLightSet" />
+
                     <!-- Parameters label -->
                     <TextView
                         android:id="@+id/parametersLabel"
