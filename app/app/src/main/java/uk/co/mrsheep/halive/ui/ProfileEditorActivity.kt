@@ -958,7 +958,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         }
     }
 
-    override fun addToolCallToTranscript(toolName: String, parameters: String, success: Boolean, result: String) {
+    override fun addToolCallToTranscript(toolName: String, targetName: String?, parameters: String, success: Boolean, result: String) {
         // Tool calls are already logged via addLogEntry in tests
         // This method exists for transcript display in main activity
     }

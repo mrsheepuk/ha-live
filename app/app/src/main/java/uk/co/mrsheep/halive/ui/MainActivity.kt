@@ -803,6 +803,7 @@ class MainActivity : AppCompatActivity() {
                     flushCurrentSpeech()  // Tool calls break speech grouping
                     items.add(TranscriptDisplayItem.ToolCallItem(
                         toolName = item.toolName,
+                        targetName = item.targetName,
                         parameters = item.parameters,
                         success = item.success,
                         result = item.result

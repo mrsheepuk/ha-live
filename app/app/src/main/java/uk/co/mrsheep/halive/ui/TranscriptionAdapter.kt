@@ -84,7 +84,13 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
             val toolCall = item as ToolCallItem
             val isExpanded = expandedToolCalls.contains(position)
 
-            toolNameText.text = humanizeToolName(toolCall.toolName)
+            val humanizedName = humanizeToolName(toolCall.toolName)
+            val displayName = if (toolCall.targetName != null) {
+                "$humanizedName ${toolCall.targetName}"
+            } else {
+                humanizedName
+            }
+            toolNameText.text = displayName
             actualToolNameText.text = toolCall.toolName
 
             if (toolCall.success) {

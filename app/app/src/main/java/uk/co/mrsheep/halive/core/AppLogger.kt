@@ -19,5 +19,5 @@ public interface AppLogger {
     fun addLogEntry(log: LogEntry)
     fun addModelTranscription(chunk: String, isThought: Boolean)
     fun addUserTranscription(chunk: String)
-    fun addToolCallToTranscript(toolName: String, parameters: String, success: Boolean, result: String)
+    fun addToolCallToTranscript(toolName: String, targetName: String?, parameters: String, success: Boolean, result: String)
 }

@@ -12,6 +12,7 @@ sealed class TranscriptItem {
 
     data class ToolCall(
         val toolName: String,
+        val targetName: String?,
         val parameters: String,
         val success: Boolean,
         val result: String,
@@ -31,6 +32,7 @@ sealed class TranscriptDisplayItem {
 
     data class ToolCallItem(
         val toolName: String,
+        val targetName: String?,
         val parameters: String,
         val success: Boolean,
         val result: String

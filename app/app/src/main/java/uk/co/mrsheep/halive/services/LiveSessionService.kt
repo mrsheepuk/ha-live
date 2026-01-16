@@ -558,9 +558,10 @@ class LiveSessionService : Service(), AppLogger {
         )
     }
 
-    override fun addToolCallToTranscript(toolName: String, parameters: String, success: Boolean, result: String) {
+    override fun addToolCallToTranscript(toolName: String, targetName: String?, parameters: String, success: Boolean, result: String) {
         _transcriptionLogs.value += TranscriptItem.ToolCall(
             toolName = toolName,
+            targetName = targetName,
             parameters = parameters,
             success = success,
             result = result,
