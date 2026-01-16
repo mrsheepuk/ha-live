@@ -56,8 +56,8 @@
     <color name="active_profile_stroke">#FFB74D</color>
 
     <!-- Tool call card colors -->
-    <color name="tool_call_background">#FFF8E1</color>  <!-- Warm amber tint -->
-    <color name="tool_call_accent">#FFB300</color>      <!-- Amber accent -->
+    <color name="tool_call_accent">#78909C</color>      <!-- Muted blue-gray accent bar -->
+    <color name="tool_call_border">#E0E0E0</color>      <!-- Light gray border -->
     <color name="tool_call_success">#4CAF50</color>     <!-- Green for success -->
     <color name="tool_call_failure">#F44336</color>     <!-- Red for failure -->
 </resources>

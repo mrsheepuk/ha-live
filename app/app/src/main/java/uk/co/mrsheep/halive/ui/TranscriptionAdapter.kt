@@ -71,6 +71,7 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
     }
 
     inner class ToolCallViewHolder(itemView: View) : TranscriptionViewHolder(itemView) {
+        private val card: View = itemView.findViewById(R.id.toolCallCard)
         private val toolNameText: TextView = itemView.findViewById(R.id.toolNameText)
         private val statusIcon: TextView = itemView.findViewById(R.id.statusIcon)
         private val parametersText: TextView = itemView.findViewById(R.id.parametersText)
@@ -98,7 +99,7 @@ class TranscriptionAdapter : RecyclerView.Adapter<TranscriptionAdapter.Transcrip
             detailsSection.visibility = if (isExpanded) View.VISIBLE else View.GONE
             expandIndicator.text = if (isExpanded) "\u25B2" else "\u25BC"  // ▲ or ▼
 
-            itemView.setOnClickListener {
+            card.setOnClickListener {
                 if (expandedToolCalls.contains(position)) {
                     expandedToolCalls.remove(position)
                 } else {

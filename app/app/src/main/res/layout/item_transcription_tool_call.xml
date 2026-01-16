@@ -13,143 +13,141 @@
         android:layout_gravity="start"
         android:layout_marginStart="8dp"
         android:layout_marginEnd="48dp"
-        android:clickable="true"
-        android:focusable="true"
-        app:cardBackgroundColor="@color/tool_call_background"
+        app:cardBackgroundColor="@color/surface_light"
         app:cardCornerRadius="8dp"
         app:cardElevation="2dp"
-        app:strokeColor="@color/tool_call_accent"
+        app:strokeColor="@color/tool_call_border"
         app:strokeWidth="1dp">
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="horizontal">
 
-            <!-- Header row with tool icon, name, status, and chevron -->
+            <!-- Left accent bar -->
+            <View
+                android:layout_width="4dp"
+                android:layout_height="match_parent"
+                android:background="@color/tool_call_accent" />
+
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="12dp">
+                android:orientation="vertical">
 
-                <!-- Left accent bar -->
-                <View
-                    android:layout_width="4dp"
-                    android:layout_height="24dp"
-                    android:layout_marginEnd="8dp"
-                    android:background="@color/tool_call_accent" />
-
-                <!-- Tool icon -->
-                <TextView
-                    android:id="@+id/toolIcon"
+                <!-- Header row with tool icon, name, status, and chevron -->
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
-                    android:text="\u2699"
-                    android:textColor="@color/tool_call_accent"
-                    android:textSize="18sp" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="10dp">
 
-                <!-- Tool name -->
-                <TextView
-                    android:id="@+id/toolNameText"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:textAppearance="@style/TextAppearance.MaterialComponents.Subtitle1"
-                    android:textColor="@color/text_primary_light"
-                    android:textStyle="bold"
-                    tools:text="turn_on_lights" />
+                    <!-- Tool icon -->
+                    <TextView
+                        android:id="@+id/toolIcon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:text="\u2699"
+                        android:textColor="@color/tool_call_accent"
+                        android:textSize="14sp" />
 
-                <!-- Status icon -->
-                <TextView
-                    android:id="@+id/statusIcon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="\u2713"
-                    android:textColor="@color/tool_call_success"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
+                    <!-- Tool name -->
+                    <TextView
+                        android:id="@+id/toolNameText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textAppearance="@style/TextAppearance.MaterialComponents.Body2"
+                        android:textColor="@color/text_primary_light"
+                        tools:text="HassLightSet" />
 
-                <!-- Expand/collapse chevron -->
-                <TextView
-                    android:id="@+id/expandIndicator"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:text="\u25BC"
-                    android:textColor="@color/text_secondary_light"
-                    android:textSize="10sp" />
+                    <!-- Status icon -->
+                    <TextView
+                        android:id="@+id/statusIcon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="\u2713"
+                        android:textColor="@color/tool_call_success"
+                        android:textSize="14sp" />
 
-            </LinearLayout>
+                    <!-- Expand/collapse chevron -->
+                    <TextView
+                        android:id="@+id/expandIndicator"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:text="\u25BC"
+                        android:textColor="@color/text_secondary_light"
+                        android:textSize="10sp" />
 
-            <!-- Expandable details section -->
-            <LinearLayout
-                android:id="@+id/detailsSection"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:paddingStart="24dp"
-                android:paddingEnd="12dp"
-                android:paddingBottom="12dp"
-                android:visibility="gone"
-                tools:visibility="visible">
+                </LinearLayout>
 
-                <!-- Divider -->
-                <View
+                <!-- Expandable details section -->
+                <LinearLayout
+                    android:id="@+id/detailsSection"
                     android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginBottom="8dp"
-                    android:background="@color/divider_light" />
-
-                <!-- Parameters label -->
-                <TextView
-                    android:id="@+id/parametersLabel"
-                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Parameters:"
-                    android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
-                    android:textColor="@color/text_secondary_light"
-                    android:textStyle="bold" />
+                    android:orientation="vertical"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="10dp"
+                    android:visibility="gone"
+                    tools:visibility="visible">
 
-                <!-- Parameters content -->
-                <TextView
-                    android:id="@+id/parametersText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:layout_marginBottom="8dp"
-                    android:fontFamily="monospace"
-                    android:textAppearance="@style/TextAppearance.MaterialComponents.Body2"
-                    android:textColor="@color/text_primary_light"
-                    android:textSize="12sp"
-                    tools:text="{&quot;entity_id&quot;: &quot;light.living_room&quot;}" />
+                    <!-- Divider -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginBottom="8dp"
+                        android:background="@color/divider_light" />
 
-                <!-- Result label -->
-                <TextView
-                    android:id="@+id/resultLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Result:"
-                    android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
-                    android:textColor="@color/text_secondary_light"
-                    android:textStyle="bold" />
+                    <!-- Parameters label -->
+                    <TextView
+                        android:id="@+id/parametersLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Parameters:"
+                        android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+                        android:textColor="@color/text_secondary_light" />
 
-                <!-- Result content -->
-                <TextView
-                    android:id="@+id/resultText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:fontFamily="monospace"
-                    android:textAppearance="@style/TextAppearance.MaterialComponents.Body2"
-                    android:textColor="@color/text_primary_light"
-                    android:textSize="12sp"
-                    tools:text="Success" />
+                    <!-- Parameters content -->
+                    <TextView
+                        android:id="@+id/parametersText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:layout_marginBottom="8dp"
+                        android:fontFamily="monospace"
+                        android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+                        android:textColor="@color/text_primary_light"
+                        tools:text="{entity_id: light.living_room}" />
+
+                    <!-- Result label -->
+                    <TextView
+                        android:id="@+id/resultLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Result:"
+                        android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+                        android:textColor="@color/text_secondary_light" />
+
+                    <!-- Result content -->
+                    <TextView
+                        android:id="@+id/resultText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:fontFamily="monospace"
+                        android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+                        android:textColor="@color/text_primary_light"
+                        tools:text="Success" />
+
+                </LinearLayout>
 
             </LinearLayout>
 
