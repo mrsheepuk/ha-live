@@ -81,8 +81,7 @@ Share visual context with Gemini during conversations:
 - **Home Assistant**:
   - Version with MCP server support
   - MCP SSE endpoint enabled (`/mcp_server/sse`)
-  - Long-lived access token
-- **Gemini API Key**: Get one from [Google AI Studio](https://aistudio.google.com/apikey)
+- **Gemini API Key**: Get one from [Google AI Studio](https://aistudio.google.com/apikey) (or use a shared key via the optional HACS integration)
 - **Network**: Both devices on the same network (or Home Assistant accessible remotely via HTTPS)
 
 ## Installation
@@ -102,19 +101,9 @@ Download the latest APK from the [Releases](https://github.com/yourusername/ha-l
 
 ### 2. Set Up Home Assistant
 
-Enable the MCP server in your Home Assistant configuration:
+Ensure the MCP server is enabled in your Home Assistant (it's on by default in recent versions).
 
-```yaml
-# configuration.yaml
-# Ensure MCP server is enabled (enabled by default in recent versions)
-```
-
-Create a long-lived access token:
-1. Go to your Home Assistant profile (click your username in the sidebar)
-2. Scroll down to "Long-Lived Access Tokens"
-3. Click "Create Token"
-4. Give it a name (e.g., "HA Live App")
-5. Copy the token immediately (you won't see it again)
+The app authenticates via OAuth—you'll log in with your Home Assistant credentials during setup.
 
 ### 3. Get a Gemini API Key
 
@@ -124,17 +113,20 @@ Create a long-lived access token:
 
 ### 4. First-Run Onboarding
 
-When you first launch HA Live, you'll go through a 3-step setup:
+When you first launch HA Live, you'll go through setup:
 
-**Step 1: Configure Gemini API**
-- Paste your Gemini API key
-
-**Step 2: Connect Home Assistant**
+**Step 1: Enter Home Assistant URL**
 - Enter your Home Assistant URL (e.g., `http://192.168.1.100:8123` or `https://home.example.com`)
-- Paste your long-lived access token
-- Tap "Test Connection" to verify
 
-**Step 3: Complete**
+**Step 2: Log in to Home Assistant**
+- A browser opens for you to log in with your Home Assistant credentials
+- Authorize HA Live to access your Home Assistant
+
+**Step 3: Configure Gemini API**
+- If the HA Live Config integration is installed, you can use the shared household API key
+- Otherwise, paste your own Gemini API key
+
+**Step 4: Complete**
 - Tap "Start Using HA Live"
 
 ## Configuration Guide
@@ -207,6 +199,39 @@ Note: Models are bundled with the app (~10MB) and copied to device storage on fi
 - **Import Profiles**: In Manage Profiles, menu → "Import Profiles" → Select `.haprofile` file
 - **Quick Switch**: Tap the dropdown on the main screen to change active profile
 - **Auto-Start**: Enable in profile settings to start conversations immediately on app launch
+
+## Shared Configuration (Optional)
+
+If multiple people in your household use HA Live, you can install the **HA Live Config** integration in Home Assistant to share configuration across all devices.
+
+### What It Provides
+
+- **Shared Gemini API Key**: Configure one API key in Home Assistant—all household members use it automatically
+- **Shared Profiles**: Create profiles in Home Assistant that sync to everyone's devices (great for household-wide "Kitchen Helper" or "Default Assistant" profiles)
+
+### When To Use It
+
+- **Single user?** You don't need this—local configuration works fine
+- **Multiple household members?** Install the integration so everyone gets the same profiles and you only manage one API key
+
+### Installation
+
+Install via HACS (Home Assistant Community Store):
+
+1. Open HACS in Home Assistant
+2. Go to Integrations → Custom repositories
+3. Add: `https://github.com/mrsheepuk/ha-live-config`
+4. Search for "HA Live Config" and install
+5. Restart Home Assistant
+6. Go to Settings → Devices & Services → Add Integration → HA Live Config
+
+### How It Works
+
+- The app automatically detects if the integration is installed
+- During setup, you'll be offered the choice to use shared or local configuration
+- Shared profiles appear alongside local profiles in the app
+- Changes to shared profiles sync to all household devices
+- You can still create local-only profiles for personal use
 
 ## Advanced Features
 
@@ -362,6 +387,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Tool call logging with timestamps
 - ✅ Local tools (EndConversation, StartWatchingCamera, StopWatchingCamera)
 - ✅ Audio feedback (beeps for ready/end)
+- ✅ OAuth authentication with Home Assistant
+- ✅ Shared configuration via HACS integration (optional)
 
 ## Roadmap
 
