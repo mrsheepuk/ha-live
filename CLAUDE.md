@@ -42,9 +42,20 @@ The app uses a `ConversationService` interface implemented by `DirectConversatio
 - Returns initialized `ConversationService` ready to start
 
 **Configuration:**
-- `HAConfig.kt` - Home Assistant URL + token
-- `GeminiConfig.kt` - Gemini API key storage
+- `HAConfig.kt` - Home Assistant URL storage (legacy, being phased out)
+- `GeminiConfig.kt` - Gemini API key storage (local or shared via HA integration)
 - `ConversationServicePreference.kt` - Provider preference (simplified, single provider)
+
+**Authentication (OAuth):**
+- `OAuthConfig.kt` - OAuth client ID and redirect URI constants
+- `OAuthTokenManager.kt` - Token refresh and lifecycle management
+- `HomeAssistantAuth.kt` - Authentication state wrapper
+- `SecureTokenStorage.kt` - Encrypted token storage (Android Keystore)
+
+**Shared Configuration (Optional HACS Integration):**
+- `SharedConfigRepository.kt` - Client for `ha_live_config` HA integration
+- Enables shared Gemini API key and profiles across household devices
+- App auto-detects if integration is installed
 
 **User Features:**
 - `ProfileService.kt` - Profile management (local + remote via HA)
@@ -89,11 +100,12 @@ VideoSource.frameFlow → ConversationService → GeminiLiveSession.sendVideoRea
 ### Session Flow
 
 **App Launch:**
-1. Check Gemini API key configuration
-2. Check Home Assistant config (URL + token)
-3. Initialize `HomeAssistantApiClient` (for template rendering)
-4. State: `ReadyToTalk` (no Gemini initialization yet)
-5. Start wake word listening if enabled (foreground only)
+1. Check Gemini API key configuration (local or shared via HA integration)
+2. Check Home Assistant OAuth authentication status
+3. Initialize `HomeAssistantApiClient` with OAuth token (for template rendering)
+4. Check for shared config if `ha_live_config` integration is installed
+5. State: `ReadyToTalk` (no Gemini initialization yet)
+6. Start wake word listening if enabled (foreground only)
 
 **Start Chat Button Press:**
 1. Stop wake word listening (release microphone)
@@ -231,17 +243,25 @@ interface VideoSource {
 ```kotlin
 // Global state (survives activity recreation)
 var haApiClient: HomeAssistantApiClient? = null
-var haUrl: String? = null
-var haToken: String? = null
+var homeAssistantAuth: HomeAssistantAuth? = null
+var sharedConfigRepo: SharedConfigRepository? = null
 
-suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
-    this.haUrl = haUrl
-    this.haToken = haToken
-    haApiClient = HomeAssistantApiClient(haUrl, haToken)
+suspend fun initializeHomeAssistant(context: Context) {
+    homeAssistantAuth = HomeAssistantAuth(context)
+    val tokenManager = homeAssistantAuth?.getTokenManager()
+    if (tokenManager != null) {
+        val token = tokenManager.getValidToken()
+        val haUrl = tokenManager.getHaUrl()
+        haApiClient = HomeAssistantApiClient(haUrl, token)
+        sharedConfigRepo = SharedConfigRepository(haApiClient!!)
+    }
 }
 ```
 
-**Note:** MCP connection (`McpClientManager`) is now per-session, created in `MainViewModel.startChat()`
+**Notes:**
+- OAuth tokens managed via `OAuthTokenManager` with automatic refresh
+- MCP connection (`McpClientManager`) is per-session, created in `MainViewModel.startChat()`
+- Shared config repository checks for `ha_live_config` integration on HA
 
 ## Important Type Mappings
 
@@ -334,8 +354,12 @@ suspend fun initializeHomeAssistant(haUrl: String, haToken: String) {
 ```
 app/app/src/main/java/uk/co/mrsheep/halive/
 ├── core/
-│   ├── GeminiConfig.kt                 # API key storage
-│   ├── HAConfig.kt                     # HA credentials persistence
+│   ├── GeminiConfig.kt                 # API key storage (local or shared)
+│   ├── HAConfig.kt                     # HA URL persistence (legacy)
+│   ├── OAuthConfig.kt                  # OAuth client ID and redirect URI
+│   ├── OAuthTokenManager.kt            # OAuth token refresh and lifecycle
+│   ├── HomeAssistantAuth.kt            # Authentication state wrapper
+│   ├── SecureTokenStorage.kt           # Encrypted OAuth token storage
 │   ├── CameraConfig.kt                 # Camera resolution/frame rate settings
 │   ├── Profile.kt                      # Profile data model (includes allowedModelCameras)
 │   ├── ProfileRepository.kt            # Profile storage interface
@@ -379,12 +403,14 @@ app/app/src/main/java/uk/co/mrsheep/halive/
 │   ├── AppToolExecutor.kt              # Logging + local tool wrapper
 │   ├── SessionPreparer.kt              # Session initialization logic
 │   ├── HomeAssistantApiClient.kt       # HA REST API (templates + cameras)
+│   ├── SharedConfigRepository.kt       # Client for ha_live_config HACS integration
 │   ├── WakeWordService.kt              # Foreground wake detection
 │   └── BeepHelper.kt                   # Audio feedback
 ├── ui/
 │   ├── MainActivity.kt                 # Main UI + audio/video conversation
 │   ├── MainViewModel.kt                # Main coordination logic
-│   ├── OnboardingActivity.kt           # First-run setup flow
+│   ├── OnboardingActivity.kt           # First-run setup flow (OAuth + Gemini config)
+│   ├── OAuthCallbackActivity.kt        # Handles OAuth redirect from browser
 │   ├── SettingsActivity.kt             # Settings management (includes camera settings)
 │   ├── ProfileManagementActivity.kt    # Profile CRUD UI
 │   ├── ProfileEditorActivity.kt        # Profile editing (includes camera selection)
@@ -424,3 +450,7 @@ app/app/src/main/java/uk/co/mrsheep/halive/
 - ✅ Tool call logging with timestamps
 - ✅ Local tools (EndConversation, StartWatchingCamera, StopWatchingCamera)
 - ✅ Audio feedback (beeps for ready/end)
+- ✅ OAuth authentication with Home Assistant (replaces long-lived tokens)
+- ✅ Shared configuration via HACS integration (`ha_live_config`) - optional
+- ✅ Shared Gemini API key across household devices
+- ✅ Shared conversation profiles synced via Home Assistant
