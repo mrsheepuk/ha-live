@@ -458,9 +458,9 @@ class GeminiLiveSession(
         // Use 4x minimum buffer for AudioTrack internal buffering
         val trackBufferSize = minBufferSize * 4
 
-        // Use the same audio session ID as the AudioRecord for proper echo cancellation.
-        // The AcousticEchoCanceler attached to the AudioRecord needs to know what audio
-        // is being played back so it can cancel it from the microphone input.
+        // Use the same audio session ID as the AudioRecord for echo cancellation.
+        // The AcousticEchoCanceler attached to the AudioRecord uses this to identify
+        // playback audio that should be cancelled from microphone input.
         val sessionId = microphoneHelper?.audioSessionId ?: AudioManager.AUDIO_SESSION_ID_GENERATE
 
         playbackAudioTrack = AudioTrack(

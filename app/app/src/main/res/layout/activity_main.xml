@@ -149,18 +149,6 @@
             app:iconSize="18dp"
             app:iconGravity="start" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/audioOutputButton"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginStart="8dp"
-            android:visibility="gone"
-            android:contentDescription="Select audio output"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            app:icon="@android:drawable/ic_btn_speak_now"
-            app:iconSize="24dp"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp" />
     </LinearLayout>
 
     <!-- Quick message chips - now fixed row in layout -->
