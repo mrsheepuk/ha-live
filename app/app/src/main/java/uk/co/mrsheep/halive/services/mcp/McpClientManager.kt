@@ -22,7 +22,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class McpClientManager(
     private val haBaseUrl: String,
-    private val tokenManager: OAuthTokenManager
+    private val tokenManager: OAuthTokenManager,
+    sharedHttpClient: OkHttpClient
 ): ToolExecutor {
 
     private val json = Json {
@@ -31,7 +32,8 @@ class McpClientManager(
         prettyPrint = false
     }
 
-    private val client = OkHttpClient.Builder()
+    // Derive from shared client to reuse connection pool and thread pool
+    private val client = sharedHttpClient.newBuilder()
         .readTimeout(0, TimeUnit.SECONDS) // Infinite for SSE
         .build()
 
@@ -282,6 +284,10 @@ class McpClientManager(
     /**
      * Phase 3: Gracefully shut down the connection and clean up all resources.
      * This is a final shutdown - the client cannot be reused after this.
+     *
+     * Note: We don't clean up the OkHttpClient resources here because we use
+     * a shared client derived from the app-wide sharedHttpClient. The connection
+     * pool and dispatcher are shared across all HTTP clients in the app.
      */
     fun shutdown() {
         isInitialized = false
@@ -290,9 +296,6 @@ class McpClientManager(
         eventSource = null
         pendingRequests.clear()
         scope.cancel()
-        // Clean up OkHttpClient resources
-        client.dispatcher.executorService.shutdown()
-        client.connectionPool.evictAll()
         Log.d(TAG, "MCP client shut down")
     }
 

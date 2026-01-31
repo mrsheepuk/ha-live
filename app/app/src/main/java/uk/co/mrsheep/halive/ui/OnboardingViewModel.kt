@@ -89,7 +89,7 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
             }
 
             try {
-                val tokenManager = OAuthTokenManager(currentHAUrl, secureTokenStorage)
+                val tokenManager = OAuthTokenManager(currentHAUrl, secureTokenStorage, app.sharedHttpClient)
                 // Exchange code for tokens (tokens are saved internally by exchangeCodeForTokens)
                 tokenManager.exchangeCodeForTokens(code)
 
@@ -97,7 +97,7 @@ class OnboardingViewModel(application: Application) : AndroidViewModel(applicati
                 app.initializeHomeAssistantWithOAuth(currentHAUrl, tokenManager)
 
                 // Test connection
-                val testMcpClient = McpClientManager(currentHAUrl, tokenManager)
+                val testMcpClient = McpClientManager(currentHAUrl, tokenManager, app.sharedHttpClient)
                 testMcpClient.connect()
                 val tools = testMcpClient.getTools()
                 testMcpClient.shutdown()

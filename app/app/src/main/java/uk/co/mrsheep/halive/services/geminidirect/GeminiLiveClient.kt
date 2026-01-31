@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit
  */
 class GeminiLiveClient(
     private val apiKey: String,
+    sharedHttpClient: OkHttpClient,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 ) : WebSocketListener() {
 
@@ -40,7 +41,8 @@ class GeminiLiveClient(
         prettyPrint = false
     }
 
-    private val httpClient = OkHttpClient.Builder()
+    // Derive from shared client to reuse connection pool and thread pool
+    private val httpClient = sharedHttpClient.newBuilder()
         .readTimeout(0, TimeUnit.SECONDS) // Infinite for bidirectional WebSocket
         .writeTimeout(0, TimeUnit.SECONDS)
         .build()

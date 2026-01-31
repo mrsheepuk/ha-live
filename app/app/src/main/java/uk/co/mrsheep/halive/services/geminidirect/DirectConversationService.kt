@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import uk.co.mrsheep.halive.HAGeminiApp
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.camera.VideoSource
@@ -122,8 +123,9 @@ class DirectConversationService(private val context: Context) :
 
             Log.d(TAG, "Starting session with direct protocol")
 
-            // Create session
-            session = GeminiLiveSession(apiKey, context, onAudioLevel = onAudioLevel)
+            // Create session with shared HTTP client
+            val app = context.applicationContext as HAGeminiApp
+            session = GeminiLiveSession(apiKey, context, app.sharedHttpClient, onAudioLevel = onAudioLevel)
 
             val protocolToolCallHandler: suspend (FunctionCall) -> FunctionResponse = { call ->
                 try {

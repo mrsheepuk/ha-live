@@ -243,7 +243,7 @@ class LiveSessionService : Service(), AppLogger {
                 // Create fresh MCP connection for this session using OAuth
                 val tokenManager = app.getTokenManager()
                     ?: throw IllegalStateException("OAuth not configured")
-                val mcp = McpClientManager(app.haUrl!!, tokenManager)
+                val mcp = McpClientManager(app.haUrl!!, tokenManager, app.sharedHttpClient)
                 mcp.connect()
                 mcpClient = mcp
 

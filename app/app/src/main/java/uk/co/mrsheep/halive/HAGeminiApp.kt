@@ -3,6 +3,7 @@ package uk.co.mrsheep.halive
 import android.app.Application
 import android.util.Log
 import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
 import uk.co.mrsheep.halive.core.CrashLogger
 import uk.co.mrsheep.halive.core.GeminiConfig
 import uk.co.mrsheep.halive.core.HomeAssistantAuth
@@ -13,8 +14,20 @@ import uk.co.mrsheep.halive.services.HomeAssistantApiClient
 import uk.co.mrsheep.halive.services.SharedConfig
 import uk.co.mrsheep.halive.services.SharedConfigRepository
 import uk.co.mrsheep.halive.services.mcp.McpTool
+import java.util.concurrent.TimeUnit
 
 class HAGeminiApp : Application() {
+    /**
+     * Shared OkHttpClient for the entire app.
+     * All HTTP clients should derive from this using newBuilder() to share
+     * connection pools, thread pools, and benefit from TLS session resumption.
+     */
+    val sharedHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
+
     var haApiClient: HomeAssistantApiClient? = null
     var lastAvailableTools: List<String>? = null
     var haUrl: String? = null
@@ -35,8 +48,8 @@ class HAGeminiApp : Application() {
             // Clear old crash logs on successful startup (they've already been seen/fixed)
             CrashLogger.clearLog(this)
 
-            // Initialize auth system
-            homeAssistantAuth = HomeAssistantAuth(this)
+            // Initialize auth system with shared HTTP client
+            homeAssistantAuth = HomeAssistantAuth(this, sharedHttpClient)
 
             // Initialize GeminiConfig to restore persisted shared key
             GeminiConfig.initialize(this)
@@ -82,7 +95,7 @@ class HAGeminiApp : Application() {
      */
     suspend fun initializeHomeAssistantWithOAuth(haUrl: String, tokenManager: OAuthTokenManager) {
         this.haUrl = haUrl
-        haApiClient = HomeAssistantApiClient(haUrl, tokenManager)
+        haApiClient = HomeAssistantApiClient(haUrl, tokenManager, sharedHttpClient)
         sharedConfigRepo = SharedConfigRepository(haApiClient!!)
 
         // Set the repository in ProfileService for remote profile access

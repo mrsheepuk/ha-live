@@ -30,9 +30,11 @@ data class TemplateRequest(val template: String)
 
 class HomeAssistantApiClient(
     private val baseUrl: String,
-    private val tokenManager: OAuthTokenManager
+    private val tokenManager: OAuthTokenManager,
+    sharedHttpClient: OkHttpClient
 ) {
-    private val client = OkHttpClient.Builder()
+    // Derive from shared client to reuse connection pool and thread pool
+    private val client = sharedHttpClient.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .build()

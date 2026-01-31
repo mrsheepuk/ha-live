@@ -136,7 +136,7 @@ class ProfileTestManager(
             testConversationService = ConversationServiceFactory.create(app.applicationContext)
 
             // Create fresh MCP connection for this test session using OAuth
-            mcpClient = McpClientManager(haUrl, tokenManager)
+            mcpClient = McpClientManager(haUrl, tokenManager, app.sharedHttpClient)
             mcpClient!!.connect()
             Log.d(TAG, "Fresh MCP connection created for test session")
 

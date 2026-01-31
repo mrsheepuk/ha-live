@@ -2,12 +2,16 @@ package uk.co.mrsheep.halive.core
 
 import android.content.Context
 import android.util.Log
+import okhttp3.OkHttpClient
 
 /**
  * Manages Home Assistant OAuth authentication.
  * OAuth is the only supported authentication method.
  */
-class HomeAssistantAuth(private val context: Context) {
+class HomeAssistantAuth(
+    private val context: Context,
+    private val sharedHttpClient: OkHttpClient? = null
+) {
     companion object {
         private const val TAG = "HomeAssistantAuth"
     }
@@ -22,7 +26,11 @@ class HomeAssistantAuth(private val context: Context) {
         val haUrl = secureStorage.getHaUrl()
         if (tokens != null && haUrl != null) {
             Log.d(TAG, "OAuth authentication available")
-            return OAuthTokenManager(haUrl, secureStorage)
+            return if (sharedHttpClient != null) {
+                OAuthTokenManager(haUrl, secureStorage, sharedHttpClient)
+            } else {
+                OAuthTokenManager(haUrl, secureStorage)
+            }
         }
         Log.d(TAG, "No OAuth authentication available")
         return null
