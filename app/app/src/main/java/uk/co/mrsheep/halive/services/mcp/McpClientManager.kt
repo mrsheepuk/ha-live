@@ -282,6 +282,10 @@ class McpClientManager(
     /**
      * Phase 3: Gracefully shut down the connection and clean up all resources.
      * This is a final shutdown - the client cannot be reused after this.
+     *
+     * Note: OkHttp cleanup operations are wrapped in try-catch because they can
+     * throw exceptions with HTTPS connections due to SSL/TLS resource cleanup
+     * complexity and connection pool race conditions.
      */
     fun shutdown() {
         isInitialized = false
@@ -290,9 +294,18 @@ class McpClientManager(
         eventSource = null
         pendingRequests.clear()
         scope.cancel()
-        // Clean up OkHttpClient resources
-        client.dispatcher.executorService.shutdown()
-        client.connectionPool.evictAll()
+        // Clean up OkHttpClient resources - wrapped in try-catch because these
+        // can throw with HTTPS connections during SSL/TLS cleanup
+        try {
+            client.dispatcher.executorService.shutdown()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error shutting down dispatcher executor: ${e.message}")
+        }
+        try {
+            client.connectionPool.evictAll()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error evicting connection pool: ${e.message}")
+        }
         Log.d(TAG, "MCP client shut down")
     }
 
