@@ -572,7 +572,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
                 toolCacheWarning.visibility = View.VISIBLE
                 return@launch
             }
-            val mcp = McpClientManager(app.haUrl!!, tokenManager)
+            val mcp = McpClientManager(app.haUrl!!, tokenManager, app.sharedHttpClient)
             try {
                 mcp.connect()
                 val toolsResult = mcp.getTools()

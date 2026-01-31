@@ -34,7 +34,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val app = application as HAGeminiApp
     private val secureTokenStorage = SecureTokenStorage(application)
-    private val haAuth = HomeAssistantAuth(application)
+    private val haAuth = HomeAssistantAuth(application, app.sharedHttpClient)
 
     // This should be set from MainActivity when launching SettingsActivity
     var isChatActive: Boolean = false
@@ -64,7 +64,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             }
 
             try {
-                val tokenManager = OAuthTokenManager(pendingOAuthUrl, secureTokenStorage)
+                val tokenManager = OAuthTokenManager(pendingOAuthUrl, secureTokenStorage, app.sharedHttpClient)
                 // Exchange code for tokens (tokens are saved internally)
                 tokenManager.exchangeCodeForTokens(code)
 
@@ -72,7 +72,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 app.initializeHomeAssistantWithOAuth(pendingOAuthUrl, tokenManager)
 
                 // Test connection
-                val testMcpClient = McpClientManager(pendingOAuthUrl, tokenManager)
+                val testMcpClient = McpClientManager(pendingOAuthUrl, tokenManager, app.sharedHttpClient)
                 testMcpClient.connect()
                 val tools = testMcpClient.getTools()
                 testMcpClient.shutdown()
@@ -165,7 +165,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     ?: throw Exception("HA URL not configured")
 
                 // Create temporary MCP connection for testing
-                testMcpClient = McpClientManager(url, tokenManager)
+                testMcpClient = McpClientManager(url, tokenManager, app.sharedHttpClient)
                 testMcpClient.connect()
 
                 // Try to fetch tools

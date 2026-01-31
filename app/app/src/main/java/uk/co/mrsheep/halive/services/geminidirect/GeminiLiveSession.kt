@@ -79,6 +79,7 @@ import kotlin.coroutines.EmptyCoroutineContext
 class GeminiLiveSession(
     private val apiKey: String,
     private val context: Context,
+    sharedHttpClient: okhttp3.OkHttpClient,
     private val onAudioLevel: ((Float) -> Unit)? = null
 ) {
     companion object {
@@ -105,7 +106,7 @@ class GeminiLiveSession(
         private val PLAYBACK_CHUNK_BYTES = PLAYBACK_CHUNK_MS * SAMPLE_RATE * BYTES_PER_SAMPLE / 1000
     }
 
-    private val client = GeminiLiveClient(apiKey)
+    private val client = GeminiLiveClient(apiKey, sharedHttpClient)
 
     @SuppressLint("ThreadPoolCreation")
     val audioDispatcher =
