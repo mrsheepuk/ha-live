@@ -497,8 +497,7 @@ class GeminiLiveSession(
             audioTrack = playbackAudioTrack!!,
             jitterBuffer = jitterBuffer!!,
             chunkSizeBytes = PLAYBACK_CHUNK_BYTES,
-            onAudioLevel = onAudioLevel,
-            onUnderrun = { Log.w(TAG, "Audio playback underrun") }
+            onAudioLevel = onAudioLevel
         )
         Log.d(TAG, "Playback thread created with chunk size: ${PLAYBACK_CHUNK_MS}ms")
     }
@@ -608,19 +607,26 @@ class GeminiLiveSession(
             onTranscription?.invoke(message.serverContent.inputTranscription?.text, message.serverContent.outputTranscription?.text, false)
         }
         if (message.serverContent.interrupted == true) {
-            Log.d(TAG, "Turn interrupted")
+            val bufferedMs = jitterBuffer?.bufferedMs() ?: 0
+            Log.w(TAG, "INTERRUPTED: Turn interrupted - clearing ${bufferedMs}ms of buffered audio")
             // Clear the jitter buffer to immediately stop playback
             jitterBuffer?.clear()
         } else {
+            var audioPartsCount = 0
             for (part in message.serverContent.modelTurn?.parts.orEmpty()) {
                 if (part.inlineData != null && part.inlineData.mimeType.startsWith("audio/pcm")) {
                     // Queue for async decode (non-blocking)
                     // The decode stage will Base64 decode and write to jitter buffer
                     decodeStage?.queueAudio(part.inlineData.data)
+                    audioPartsCount++
                 }
                 if (part.text != null) {
                     onTranscription?.invoke(null, part.text, true)
                 }
+            }
+            // Log audio chunk receipt (verbose, but helpful for debugging)
+            if (audioPartsCount > 0) {
+                Log.v(TAG, "AUDIO_RECEIVED: $audioPartsCount audio part(s), turnComplete=${message.serverContent.turnComplete}")
             }
         }
         // Log turn completion
@@ -645,7 +651,8 @@ class GeminiLiveSession(
     ) {
         message.toolCall.functionCalls?.forEach { functionCall ->
             try {
-                Log.d(TAG, "Executing tool call: id=${functionCall.id}, name=${functionCall.name}")
+                val bufferedMsBefore = jitterBuffer?.bufferedMs() ?: 0
+                Log.w(TAG, "TOOL_CALL_START: ${functionCall.name} (id=${functionCall.id}), buffered audio: ${bufferedMsBefore}ms")
 
                 // Execute the tool
                 val response = onToolCall(functionCall)
@@ -660,7 +667,8 @@ class GeminiLiveSession(
                 val responseJson = json.encodeToString(ClientMessage.serializer(), responseMessage)
                 client.send(responseJson)
 
-                Log.d(TAG, "Tool response sent: id=${response.id}")
+                val bufferedMsAfter = jitterBuffer?.bufferedMs() ?: 0
+                Log.w(TAG, "TOOL_CALL_END: ${functionCall.name} (id=${response.id}), buffered audio: ${bufferedMsAfter}ms")
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error executing tool ${functionCall.name}", e)
