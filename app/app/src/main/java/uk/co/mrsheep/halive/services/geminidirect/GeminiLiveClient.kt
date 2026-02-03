@@ -209,9 +209,8 @@ class GeminiLiveClient(
         // For now, just coerce to string (feels wrong but let's see)
         try {
             val str = bytes.string(Charset.defaultCharset())
-            Log.d(TAG, "Received bytes: $str")
             val message = json.decodeFromString(ServerMessage.serializer(), str)
-            Log.d(TAG, "Received JSON $message")
+            Log.d(TAG, "Received binary JSON: ${summarizeServerMessage(message)}")
             // Use tryEmit for non-suspending emission - no coroutine overhead
             if (!messageFlow.tryEmit(message)) {
                 Log.w(TAG, "Message flow buffer full, dropping binary message")
@@ -257,6 +256,41 @@ class GeminiLiveClient(
         scope.launch {
             connectionMutex.withLock {
                 isConnected = false
+            }
+        }
+    }
+
+    /**
+     * Create a concise summary of a ServerMessage for logging.
+     * Replaces large base64 audio data with size info.
+     */
+    private fun summarizeServerMessage(message: ServerMessage): String {
+        return when (message) {
+            is ServerMessage.SetupComplete -> "SetupComplete"
+            is ServerMessage.ToolCall -> "ToolCall(${message.toolCall.functionCalls?.map { it.name }})"
+            is ServerMessage.ToolCallCancellation -> "ToolCallCancellation(id=${message.toolCallCancellation.id})"
+            is ServerMessage.Content -> {
+                val sc = message.serverContent
+                val parts = mutableListOf<String>()
+
+                // Summarize audio parts
+                sc.modelTurn?.parts?.forEach { part ->
+                    part.inlineData?.let { data ->
+                        parts.add("audio(${data.data.length} base64 chars)")
+                    }
+                    part.text?.let { text ->
+                        parts.add("text(${text.take(50)}...)")
+                    }
+                }
+
+                val flags = mutableListOf<String>()
+                if (sc.turnComplete == true) flags.add("turnComplete")
+                if (sc.interrupted == true) flags.add("interrupted")
+                if (sc.generationComplete == true) flags.add("generationComplete")
+                sc.inputTranscription?.let { flags.add("inputTranscription='${it.text}'") }
+                sc.outputTranscription?.let { flags.add("outputTranscription='${it.text}'") }
+
+                "Content(parts=[${parts.joinToString()}], ${flags.joinToString()})"
             }
         }
     }
