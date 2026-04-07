@@ -1,5 +1,6 @@
 package uk.co.mrsheep.halive.services.conversation
 
+import uk.co.mrsheep.halive.core.AppLogger
 import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.camera.VideoSource
@@ -43,7 +44,8 @@ interface ConversationService {
         enableAffectiveDialog: Boolean = false,
         enableProactivity: Boolean = false,
         thinkingLevel: String? = null,
-        onAudioLevel: ((Float) -> Unit)? = null
+        onAudioLevel: ((Float) -> Unit)? = null,
+        logger: AppLogger? = null
     )
 
     /**

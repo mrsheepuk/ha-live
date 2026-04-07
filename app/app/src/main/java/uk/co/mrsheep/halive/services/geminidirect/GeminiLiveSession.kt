@@ -55,7 +55,12 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolDeclaration
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.Turn
 import uk.co.mrsheep.halive.services.geminidirect.protocol.VoiceConfig
+import uk.co.mrsheep.halive.core.AppLogger
+import uk.co.mrsheep.halive.core.LogEntry
 import java.io.ByteArrayOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicLong
@@ -80,7 +85,8 @@ class GeminiLiveSession(
     private val apiKey: String,
     private val context: Context,
     sharedHttpClient: okhttp3.OkHttpClient,
-    private val onAudioLevel: ((Float) -> Unit)? = null
+    private val onAudioLevel: ((Float) -> Unit)? = null,
+    private val logger: AppLogger? = null
 ) {
     companion object {
         private const val TAG = "GeminiLiveSession"
@@ -106,7 +112,18 @@ class GeminiLiveSession(
         private val PLAYBACK_CHUNK_BYTES = PLAYBACK_CHUNK_MS * SAMPLE_RATE * BYTES_PER_SAMPLE / 1000
     }
 
-    private val client = GeminiLiveClient(apiKey, sharedHttpClient)
+    private val client = GeminiLiveClient(apiKey, sharedHttpClient, logger = logger)
+    private val timestampFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
+
+    private fun debugLog(name: String, detail: String, success: Boolean = true) {
+        logger?.addLogEntry(LogEntry(
+            timestamp = timestampFormat.format(Date()),
+            toolName = "Session: $name",
+            parameters = "",
+            success = success,
+            result = detail
+        ))
+    }
 
     @SuppressLint("ThreadPoolCreation")
     val audioDispatcher =
@@ -212,6 +229,7 @@ class GeminiLiveSession(
 
         try {
             Log.d(TAG, "Starting Gemini Live session with model: $model")
+            debugLog("Start", "Starting session with model=$model voice=$voiceName thinkingLevel=$thinkingLevel interruptable=$interruptable tools=${tools.size}")
             isSessionActive = true
 
             // Step 1: Connect to Gemini Live API
@@ -263,6 +281,7 @@ class GeminiLiveSession(
             )
 
             val setupJson = json.encodeToString(ClientMessage.serializer(), setupMessage)
+            debugLog("Setup", "Sending setup message (${setupJson.length} chars):\n${setupJson.take(1000)}")
             client.send(setupJson)
             Log.d(TAG, "Setup message sent with ${tools.size} tools")
 
@@ -281,9 +300,11 @@ class GeminiLiveSession(
                 true
             }
             if (setupCompleted == null) {
+                debugLog("Setup", "TIMEOUT: Setup did not complete within ${SETUP_TIMEOUT_MS}ms. Check WS messages above for errors.", success = false)
                 throw TimeoutException("Setup did not complete within ${SETUP_TIMEOUT_MS}ms")
             }
             Log.d(TAG, "Setup completed successfully")
+            debugLog("Setup", "Setup completed successfully")
 
             // Send any pre-buffered audio from wake word detection
             if (!ownsMicrophoneHelper) {

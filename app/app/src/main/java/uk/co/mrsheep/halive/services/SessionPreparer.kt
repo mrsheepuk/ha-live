@@ -148,7 +148,8 @@ class SessionPreparer(
                     enableAffectiveDialog = profile?.enableAffectiveDialog ?: false,
                     enableProactivity = profile?.enableProactivity ?: false,
                     thinkingLevel = thinkingLevel,
-                    onAudioLevel = onAudioLevel
+                    onAudioLevel = onAudioLevel,
+                    logger = logger
             )
 
             // Return HA cameras for caller to use

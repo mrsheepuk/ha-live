@@ -8,7 +8,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import uk.co.mrsheep.halive.HAGeminiApp
+import uk.co.mrsheep.halive.core.AppLogger
 import uk.co.mrsheep.halive.core.GeminiConfig
+import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.camera.VideoSource
 import uk.co.mrsheep.halive.services.ToolExecutor
@@ -49,6 +51,7 @@ class DirectConversationService(private val context: Context) :
     private var onAudioLevel: ((Float) -> Unit)? = null
     private var interruptable: Boolean = true
     private var thinkingLevel: String? = null
+    private var logger: AppLogger? = null
 
     private val json = Json {
         encodeDefaults = true
@@ -78,7 +81,8 @@ class DirectConversationService(private val context: Context) :
         enableAffectiveDialog: Boolean,
         enableProactivity: Boolean,
         thinkingLevel: String?,
-        onAudioLevel: ((Float) -> Unit)?
+        onAudioLevel: ((Float) -> Unit)?,
+        logger: AppLogger?
     ) {
         try {
             Log.d(TAG, "Initializing DirectConversationService with ${tools.size} tools")
@@ -95,6 +99,7 @@ class DirectConversationService(private val context: Context) :
             this.voiceName = voiceName
             this.interruptable = interruptable
             this.thinkingLevel = thinkingLevel
+            this.logger = logger
 
             Log.d(
                 TAG,
@@ -124,7 +129,7 @@ class DirectConversationService(private val context: Context) :
 
             // Create session with shared HTTP client
             val app = context.applicationContext as HAGeminiApp
-            session = GeminiLiveSession(apiKey, context, app.sharedHttpClient, onAudioLevel = onAudioLevel)
+            session = GeminiLiveSession(apiKey, context, app.sharedHttpClient, onAudioLevel = onAudioLevel, logger = logger)
 
             val protocolToolCallHandler: suspend (FunctionCall) -> FunctionResponse = { call ->
                 try {
