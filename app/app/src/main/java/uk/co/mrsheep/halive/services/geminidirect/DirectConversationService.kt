@@ -50,6 +50,7 @@ class DirectConversationService(private val context: Context) :
     private var interruptable: Boolean = true
     private var enableAffectiveDialog: Boolean = false
     private var enableProactivity: Boolean = false
+    private var thinkingLevel: String? = null
 
     private val json = Json {
         encodeDefaults = true
@@ -78,6 +79,7 @@ class DirectConversationService(private val context: Context) :
         interruptable: Boolean,
         enableAffectiveDialog: Boolean,
         enableProactivity: Boolean,
+        thinkingLevel: String?,
         onAudioLevel: ((Float) -> Unit)?
     ) {
         try {
@@ -96,6 +98,7 @@ class DirectConversationService(private val context: Context) :
             this.interruptable = interruptable
             this.enableAffectiveDialog = enableAffectiveDialog
             this.enableProactivity = enableProactivity
+            this.thinkingLevel = thinkingLevel
 
             Log.d(
                 TAG,
@@ -137,6 +140,11 @@ class DirectConversationService(private val context: Context) :
                 }
             }
 
+            // Gemini 3.1 does not support affective dialog or proactivity
+            val isGemini31 = (modelName ?: "").contains("3.1")
+            val effectiveAffectiveDialog = if (isGemini31) false else enableAffectiveDialog
+            val effectiveProactivity = if (isGemini31) false else enableProactivity
+
             // Start the session with stored configuration
             session?.start(
                 model = modelName ?: "models/gemini-2.0-flash-exp",
@@ -144,8 +152,9 @@ class DirectConversationService(private val context: Context) :
                 tools = toolDeclarations ?: emptyList(),
                 voiceName = voiceName ?: "Aoede",
                 interruptable = interruptable,
-                enableAffectiveDialog = enableAffectiveDialog,
-                enableProactivity = enableProactivity,
+                enableAffectiveDialog = effectiveAffectiveDialog,
+                enableProactivity = effectiveProactivity,
+                thinkingLevel = thinkingLevel,
                 onToolCall = protocolToolCallHandler,
                 onTranscription = transcriptor,
                 externalMicrophoneHelper = microphoneHelper

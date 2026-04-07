@@ -51,6 +51,7 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.ServerMessage
 import uk.co.mrsheep.halive.services.geminidirect.protocol.SetupMessage
 import uk.co.mrsheep.halive.services.geminidirect.protocol.SpeechConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.TextPart
+import uk.co.mrsheep.halive.services.geminidirect.protocol.ThinkingConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolDeclaration
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.Turn
@@ -186,6 +187,7 @@ class GeminiLiveSession(
         interruptable: Boolean = true,
         enableAffectiveDialog: Boolean = false,
         enableProactivity: Boolean = false,
+        thinkingLevel: String? = null,
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
         onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null,
         externalMicrophoneHelper: MicrophoneHelper? = null
@@ -230,6 +232,10 @@ class GeminiLiveSession(
             Log.d(TAG, "WebSocket connected")
 
             // Step 2: Send setup message
+            val thinkingConfig = if (model.contains("3.1") && thinkingLevel != null) {
+                ThinkingConfig(thinkingLevel = "THINKING_LEVEL_${thinkingLevel.uppercase()}")
+            } else null
+
             val setupMessage = ClientMessage(
                 setup = SetupMessage(
                     model = "models/$model",
@@ -243,6 +249,7 @@ class GeminiLiveSession(
                             languageCode = "en-US"
                         ),
                         enableAffectiveDialog = if (enableAffectiveDialog) true else null,
+                        thinkingConfig = thinkingConfig,
                     ),
                     systemInstruction = Content(
                         role = null,

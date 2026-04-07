@@ -99,7 +99,8 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
         originalLastModified: String? = null,
         forceOverwrite: Boolean = false,
         enableAffectiveDialog: Boolean = false,
-        enableProactivity: Boolean = false
+        enableProactivity: Boolean = false,
+        thinkingLevel: String = "minimal"
     ) {
         viewModelScope.launch {
             _editorState.value = ProfileEditorState.Saving
@@ -142,6 +143,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         interruptable = interruptable,
                         enableAffectiveDialog = enableAffectiveDialog,
                         enableProactivity = enableProactivity,
+                        thinkingLevel = thinkingLevel,
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,
                         selectedToolNames = selectedToolNames,
@@ -164,6 +166,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         interruptable = interruptable,
                         enableAffectiveDialog = enableAffectiveDialog,
                         enableProactivity = enableProactivity,
+                        thinkingLevel = thinkingLevel,
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,
                         selectedToolNames = selectedToolNames,

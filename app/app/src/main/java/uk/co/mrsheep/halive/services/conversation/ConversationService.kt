@@ -29,6 +29,7 @@ interface ConversationService {
      * @param interruptable Whether the conversation can be interrupted by the user
      * @param enableAffectiveDialog Enable affective dialog mode
      * @param enableProactivity Enable proactivity mode
+     * @param thinkingLevel Thinking level for Gemini 3.1 models (e.g., "minimal", "low", "medium", "high")
      * @param onAudioLevel Optional callback for audio level updates (0.0-1.0), used for visualization
      */
     suspend fun initialize(
@@ -41,6 +42,7 @@ interface ConversationService {
         interruptable: Boolean = true,
         enableAffectiveDialog: Boolean = false,
         enableProactivity: Boolean = false,
+        thinkingLevel: String? = null,
         onAudioLevel: ((Float) -> Unit)? = null
     )
 

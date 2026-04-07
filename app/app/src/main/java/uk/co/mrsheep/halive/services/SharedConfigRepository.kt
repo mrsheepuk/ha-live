@@ -42,6 +42,8 @@ data class SharedProfile(
     val enableAffectiveDialog: Boolean = false,
     @SerialName("enable_proactivity")
     val enableProactivity: Boolean = false,
+    @SerialName("thinking_level")
+    val thinkingLevel: String = "minimal",
     @SerialName("last_modified")
     val lastModified: String? = null,
     @SerialName("modified_by")

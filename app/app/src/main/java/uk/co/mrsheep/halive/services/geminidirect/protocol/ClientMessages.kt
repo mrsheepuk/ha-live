@@ -57,6 +57,12 @@ class AudioTranscriptionConfig()
 // --- GenerationConfig (output settings) ---
 
 @Serializable
+data class ThinkingConfig(
+    @SerialName("thinking_level")
+    val thinkingLevel: String // "THINKING_LEVEL_MINIMAL", "THINKING_LEVEL_LOW", "THINKING_LEVEL_MEDIUM", "THINKING_LEVEL_HIGH"
+)
+
+@Serializable
 data class GenerationConfig(
     @SerialName("response_modalities")
     val responseModalities: List<String>? = null, // e.g., ["AUDIO"]
@@ -64,6 +70,8 @@ data class GenerationConfig(
     val speechConfig: SpeechConfig? = null,
     @SerialName("enable_affective_dialog")
     val enableAffectiveDialog: Boolean? = null,
+    @SerialName("thinking_config")
+    val thinkingConfig: ThinkingConfig? = null,
 )
 
 // --- SpeechConfig (voice settings) ---

@@ -93,6 +93,7 @@ class SessionPreparer(
             // Extract model and voice from profile or use defaults
             val model = profile?.model ?: SystemPromptConfig.DEFAULT_MODEL
             val voice = profile?.voice ?: SystemPromptConfig.DEFAULT_VOICE
+            val thinkingLevel = profile?.thinkingLevel
 
             // Build tools section for logging
             val filterInfo =
@@ -146,6 +147,7 @@ class SessionPreparer(
                     interruptable = profile?.interruptable ?: true,
                     enableAffectiveDialog = profile?.enableAffectiveDialog ?: false,
                     enableProactivity = profile?.enableProactivity ?: false,
+                    thinkingLevel = thinkingLevel,
                     onAudioLevel = onAudioLevel
             )
 
