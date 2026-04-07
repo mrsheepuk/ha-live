@@ -37,19 +37,12 @@ data class SetupMessage(
     @SerialName("system_instruction")
     val systemInstruction: Content? = null,
     val tools: List<ToolDeclaration>? = null,
-    val proactivity: ProactivtyConfig? = null,
     @SerialName("input_audio_transcription")
     val inputAudioTranscription: AudioTranscriptionConfig? = null,
     @SerialName("output_audio_transcription")
     val outputAudioTranscription: AudioTranscriptionConfig? = null,
     @SerialName("realtime_input_config")
     val realtimeInputConfig: RealtimeInputConfig? = null,
-)
-
-@Serializable
-data class ProactivtyConfig(
-    @SerialName("proactive_audio")
-    val proactiveAudio: Boolean? = null
 )
 
 @Serializable
@@ -69,8 +62,6 @@ data class GenerationConfig(
     val responseModalities: List<String>? = null, // e.g., ["AUDIO"]
     @SerialName("speech_config")
     val speechConfig: SpeechConfig? = null,
-    @SerialName("enable_affective_dialog")
-    val enableAffectiveDialog: Boolean? = null,
     @SerialName("thinking_config")
     val thinkingConfig: ThinkingConfig? = null,
 )
