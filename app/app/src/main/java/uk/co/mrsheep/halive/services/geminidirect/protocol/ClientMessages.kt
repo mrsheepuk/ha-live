@@ -11,7 +11,6 @@ import kotlinx.serialization.json.JsonElement
  */
 @Serializable
 data class ClientMessage(
-    @SerialName("config")
     val setup: SetupMessage? = null,
     @SerialName("realtime_input")
     val realtimeInput: RealtimeInput? = null,
