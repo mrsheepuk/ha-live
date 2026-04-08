@@ -96,6 +96,7 @@ data class RealtimeInput(
     val mediaChunks: List<MediaChunk>? = null,
     val audio: MediaChunk? = null,
     val video: MediaChunk? = null,
+    val text: String? = null,
 )
 
 // --- ToolResponseMessage (reply to function calls) ---

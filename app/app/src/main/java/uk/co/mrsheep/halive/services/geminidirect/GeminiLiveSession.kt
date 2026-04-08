@@ -132,7 +132,7 @@ class GeminiLiveSession(
     private var sessionScope: CoroutineScope = CoroutineScope(EmptyCoroutineContext).apply { cancel() }
 
     private val json = Json {
-        encodeDefaults = false
+        encodeDefaults = true
         ignoreUnknownKeys = true
         prettyPrint = false
     }
@@ -730,15 +730,7 @@ class GeminiLiveSession(
             Log.d(TAG, "Sending text: $text")
 
             val message = ClientMessage(
-                clientContent = ClientContent(
-                    turns = listOf(
-                        Turn(
-                            role = "user",
-                            parts = listOf(TextPart(text)),
-                        )
-                    ),
-                    turnComplete = true,
-                )
+                realtimeInput = RealtimeInput(text = text)
             )
 
             val messageJson = json.encodeToString(ClientMessage.serializer(), message)
