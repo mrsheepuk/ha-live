@@ -25,8 +25,8 @@ data class ExportableProfile(
     val enableTranscription: Boolean,
     val autoStartChat: Boolean,
     val interruptable: Boolean,
-    val enableAffectiveDialog: Boolean,
-    val enableProactivity: Boolean
+    val enableAffectiveDialog: Boolean = false,
+    val enableProactivity: Boolean = false
 )
 
 /**
@@ -134,9 +134,7 @@ object ProfileExportImport {
                     selectedToolNames = exportable.selectedToolNames,
                     enableTranscription = exportable.enableTranscription,
                     autoStartChat = exportable.autoStartChat,
-                    interruptable = exportable.interruptable,
-                    enableAffectiveDialog = exportable.enableAffectiveDialog,
-                    enableProactivity = exportable.enableProactivity
+                    interruptable = exportable.interruptable
                 )
 
                 importedProfiles.add(importedProfile)
@@ -173,9 +171,7 @@ object ProfileExportImport {
             selectedToolNames = profile.selectedToolNames,
             enableTranscription = profile.enableTranscription,
             autoStartChat = profile.autoStartChat,
-            interruptable = profile.interruptable,
-            enableAffectiveDialog = profile.enableAffectiveDialog,
-            enableProactivity = profile.enableProactivity
+            interruptable = profile.interruptable
         )
     }
 

@@ -145,8 +145,6 @@ class SessionPreparer(
                     toolExecutor,
                     transcriptor,
                     interruptable = profile?.interruptable ?: true,
-                    enableAffectiveDialog = profile?.enableAffectiveDialog ?: false,
-                    enableProactivity = profile?.enableProactivity ?: false,
                     thinkingLevel = thinkingLevel,
                     onAudioLevel = onAudioLevel,
                     logger = logger

@@ -98,8 +98,6 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
     private lateinit var enableTranscriptionCheckbox: MaterialCheckBox
     private lateinit var autoStartChatCheckbox: MaterialCheckBox
     private lateinit var interruptableSwitch: SwitchMaterial
-    private lateinit var affectiveDialogSwitch: SwitchMaterial
-    private lateinit var proactivitySwitch: SwitchMaterial
 
     // Tool Filtering UI components
     private lateinit var toolFilterModeGroup: RadioGroup
@@ -236,7 +234,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         thinkingLevelInput.setText("Minimal", false)
 
         modelInput.setOnItemClickListener { _, _, position, _ ->
-            updateModelDependentUI(modelOptions[position])
+            thinkingLevelLayout.visibility = if (modelOptions[position].contains("3.1")) View.VISIBLE else View.GONE
         }
 
         // Setup voice dropdown
@@ -287,11 +285,9 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         enableTranscriptionCheckbox = findViewById(R.id.enableTranscriptionCheckbox)
         autoStartChatCheckbox = findViewById(R.id.autoStartChatCheckbox)
         interruptableSwitch = findViewById(R.id.interruptableSwitch)
-        affectiveDialogSwitch = findViewById(R.id.affectiveDialogSwitch)
-        proactivitySwitch = findViewById(R.id.proactivitySwitch)
 
-        // Set initial state based on default model
-        updateModelDependentUI(modelOptions[0])
+        // Set initial thinking level visibility based on default model
+        thinkingLevelLayout.visibility = if (modelOptions[0].contains("3.1")) View.VISIBLE else View.GONE
 
         // Tool Filtering UI
         toolFilterModeGroup = findViewById(R.id.toolFilterModeGroup)
@@ -470,10 +466,8 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
                 enableTranscriptionCheckbox.isChecked = state.profile.enableTranscription
                 autoStartChatCheckbox.isChecked = state.profile.autoStartChat
                 interruptableSwitch.isChecked = state.profile.interruptable
-                affectiveDialogSwitch.isChecked = state.profile.enableAffectiveDialog
-                proactivitySwitch.isChecked = state.profile.enableProactivity
-                // Must come after switch values are restored so it can override for 3.1
-                updateModelDependentUI(state.profile.model)
+                // Update thinking level visibility based on loaded model
+                thinkingLevelLayout.visibility = if (state.profile.model.contains("3.1")) View.VISIBLE else View.GONE
 
                 // Store original lastModified for conflict detection
                 originalLastModified = state.profile.lastModified
@@ -738,15 +732,13 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         val enableTranscription = enableTranscriptionCheckbox.isChecked
         val autoStartChat = autoStartChatCheckbox.isChecked
         val interruptable = interruptableSwitch.isChecked
-        val enableAffectiveDialog = affectiveDialogSwitch.isChecked
-        val enableProactivity = proactivitySwitch.isChecked
         val thinkingLevel = thinkingLevelInput.text.toString().lowercase()
         val allowedModelCameras = selectedCameraEntityIds.toSet()
         viewModel.saveProfile(
             name, prompt, personality, backgroundInfo, initialMessageToAgent,
             model, voice, includeLiveContext, enableTranscription, autoStartChat, interruptable, currentToolFilterMode,
             selectedToolNames.toSet(), allowedModelCameras, editingProfileId, targetSource,
-            originalLastModified, forceOverwrite, enableAffectiveDialog, enableProactivity, thinkingLevel
+            originalLastModified, forceOverwrite, thinkingLevel
         )
     }
 
@@ -790,8 +782,6 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
             enableTranscription = enableTranscriptionCheckbox.isChecked,
             autoStartChat = false, // Irrelevant for testing
             interruptable = interruptableSwitch.isChecked,
-            enableAffectiveDialog = affectiveDialogSwitch.isChecked,
-            enableProactivity = proactivitySwitch.isChecked,
             thinkingLevel = thinkingLevelInput.text.toString().lowercase(),
             toolFilterMode = currentToolFilterMode,
             selectedToolNames = selectedToolNames.toSet(),
@@ -912,19 +902,6 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         }
     }
 
-    private fun updateModelDependentUI(modelName: String) {
-        val isGemini31 = modelName.contains("3.1")
-        // Thinking level only applies to 3.1
-        thinkingLevelLayout.visibility = if (isGemini31) View.VISIBLE else View.GONE
-        // Affective dialog and proactivity not supported on 3.1
-        if (isGemini31) {
-            affectiveDialogSwitch.isChecked = false
-            proactivitySwitch.isChecked = false
-        }
-        affectiveDialogSwitch.isEnabled = !isGemini31
-        proactivitySwitch.isEnabled = !isGemini31
-    }
-
     private fun enableEditing(enabled: Boolean) {
         profileNameInput.isEnabled = enabled
         modelInput.isEnabled = enabled
@@ -938,9 +915,6 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         enableTranscriptionCheckbox.isEnabled = enabled
         autoStartChatCheckbox.isEnabled = enabled
         interruptableSwitch.isEnabled = enabled
-        val isGemini31 = modelInput.text.toString().contains("3.1")
-        affectiveDialogSwitch.isEnabled = enabled && !isGemini31
-        proactivitySwitch.isEnabled = enabled && !isGemini31
         radioAllTools.isEnabled = enabled
         radioSelectedTools.isEnabled = enabled
         toolSearchBox.isEnabled = enabled

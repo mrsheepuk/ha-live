@@ -78,8 +78,6 @@ class DirectConversationService(private val context: Context) :
         toolExecutor: ToolExecutor,
         transcriptor: ((String?, String?, Boolean) -> Unit)?,
         interruptable: Boolean,
-        enableAffectiveDialog: Boolean,
-        enableProactivity: Boolean,
         thinkingLevel: String?,
         onAudioLevel: ((Float) -> Unit)?,
         logger: AppLogger?

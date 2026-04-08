@@ -60,8 +60,6 @@ floors:
     const val DEFAULT_INCLUDE_LIVE_CONTEXT = true
     const val DEFAULT_ENABLE_TRANSCRIPTION = true
     const val DEFAULT_INTERRUPTABLE = true
-    const val DEFAULT_ENABLE_AFFECTIVE_DIALOG = false
-    const val DEFAULT_ENABLE_PROACTIVITY = false
     const val DEFAULT_THINKING_LEVEL = "minimal"
 
     private fun getPrefs(context: Context): SharedPreferences {
