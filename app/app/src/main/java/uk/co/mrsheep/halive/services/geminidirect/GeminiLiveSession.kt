@@ -132,7 +132,7 @@ class GeminiLiveSession(
     private var sessionScope: CoroutineScope = CoroutineScope(EmptyCoroutineContext).apply { cancel() }
 
     private val json = Json {
-        encodeDefaults = true
+        encodeDefaults = false
         ignoreUnknownKeys = true
         prettyPrint = false
     }
@@ -742,6 +742,7 @@ class GeminiLiveSession(
             )
 
             val messageJson = json.encodeToString(ClientMessage.serializer(), message)
+            debugLog("SendText", "Sending text message:\n${messageJson.take(500)}")
             client.send(messageJson)
 
         } catch (e: Exception) {
