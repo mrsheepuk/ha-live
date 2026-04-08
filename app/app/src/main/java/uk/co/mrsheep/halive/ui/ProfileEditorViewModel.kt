@@ -158,8 +158,6 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         enableTranscription = enableTranscription,
                         autoStartChat = autoStartChat,
                         interruptable = interruptable,
-                        enableAffectiveDialog = enableAffectiveDialog,
-                        enableProactivity = enableProactivity,
                         thinkingLevel = thinkingLevel,
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,
