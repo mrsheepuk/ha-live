@@ -248,7 +248,7 @@ class GeminiLiveSession(
 
             // Step 2: Send setup message
             val thinkingConfig = if (model.contains("3.1") && thinkingLevel != null) {
-                ThinkingConfig(thinkingLevel = "THINKING_LEVEL_${thinkingLevel.uppercase()}")
+                ThinkingConfig(thinkingLevel = thinkingLevel)
             } else null
 
             val setupMessage = ClientMessage(

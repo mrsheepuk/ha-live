@@ -1,10 +1,15 @@
 package uk.co.mrsheep.halive.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -44,6 +49,14 @@ class DebugLogsBottomSheet : BottomSheetDialogFragment() {
         (dialog as? BottomSheetDialog)?.behavior?.apply {
             skipCollapsed = true
             state = BottomSheetBehavior.STATE_EXPANDED
+        }
+
+        // Copy All button
+        view.findViewById<Button>(R.id.copyAllButton).setOnClickListener {
+            val text = debugLogText.text.toString()
+            val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("Debug Logs", text))
+            Toast.makeText(requireContext(), "Logs copied to clipboard", Toast.LENGTH_SHORT).show()
         }
 
         // Get the MainActivity's viewModel

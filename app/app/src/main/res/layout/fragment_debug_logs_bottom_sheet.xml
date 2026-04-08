@@ -17,13 +17,33 @@
         android:alpha="0.4" />
 
     <!-- Header -->
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Debug Logs"
-        android:textAppearance="@style/TextAppearance.MaterialComponents.Subtitle1"
-        android:textColor="?attr/colorOnSurface"
-        android:padding="16dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Debug Logs"
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Subtitle1"
+            android:textColor="?attr/colorOnSurface" />
+
+        <Button
+            android:id="@+id/copyAllButton"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Copy All"
+            android:textSize="12sp" />
+
+    </LinearLayout>
 
     <!-- Divider -->
     <View
@@ -46,7 +66,8 @@
             android:fontFamily="monospace"
             android:text="Loading logs..."
             android:textSize="12sp"
-            android:textColor="?attr/colorOnSurface" />
+            android:textColor="?attr/colorOnSurface"
+            android:textIsSelectable="true" />
 
     </androidx.core.widget.NestedScrollView>
 
