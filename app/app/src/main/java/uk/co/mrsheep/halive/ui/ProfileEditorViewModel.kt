@@ -76,8 +76,6 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
      * @param targetSource The target source for new profiles (default LOCAL)
      * @param originalLastModified The original lastModified timestamp for conflict detection
      * @param forceOverwrite Whether to force overwrite in case of conflict (default false)
-     * @param enableAffectiveDialog Whether to enable affective dialog
-     * @param enableProactivity Whether to enable proactivity
      */
     fun saveProfile(
         name: String,
@@ -98,8 +96,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
         targetSource: ProfileSource = ProfileSource.LOCAL,
         originalLastModified: String? = null,
         forceOverwrite: Boolean = false,
-        enableAffectiveDialog: Boolean = false,
-        enableProactivity: Boolean = false
+        thinkingLevel: String = "minimal"
     ) {
         viewModelScope.launch {
             _editorState.value = ProfileEditorState.Saving
@@ -140,8 +137,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         enableTranscription = enableTranscription,
                         autoStartChat = autoStartChat,
                         interruptable = interruptable,
-                        enableAffectiveDialog = enableAffectiveDialog,
-                        enableProactivity = enableProactivity,
+                        thinkingLevel = thinkingLevel,
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,
                         selectedToolNames = selectedToolNames,
@@ -162,8 +158,7 @@ class ProfileEditorViewModel(application: Application) : AndroidViewModel(applic
                         enableTranscription = enableTranscription,
                         autoStartChat = autoStartChat,
                         interruptable = interruptable,
-                        enableAffectiveDialog = enableAffectiveDialog,
-                        enableProactivity = enableProactivity,
+                        thinkingLevel = thinkingLevel,
                         initialMessageToAgent = initialMessageToAgent,
                         toolFilterMode = toolFilterMode,
                         selectedToolNames = selectedToolNames,

@@ -65,6 +65,8 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
     private lateinit var profileNameInput: TextInputEditText
     private lateinit var modelLayout: TextInputLayout
     private lateinit var modelInput: AutoCompleteTextView
+    private lateinit var thinkingLevelLayout: TextInputLayout
+    private lateinit var thinkingLevelInput: AutoCompleteTextView
     private lateinit var voiceLayout: TextInputLayout
     private lateinit var voiceInput: AutoCompleteTextView
 
@@ -96,8 +98,6 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
     private lateinit var enableTranscriptionCheckbox: MaterialCheckBox
     private lateinit var autoStartChatCheckbox: MaterialCheckBox
     private lateinit var interruptableSwitch: SwitchMaterial
-    private lateinit var affectiveDialogSwitch: SwitchMaterial
-    private lateinit var proactivitySwitch: SwitchMaterial
 
     // Tool Filtering UI components
     private lateinit var toolFilterModeGroup: RadioGroup
@@ -220,10 +220,22 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         voiceInput = findViewById(R.id.voiceInput)
 
         // Setup model dropdown
-        val modelOptions = arrayOf("gemini-2.5-flash-native-audio-preview-12-2025", "gemini-2.5-flash-native-audio-preview-09-2025", "gemini-live-2.5-flash-preview")
+        val modelOptions = arrayOf("gemini-3.1-flash-live-preview", "gemini-2.5-flash-native-audio-preview-12-2025", "gemini-2.5-flash-native-audio-preview-09-2025", "gemini-live-2.5-flash-preview")
         val modelAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, modelOptions)
         modelInput.setAdapter(modelAdapter)
         modelInput.setText(modelOptions[0], false) // Set default
+
+        // Setup thinking level dropdown
+        thinkingLevelLayout = findViewById(R.id.thinkingLevelLayout)
+        thinkingLevelInput = findViewById(R.id.thinkingLevelInput)
+        val thinkingLevelOptions = arrayOf("Minimal", "Low", "Medium", "High")
+        val thinkingLevelAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, thinkingLevelOptions)
+        thinkingLevelInput.setAdapter(thinkingLevelAdapter)
+        thinkingLevelInput.setText("Minimal", false)
+
+        modelInput.setOnItemClickListener { _, _, position, _ ->
+            thinkingLevelLayout.visibility = if (modelOptions[position].contains("3.1")) View.VISIBLE else View.GONE
+        }
 
         // Setup voice dropdown
 //        val voiceOptions = arrayOf("Aoede", "Leda", "Kore", "Puck", "Charon", "Fenrir", "Orus", "Zephyr")
@@ -273,8 +285,9 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         enableTranscriptionCheckbox = findViewById(R.id.enableTranscriptionCheckbox)
         autoStartChatCheckbox = findViewById(R.id.autoStartChatCheckbox)
         interruptableSwitch = findViewById(R.id.interruptableSwitch)
-        affectiveDialogSwitch = findViewById(R.id.affectiveDialogSwitch)
-        proactivitySwitch = findViewById(R.id.proactivitySwitch)
+
+        // Set initial thinking level visibility based on default model
+        thinkingLevelLayout.visibility = if (modelOptions[0].contains("3.1")) View.VISIBLE else View.GONE
 
         // Tool Filtering UI
         toolFilterModeGroup = findViewById(R.id.toolFilterModeGroup)
@@ -448,12 +461,13 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
                 initialMessageInput.setText(state.profile.initialMessageToAgent)
                 modelInput.setText(state.profile.model, false)
                 voiceInput.setText(state.profile.voice, false)
+                thinkingLevelInput.setText(state.profile.thinkingLevel.replaceFirstChar { it.uppercase() }, false)
                 includeLiveContextCheckbox.isChecked = state.profile.includeLiveContext
                 enableTranscriptionCheckbox.isChecked = state.profile.enableTranscription
                 autoStartChatCheckbox.isChecked = state.profile.autoStartChat
                 interruptableSwitch.isChecked = state.profile.interruptable
-                affectiveDialogSwitch.isChecked = state.profile.enableAffectiveDialog
-                proactivitySwitch.isChecked = state.profile.enableProactivity
+                // Update thinking level visibility based on loaded model
+                thinkingLevelLayout.visibility = if (state.profile.model.contains("3.1")) View.VISIBLE else View.GONE
 
                 // Store original lastModified for conflict detection
                 originalLastModified = state.profile.lastModified
@@ -718,14 +732,13 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         val enableTranscription = enableTranscriptionCheckbox.isChecked
         val autoStartChat = autoStartChatCheckbox.isChecked
         val interruptable = interruptableSwitch.isChecked
-        val enableAffectiveDialog = affectiveDialogSwitch.isChecked
-        val enableProactivity = proactivitySwitch.isChecked
+        val thinkingLevel = thinkingLevelInput.text.toString().lowercase()
         val allowedModelCameras = selectedCameraEntityIds.toSet()
         viewModel.saveProfile(
             name, prompt, personality, backgroundInfo, initialMessageToAgent,
             model, voice, includeLiveContext, enableTranscription, autoStartChat, interruptable, currentToolFilterMode,
             selectedToolNames.toSet(), allowedModelCameras, editingProfileId, targetSource,
-            originalLastModified, forceOverwrite, enableAffectiveDialog, enableProactivity
+            originalLastModified, forceOverwrite, thinkingLevel
         )
     }
 
@@ -769,8 +782,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
             enableTranscription = enableTranscriptionCheckbox.isChecked,
             autoStartChat = false, // Irrelevant for testing
             interruptable = interruptableSwitch.isChecked,
-            enableAffectiveDialog = affectiveDialogSwitch.isChecked,
-            enableProactivity = proactivitySwitch.isChecked,
+            thinkingLevel = thinkingLevelInput.text.toString().lowercase(),
             toolFilterMode = currentToolFilterMode,
             selectedToolNames = selectedToolNames.toSet(),
             allowedModelCameras = selectedCameraEntityIds.toSet()
@@ -893,6 +905,7 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
     private fun enableEditing(enabled: Boolean) {
         profileNameInput.isEnabled = enabled
         modelInput.isEnabled = enabled
+        thinkingLevelInput.isEnabled = enabled
         voiceInput.isEnabled = enabled
         systemPromptInput.isEnabled = enabled
         personalityInput.isEnabled = enabled
@@ -902,8 +915,6 @@ class ProfileEditorActivity : AppCompatActivity(), AppLogger {
         enableTranscriptionCheckbox.isEnabled = enabled
         autoStartChatCheckbox.isEnabled = enabled
         interruptableSwitch.isEnabled = enabled
-        affectiveDialogSwitch.isEnabled = enabled
-        proactivitySwitch.isEnabled = enabled
         radioAllTools.isEnabled = enabled
         radioSelectedTools.isEnabled = enabled
         toolSearchBox.isEnabled = enabled

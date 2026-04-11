@@ -36,7 +36,6 @@ data class SetupMessage(
     @SerialName("system_instruction")
     val systemInstruction: Content? = null,
     val tools: List<ToolDeclaration>? = null,
-    val proactivity: ProactivtyConfig? = null,
     @SerialName("input_audio_transcription")
     val inputAudioTranscription: AudioTranscriptionConfig? = null,
     @SerialName("output_audio_transcription")
@@ -46,15 +45,15 @@ data class SetupMessage(
 )
 
 @Serializable
-data class ProactivtyConfig(
-    @SerialName("proactive_audio")
-    val proactiveAudio: Boolean? = null
-)
-
-@Serializable
 class AudioTranscriptionConfig()
 
 // --- GenerationConfig (output settings) ---
+
+@Serializable
+data class ThinkingConfig(
+    @SerialName("thinking_level")
+    val thinkingLevel: String // "minimal", "low", "medium", "high"
+)
 
 @Serializable
 data class GenerationConfig(
@@ -62,8 +61,8 @@ data class GenerationConfig(
     val responseModalities: List<String>? = null, // e.g., ["AUDIO"]
     @SerialName("speech_config")
     val speechConfig: SpeechConfig? = null,
-    @SerialName("enable_affective_dialog")
-    val enableAffectiveDialog: Boolean? = null,
+    @SerialName("thinking_config")
+    val thinkingConfig: ThinkingConfig? = null,
 )
 
 // --- SpeechConfig (voice settings) ---
@@ -97,6 +96,7 @@ data class RealtimeInput(
     val mediaChunks: List<MediaChunk>? = null,
     val audio: MediaChunk? = null,
     val video: MediaChunk? = null,
+    val text: String? = null,
 )
 
 // --- ToolResponseMessage (reply to function calls) ---

@@ -1,5 +1,6 @@
 package uk.co.mrsheep.halive.services.conversation
 
+import uk.co.mrsheep.halive.core.AppLogger
 import uk.co.mrsheep.halive.services.ToolExecutor
 import uk.co.mrsheep.halive.services.audio.MicrophoneHelper
 import uk.co.mrsheep.halive.services.camera.VideoSource
@@ -27,8 +28,7 @@ interface ConversationService {
      * @param modelName Model to use (e.g., "gemini-2.0-flash-exp")
      * @param voiceName Voice to use (e.g., "Aoede")
      * @param interruptable Whether the conversation can be interrupted by the user
-     * @param enableAffectiveDialog Enable affective dialog mode
-     * @param enableProactivity Enable proactivity mode
+     * @param thinkingLevel Thinking level for Gemini 3.1 models (e.g., "minimal", "low", "medium", "high")
      * @param onAudioLevel Optional callback for audio level updates (0.0-1.0), used for visualization
      */
     suspend fun initialize(
@@ -39,9 +39,9 @@ interface ConversationService {
         toolExecutor: ToolExecutor,
         transcriptor: ((String?, String?, Boolean) -> Unit)? = null,
         interruptable: Boolean = true,
-        enableAffectiveDialog: Boolean = false,
-        enableProactivity: Boolean = false,
-        onAudioLevel: ((Float) -> Unit)? = null
+        thinkingLevel: String? = null,
+        onAudioLevel: ((Float) -> Unit)? = null,
+        logger: AppLogger? = null
     )
 
     /**

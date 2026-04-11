@@ -45,17 +45,22 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.FunctionResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.GenerationConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.MediaChunk
 import uk.co.mrsheep.halive.services.geminidirect.protocol.PrebuiltVoiceConfig
-import uk.co.mrsheep.halive.services.geminidirect.protocol.ProactivtyConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.RealtimeInput
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ServerMessage
 import uk.co.mrsheep.halive.services.geminidirect.protocol.SetupMessage
 import uk.co.mrsheep.halive.services.geminidirect.protocol.SpeechConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.TextPart
+import uk.co.mrsheep.halive.services.geminidirect.protocol.ThinkingConfig
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolDeclaration
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.Turn
 import uk.co.mrsheep.halive.services.geminidirect.protocol.VoiceConfig
+import uk.co.mrsheep.halive.core.AppLogger
+import uk.co.mrsheep.halive.core.LogEntry
 import java.io.ByteArrayOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicLong
@@ -80,7 +85,8 @@ class GeminiLiveSession(
     private val apiKey: String,
     private val context: Context,
     sharedHttpClient: okhttp3.OkHttpClient,
-    private val onAudioLevel: ((Float) -> Unit)? = null
+    private val onAudioLevel: ((Float) -> Unit)? = null,
+    private val logger: AppLogger? = null
 ) {
     companion object {
         private const val TAG = "GeminiLiveSession"
@@ -106,7 +112,18 @@ class GeminiLiveSession(
         private val PLAYBACK_CHUNK_BYTES = PLAYBACK_CHUNK_MS * SAMPLE_RATE * BYTES_PER_SAMPLE / 1000
     }
 
-    private val client = GeminiLiveClient(apiKey, sharedHttpClient)
+    private val client = GeminiLiveClient(apiKey, sharedHttpClient, logger = logger)
+    private val timestampFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
+
+    private fun debugLog(name: String, detail: String, success: Boolean = true) {
+        logger?.addLogEntry(LogEntry(
+            timestamp = timestampFormat.format(Date()),
+            toolName = "Session: $name",
+            parameters = "",
+            success = success,
+            result = detail
+        ))
+    }
 
     @SuppressLint("ThreadPoolCreation")
     val audioDispatcher =
@@ -184,8 +201,7 @@ class GeminiLiveSession(
         tools: List<ToolDeclaration>,
         voiceName: String,
         interruptable: Boolean = true,
-        enableAffectiveDialog: Boolean = false,
-        enableProactivity: Boolean = false,
+        thinkingLevel: String? = null,
         onToolCall: suspend (FunctionCall) -> FunctionResponse,
         onTranscription: ((userTranscription: String?, modelTranscription: String?, isThought: Boolean) -> Unit)? = null,
         externalMicrophoneHelper: MicrophoneHelper? = null
@@ -213,6 +229,7 @@ class GeminiLiveSession(
 
         try {
             Log.d(TAG, "Starting Gemini Live session with model: $model")
+            debugLog("Start", "Starting session with model=$model voice=$voiceName thinkingLevel=$thinkingLevel interruptable=$interruptable tools=${tools.size}")
             isSessionActive = true
 
             // Step 1: Connect to Gemini Live API
@@ -230,6 +247,10 @@ class GeminiLiveSession(
             Log.d(TAG, "WebSocket connected")
 
             // Step 2: Send setup message
+            val thinkingConfig = if (model.contains("3.1") && thinkingLevel != null) {
+                ThinkingConfig(thinkingLevel = thinkingLevel)
+            } else null
+
             val setupMessage = ClientMessage(
                 setup = SetupMessage(
                     model = "models/$model",
@@ -242,14 +263,13 @@ class GeminiLiveSession(
                             // TODO: Make language code configurable
                             languageCode = "en-US"
                         ),
-                        enableAffectiveDialog = if (enableAffectiveDialog) true else null,
+                        thinkingConfig = thinkingConfig,
                     ),
                     systemInstruction = Content(
                         role = null,
                         parts = listOf(TextPart(systemPrompt))
                     ),
                     tools = tools.takeIf { it.isNotEmpty() },
-                    proactivity = if (enableProactivity) ProactivtyConfig(proactiveAudio = true) else null,
                     inputAudioTranscription = if (onTranscription != null) AudioTranscriptionConfig() else null,
                     outputAudioTranscription = if (onTranscription != null) AudioTranscriptionConfig() else null,
                     realtimeInputConfig = if (!interruptable) {
@@ -261,6 +281,7 @@ class GeminiLiveSession(
             )
 
             val setupJson = json.encodeToString(ClientMessage.serializer(), setupMessage)
+            debugLog("Setup", "Sending setup message (${setupJson.length} chars):\n${setupJson.take(1000)}")
             client.send(setupJson)
             Log.d(TAG, "Setup message sent with ${tools.size} tools")
 
@@ -279,9 +300,11 @@ class GeminiLiveSession(
                 true
             }
             if (setupCompleted == null) {
+                debugLog("Setup", "TIMEOUT: Setup did not complete within ${SETUP_TIMEOUT_MS}ms. Check WS messages above for errors.", success = false)
                 throw TimeoutException("Setup did not complete within ${SETUP_TIMEOUT_MS}ms")
             }
             Log.d(TAG, "Setup completed successfully")
+            debugLog("Setup", "Setup completed successfully")
 
             // Send any pre-buffered audio from wake word detection
             if (!ownsMicrophoneHelper) {
@@ -707,18 +730,11 @@ class GeminiLiveSession(
             Log.d(TAG, "Sending text: $text")
 
             val message = ClientMessage(
-                clientContent = ClientContent(
-                    turns = listOf(
-                        Turn(
-                            role = "user",
-                            parts = listOf(TextPart(text)),
-                        )
-                    ),
-                    turnComplete = true,
-                )
+                realtimeInput = RealtimeInput(text = text)
             )
 
             val messageJson = json.encodeToString(ClientMessage.serializer(), message)
+            debugLog("SendText", "Sending text message:\n${messageJson.take(500)}")
             client.send(messageJson)
 
         } catch (e: Exception) {

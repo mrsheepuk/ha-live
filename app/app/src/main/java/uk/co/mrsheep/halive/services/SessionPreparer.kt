@@ -93,6 +93,7 @@ class SessionPreparer(
             // Extract model and voice from profile or use defaults
             val model = profile?.model ?: SystemPromptConfig.DEFAULT_MODEL
             val voice = profile?.voice ?: SystemPromptConfig.DEFAULT_VOICE
+            val thinkingLevel = profile?.thinkingLevel
 
             // Build tools section for logging
             val filterInfo =
@@ -144,9 +145,9 @@ class SessionPreparer(
                     toolExecutor,
                     transcriptor,
                     interruptable = profile?.interruptable ?: true,
-                    enableAffectiveDialog = profile?.enableAffectiveDialog ?: false,
-                    enableProactivity = profile?.enableProactivity ?: false,
-                    onAudioLevel = onAudioLevel
+                    thinkingLevel = thinkingLevel,
+                    onAudioLevel = onAudioLevel,
+                    logger = logger
             )
 
             // Return HA cameras for caller to use

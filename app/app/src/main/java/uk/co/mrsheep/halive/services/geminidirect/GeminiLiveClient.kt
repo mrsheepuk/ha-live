@@ -14,8 +14,13 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
+import uk.co.mrsheep.halive.core.AppLogger
+import uk.co.mrsheep.halive.core.LogEntry
 import uk.co.mrsheep.halive.services.geminidirect.protocol.ServerMessage
 import java.nio.charset.Charset
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /**
@@ -25,12 +30,13 @@ import java.util.concurrent.TimeUnit
 class GeminiLiveClient(
     private val apiKey: String,
     sharedHttpClient: OkHttpClient,
+    private val logger: AppLogger? = null,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 ) : WebSocketListener() {
 
     companion object {
         private const val TAG = "GeminiLiveClient"
-        private const val API_ENDPOINT_V1ALPHA = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
+        private const val API_ENDPOINT = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
         private const val MESSAGE_QUEUE_CAPACITY = 512
         private const val CONNECTION_TIMEOUT_MS = 5000L
     }
@@ -54,8 +60,20 @@ class GeminiLiveClient(
         onBufferOverflow = BufferOverflow.SUSPEND
     )
 
+    private val timestampFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
+
     private var isConnected = false
     private val connectionMutex = Mutex()
+
+    private fun debugLog(name: String, detail: String, success: Boolean = true) {
+        logger?.addLogEntry(LogEntry(
+            timestamp = timestampFormat.format(Date()),
+            toolName = "WS: $name",
+            parameters = "",
+            success = success,
+            result = detail
+        ))
+    }
 
     // Deferred to signal when the WebSocket connection is actually open
     private var connectionDeferred: CompletableDeferred<Boolean>? = null
@@ -83,11 +101,12 @@ class GeminiLiveClient(
                 }
 
                 Log.d(TAG, "Connecting to Gemini Live API...")
+                debugLog("Connect", "Connecting to v1beta endpoint...")
 
                 // Create a new deferred for this connection attempt
                 connectionDeferred = CompletableDeferred()
 
-                val url = "$API_ENDPOINT_V1ALPHA?key=$apiKey"
+                val url = "$API_ENDPOINT?key=$apiKey"
                 val request = Request.Builder()
                     .url(url)
                     .build()
@@ -103,10 +122,12 @@ class GeminiLiveClient(
 
                 if (connected) {
                     Log.d(TAG, "WebSocket connected successfully")
+                    debugLog("Connect", "WebSocket connected successfully")
                     isConnected = true
                     true
                 } else {
                     Log.e(TAG, "WebSocket connection timed out after ${CONNECTION_TIMEOUT_MS}ms")
+                    debugLog("Connect", "WebSocket connection timed out after ${CONNECTION_TIMEOUT_MS}ms", success = false)
                     webSocket?.close(1000, "Connection timeout")
                     webSocket = null
                     isConnected = false
@@ -192,6 +213,22 @@ class GeminiLiveClient(
         // Parse the JSON and deserialize to ServerMessage
         try {
             val message = json.decodeFromString(ServerMessage.serializer(), text)
+            // Log non-audio messages to in-app debug (audio content is too noisy)
+            when (message) {
+                is ServerMessage.SetupComplete -> debugLog("Recv", "SetupComplete received")
+                is ServerMessage.ToolCall -> debugLog("Recv", "ToolCall: ${text.take(300)}")
+                is ServerMessage.ToolCallCancellation -> debugLog("Recv", "ToolCallCancellation")
+                is ServerMessage.Content -> {
+                    // Only log non-audio content (transcriptions, turn complete, interrupts)
+                    val sc = message.serverContent
+                    if (sc.turnComplete == true || sc.interrupted == true ||
+                        sc.inputTranscription != null || sc.outputTranscription != null) {
+                        debugLog("Recv", "Content: turnComplete=${sc.turnComplete} interrupted=${sc.interrupted} " +
+                            "inputTranscript=${sc.inputTranscription?.text?.take(50)} " +
+                            "outputTranscript=${sc.outputTranscription?.text?.take(50)}")
+                    }
+                }
+            }
             // Use tryEmit for non-suspending emission - no coroutine overhead
             // This ensures message ordering and reduces latency
             if (!messageFlow.tryEmit(message)) {
@@ -199,6 +236,7 @@ class GeminiLiveClient(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to deserialize message", e)
+            debugLog("Recv", "FAILED to deserialize: ${e.message}\nRaw JSON: ${text.take(500)}", success = false)
         }
         super.onMessage(webSocket, text)
     }
@@ -224,6 +262,7 @@ class GeminiLiveClient(
 
     override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
         Log.w(TAG, "WebSocket closing:\ncode=$code\nreason=$reason")
+        debugLog("Close", "WebSocket closing: code=$code reason=$reason", success = false)
         // If we're still waiting for connection, mark it as failed
         connectionDeferred?.complete(false)
 //        webSocket.close(1000, null)
@@ -248,6 +287,7 @@ class GeminiLiveClient(
         Log.e(TAG, "WebSocket error - $responseInfo", t)
         Log.e(TAG, "Exception details: ${t.javaClass.simpleName}: ${t.message}")
         Log.e(TAG, "Stack trace: ${t.stackTraceToString()}")
+        debugLog("Failure", "WebSocket error: $responseInfo\n${t.javaClass.simpleName}: ${t.message}", success = false)
 
         // Signal connection failure FIRST (before acquiring mutex)
         // This prevents deadlock with connect() which holds the mutex while waiting

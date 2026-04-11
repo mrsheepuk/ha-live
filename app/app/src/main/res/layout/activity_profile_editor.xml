@@ -66,6 +66,24 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Thinking Level Selection -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/thinkingLevelLayout"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Thinking Level"
+            android:layout_marginBottom="16dp">
+
+            <AutoCompleteTextView
+                android:id="@+id/thinkingLevelInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="none"
+                android:editable="false" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
         <!-- Voice Selection -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/voiceLayout"
@@ -125,40 +143,6 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             android:text="Enable 'barge in' - interrupt the model while it's speaking"
-            android:textAppearance="?attr/textAppearanceCaption"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <!-- Affective Dialog Switch -->
-        <com.google.android.material.switchmaterial.SwitchMaterial
-            android:id="@+id/affectiveDialogSwitch"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="4dp"
-            android:text="Enable Affective Dialog"
-            android:checked="false" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:text="Allow the model to detect and respond to emotional cues (v1alpha feature)"
-            android:textAppearance="?attr/textAppearanceCaption"
-            android:textColor="?android:attr/textColorSecondary" />
-
-        <!-- Proactivity Switch -->
-        <com.google.android.material.switchmaterial.SwitchMaterial
-            android:id="@+id/proactivitySwitch"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="4dp"
-            android:text="Enable Proactive Responses"
-            android:checked="false" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:text="Allow the model to proactively speak without waiting for input (v1alpha feature)"
             android:textAppearance="?attr/textAppearanceCaption"
             android:textColor="?android:attr/textColorSecondary" />
 

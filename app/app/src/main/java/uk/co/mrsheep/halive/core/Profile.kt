@@ -46,8 +46,9 @@ data class Profile(
     val enableTranscription: Boolean = SystemPromptConfig.DEFAULT_ENABLE_TRANSCRIPTION,
     val autoStartChat: Boolean = false,
     val interruptable: Boolean = SystemPromptConfig.DEFAULT_INTERRUPTABLE,
-    val enableAffectiveDialog: Boolean = SystemPromptConfig.DEFAULT_ENABLE_AFFECTIVE_DIALOG,
-    val enableProactivity: Boolean = SystemPromptConfig.DEFAULT_ENABLE_PROACTIVITY,
+    val enableAffectiveDialog: Boolean = false,
+    val enableProactivity: Boolean = false,
+    val thinkingLevel: String = SystemPromptConfig.DEFAULT_THINKING_LEVEL,
     // Shared config metadata
     val source: ProfileSource = ProfileSource.LOCAL,
     val lastModified: String? = null,
@@ -73,8 +74,7 @@ data class Profile(
         "auto_start_chat" to autoStartChat,
         "initial_message" to initialMessageToAgent,
         "interruptable" to interruptable,
-        "enable_affective_dialog" to enableAffectiveDialog,
-        "enable_proactivity" to enableProactivity
+        "thinking_level" to thinkingLevel
     )
 
     companion object {
@@ -97,8 +97,7 @@ data class Profile(
                 enableTranscription = SystemPromptConfig.DEFAULT_ENABLE_TRANSCRIPTION,
                 autoStartChat = false,
                 interruptable = SystemPromptConfig.DEFAULT_INTERRUPTABLE,
-                enableAffectiveDialog = SystemPromptConfig.DEFAULT_ENABLE_AFFECTIVE_DIALOG,
-                enableProactivity = SystemPromptConfig.DEFAULT_ENABLE_PROACTIVITY
+                thinkingLevel = SystemPromptConfig.DEFAULT_THINKING_LEVEL
             )
         }
 
@@ -126,8 +125,7 @@ data class Profile(
                 autoStartChat = shared.autoStartChat,
                 initialMessageToAgent = shared.initialMessage,
                 interruptable = shared.interruptable,
-                enableAffectiveDialog = shared.enableAffectiveDialog,
-                enableProactivity = shared.enableProactivity,
+                thinkingLevel = shared.thinkingLevel,
                 source = ProfileSource.SHARED,
                 lastModified = shared.lastModified,
                 modifiedBy = shared.modifiedBy,
@@ -181,8 +179,7 @@ data class Profile(
             "enableTranscription": $enableTranscription,
             "autoStartChat": $autoStartChat,
             "interruptable": $interruptable,
-            "enableAffectiveDialog": $enableAffectiveDialog,
-            "enableProactivity": $enableProactivity,
+            "thinkingLevel": "$thinkingLevel",
             "toolFilterMode": "$toolFilterMode",
             "selectedToolNames": [$toolNamesJson],
             "allowedModelCameras": [$cameraNamesJson]

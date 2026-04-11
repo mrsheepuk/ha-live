@@ -55,13 +55,12 @@ floors:
 
     const val DEFAULT_INITIAL_MESSAGE_TO_AGENT = "Activate"
 
-    const val DEFAULT_MODEL = "gemini-2.5-flash-native-audio-preview-09-2025"
+    const val DEFAULT_MODEL = "gemini-3.1-flash-live-preview"
     const val DEFAULT_VOICE = "Kore"
     const val DEFAULT_INCLUDE_LIVE_CONTEXT = true
     const val DEFAULT_ENABLE_TRANSCRIPTION = true
     const val DEFAULT_INTERRUPTABLE = true
-    const val DEFAULT_ENABLE_AFFECTIVE_DIALOG = false
-    const val DEFAULT_ENABLE_PROACTIVITY = false
+    const val DEFAULT_THINKING_LEVEL = "minimal"
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
