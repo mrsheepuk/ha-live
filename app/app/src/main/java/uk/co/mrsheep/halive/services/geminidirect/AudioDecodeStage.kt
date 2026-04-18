@@ -89,6 +89,11 @@ class AudioDecodeStage(
         }
     }
 
+    // Track chunk sizes for anomaly detection
+    private var lastChunkSize = 0
+    private var typicalChunkSize = 0
+    private var chunkCount = 0
+
     /**
      * Process a single audio chunk: decode and write to jitter buffer.
      */
@@ -96,12 +101,27 @@ class AudioDecodeStage(
         try {
             // Decode base64 to PCM bytes
             val pcmData = Base64.decode(base64Data, Base64.NO_WRAP)
+            val chunkSize = pcmData.size
+
+            // Track typical chunk size (use first 10 chunks to establish baseline)
+            chunkCount++
+            if (chunkCount <= 10) {
+                typicalChunkSize = maxOf(typicalChunkSize, chunkSize)
+            }
+
+            // Log if chunk is unusually small (less than 50% of typical) after baseline established
+            val isSmall = chunkCount > 10 && typicalChunkSize > 0 && chunkSize < typicalChunkSize / 2
+            if (isSmall) {
+                Log.w(TAG, "SMALL_CHUNK: ${chunkSize} bytes (typical: ${typicalChunkSize}, prev: ${lastChunkSize})")
+            }
+
+            lastChunkSize = chunkSize
 
             // Write to jitter buffer
             if (!jitterBuffer.write(pcmData)) {
                 Log.w(TAG, "Jitter buffer full, dropping ${pcmData.size} bytes of audio")
             } else {
-                Log.v(TAG, "Decoded and buffered ${pcmData.size} bytes")
+                Log.v(TAG, "Decoded and buffered ${pcmData.size} bytes (buffered: ${jitterBuffer.bufferedMs()}ms)")
             }
         } catch (e: IllegalArgumentException) {
             Log.e(TAG, "Invalid base64 audio data", e)

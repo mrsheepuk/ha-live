@@ -110,10 +110,8 @@ class AudioPlaybackThread(
                 }
             } else {
                 // No data available - potential underrun
-                if (trackStarted) {
-                    onUnderrun?.invoke()
-                    Log.w(TAG, "Buffer underrun - jitter buffer empty")
-                }
+                // Note: Underruns are common during pauses and not always problematic
+                // Removed logging here as it creates excessive noise
                 pendingLevel = 0f
             }
         }
