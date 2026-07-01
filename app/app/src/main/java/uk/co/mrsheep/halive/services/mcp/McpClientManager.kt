@@ -30,6 +30,9 @@ class McpClientManager(
         encodeDefaults = true
         ignoreUnknownKeys = true
         prettyPrint = false
+        // Tolerate minor schema quirks from HA, e.g. numeric enum values
+        // decoded into string fields
+        isLenient = true
     }
 
     // Derive from shared client to reuse connection pool and thread pool
