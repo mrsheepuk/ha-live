@@ -96,9 +96,11 @@ class GeminiLiveSession(
         private const val SAMPLE_RATE = 24000
         private const val BYTES_PER_SAMPLE = 2 // 16-bit mono
 
-        // Pre-buffer 100ms of audio before starting playback
-        // This absorbs network/decode jitter
-        private const val PRE_BUFFER_MS = 100
+        // Pre-buffer 200ms of audio before starting playback (also re-armed
+        // after each underrun). This absorbs network/decode jitter - observed
+        // streams can run ~200ms behind real-time while ramping up at the
+        // start of a turn.
+        private const val PRE_BUFFER_MS = 200
         private val PRE_BUFFER_BYTES = PRE_BUFFER_MS * SAMPLE_RATE * BYTES_PER_SAMPLE / 1000
 
         // Total jitter buffer capacity: 30 seconds
