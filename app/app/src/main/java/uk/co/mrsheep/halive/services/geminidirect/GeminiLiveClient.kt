@@ -233,6 +233,7 @@ class GeminiLiveClient(
             // This ensures message ordering and reduces latency
             if (!messageFlow.tryEmit(message)) {
                 Log.w(TAG, "Message flow buffer full, dropping message")
+                debugLog("Drop", "Message buffer full - DROPPED ${message.javaClass.simpleName} (audio may skip)", success = false)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to deserialize message", e)
@@ -253,6 +254,7 @@ class GeminiLiveClient(
             // Use tryEmit for non-suspending emission - no coroutine overhead
             if (!messageFlow.tryEmit(message)) {
                 Log.w(TAG, "Message flow buffer full, dropping binary message")
+                debugLog("Drop", "Message buffer full - DROPPED binary ${message.javaClass.simpleName} (audio may skip)", success = false)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to deserialize message", e)

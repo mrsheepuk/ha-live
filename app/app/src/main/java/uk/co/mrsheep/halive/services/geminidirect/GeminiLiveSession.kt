@@ -513,7 +513,7 @@ class GeminiLiveSession(
         Log.d(TAG, "JitterBuffer created: capacity=${BUFFER_CAPACITY_MS}ms, preBuffer=${PRE_BUFFER_MS}ms")
 
         // Create decode stage (writes decoded audio to jitter buffer)
-        decodeStage = AudioDecodeStage(jitterBuffer!!)
+        decodeStage = AudioDecodeStage(jitterBuffer!!, logger)
 
         // Create playback thread (reads from jitter buffer, writes to AudioTrack)
         playbackThread = AudioPlaybackThread(
@@ -521,7 +521,13 @@ class GeminiLiveSession(
             jitterBuffer = jitterBuffer!!,
             chunkSizeBytes = PLAYBACK_CHUNK_BYTES,
             onAudioLevel = onAudioLevel,
-            onUnderrun = { Log.w(TAG, "Audio playback underrun") }
+            onUnderrun = {
+                Log.w(TAG, "Audio playback underrun")
+                debugLog("Playback", "Jitter buffer empty - playback starved", success = false)
+            },
+            onPlaybackResumed = { gapMs ->
+                debugLog("Playback", "Playback resumed after ${gapMs}ms starved gap")
+            }
         )
         Log.d(TAG, "Playback thread created with chunk size: ${PLAYBACK_CHUNK_MS}ms")
     }
@@ -632,7 +638,11 @@ class GeminiLiveSession(
         }
         if (message.serverContent.interrupted == true) {
             Log.d(TAG, "Turn interrupted")
-            // Clear the jitter buffer to immediately stop playback
+            // Clear the jitter buffer to immediately stop playback. The amount
+            // discarded matters: a false interruption (e.g. echo tripping the
+            // server VAD) audibly cuts off the rest of the response.
+            val discardedMs = jitterBuffer?.bufferedMs() ?: 0
+            debugLog("Interrupted", "Server interruption - discarded ~${discardedMs}ms of buffered audio")
             jitterBuffer?.clear()
         } else {
             for (part in message.serverContent.modelTurn?.parts.orEmpty()) {
@@ -646,9 +656,13 @@ class GeminiLiveSession(
                 }
             }
         }
-        // Log turn completion
+        // Log turn completion with per-turn audio pipeline stats - any drops
+        // reported here correspond to audibly skipped speech
         if (message.serverContent.turnComplete == true) {
             Log.d(TAG, "Turn completed")
+            val stats = decodeStage?.takeStatsSummary() ?: "decode stage not running"
+            val remainingMs = jitterBuffer?.bufferedMs() ?: 0
+            debugLog("TurnComplete", "$stats; ~${remainingMs}ms still buffered for playback")
         }
     }
 
