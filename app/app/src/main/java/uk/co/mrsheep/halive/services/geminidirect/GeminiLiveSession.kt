@@ -56,6 +56,7 @@ import uk.co.mrsheep.halive.services.geminidirect.protocol.ToolResponse
 import uk.co.mrsheep.halive.services.geminidirect.protocol.Turn
 import uk.co.mrsheep.halive.services.geminidirect.protocol.VoiceConfig
 import uk.co.mrsheep.halive.core.AppLogger
+import uk.co.mrsheep.halive.core.DebugConfig
 import uk.co.mrsheep.halive.core.LogEntry
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
@@ -169,6 +170,10 @@ class GeminiLiveSession(
     private var playbackThread: AudioPlaybackThread? = null
     private var playbackAudioTrack: AudioTrack? = null
 
+    // Debug: records model audio exactly as received, one WAV per turn
+    // (enabled via DebugConfig.isSaveReceivedAudioEnabled)
+    private var receivedAudioRecorder: ReceivedAudioRecorder? = null
+
     val MIN_BUFFER_SIZE =
         AudioTrack.getMinBufferSize(
             SAMPLE_RATE,
@@ -228,6 +233,12 @@ class GeminiLiveSession(
 
         // Initialize new audio playback pipeline
         initializePlaybackPipeline()
+
+        // Debug: capture raw received audio to WAV files if enabled
+        if (DebugConfig.isSaveReceivedAudioEnabled(context)) {
+            receivedAudioRecorder = ReceivedAudioRecorder(context, logger)
+            debugLog("Debug", "Saving received model audio to Downloads/HALive (one WAV per turn)")
+        }
 
         try {
             Log.d(TAG, "Starting Gemini Live session with model: $model")
@@ -646,9 +657,13 @@ class GeminiLiveSession(
             val discardedMs = jitterBuffer?.bufferedMs() ?: 0
             debugLog("Interrupted", "Server interruption - discarded ~${discardedMs}ms of buffered audio")
             jitterBuffer?.clear()
+            receivedAudioRecorder?.onTurnBoundary("interrupted")
         } else {
             for (part in message.serverContent.modelTurn?.parts.orEmpty()) {
                 if (part.inlineData != null && part.inlineData.mimeType.startsWith("audio/pcm")) {
+                    // Debug capture first - exactly what was received, before
+                    // the playback pipeline can drop or reorder anything
+                    receivedAudioRecorder?.onAudioChunk(part.inlineData.data)
                     // Queue for async decode (non-blocking)
                     // The decode stage will Base64 decode and write to jitter buffer
                     decodeStage?.queueAudio(part.inlineData.data)
@@ -665,6 +680,7 @@ class GeminiLiveSession(
             val stats = decodeStage?.takeStatsSummary() ?: "decode stage not running"
             val remainingMs = jitterBuffer?.bufferedMs() ?: 0
             debugLog("TurnComplete", "$stats; ~${remainingMs}ms still buffered for playback")
+            receivedAudioRecorder?.onTurnBoundary("turn")
         }
     }
 
@@ -807,6 +823,10 @@ class GeminiLiveSession(
 
         // Shutdown the new audio playback pipeline
         shutdownPlaybackPipeline()
+
+        // Flush any partial debug recording
+        receivedAudioRecorder?.close()
+        receivedAudioRecorder = null
 
         // Release recording resources (only if we own them)
         if (ownsMicrophoneHelper) {

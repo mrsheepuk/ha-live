@@ -500,6 +500,20 @@
                     android:layout_marginStart="4dp" />
             </LinearLayout>
 
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/saveReceivedAudioSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Save received model audio"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Saves the model's speech exactly as received to Downloads/HALive (one WAV per response), to diagnose audio glitches"
+                android:textSize="12sp"
+                android:layout_marginBottom="24dp" />
+
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
