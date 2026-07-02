@@ -9,6 +9,9 @@ import kotlin.concurrent.withLock
  *
  * Key features:
  * - Pre-buffering: Won't allow reads until a minimum threshold of audio is buffered
+ * - Re-buffering: When the buffer runs dry (underrun), pre-buffering is re-armed
+ *   so playback resumes with a cushion instead of dripping chunk-by-chunk, which
+ *   sounds like clipped speech
  * - Ring buffer: Fixed allocation, no GC pressure during streaming
  * - Thread-safe: Lock-based synchronization between writer (decode) and reader (playback)
  * - Timed waits: Reader can wait for data without busy-spinning
@@ -24,6 +27,14 @@ class JitterBuffer(
     private val sampleRate: Int = 24000,
     private val bytesPerSample: Int = 2
 ) {
+    companion object {
+        // If pre-buffering hasn't reached the threshold within this window but
+        // some audio is buffered, play it anyway. Prevents stranding audio
+        // smaller than the threshold (e.g. the final chunk of a turn arriving
+        // after an underrun re-armed pre-buffering).
+        private const val PRE_BUFFER_FLUSH_TIMEOUT_NS = 300_000_000L // 300ms
+    }
+
     private val buffer = ByteArray(capacity)
     private var writePos = 0
     private var readPos = 0
@@ -34,11 +45,15 @@ class JitterBuffer(
 
     /**
      * Whether enough audio has been buffered to start playback.
-     * Once true, remains true until [clear] is called.
+     * Reset by [clear] and by an underrun (empty buffer during playback), so
+     * each resumption accumulates a fresh cushion.
      */
     @Volatile
     var isPreBuffered = false
         private set
+
+    /** When pre-buffering was last (re-)armed, for the flush timeout. */
+    private var preBufferArmedAtNs = System.nanoTime()
 
     /**
      * Write audio data into the buffer.
@@ -95,7 +110,18 @@ class JitterBuffer(
                 // Wait for pre-buffer threshold to be reached
                 val preBufferWaitMs = 100L // Give more time for initial buffering
                 dataAvailable.await(preBufferWaitMs, TimeUnit.MILLISECONDS)
-                if (!isPreBuffered) return 0
+                if (!isPreBuffered) {
+                    // Flush timeout: audio stuck below the threshold with no
+                    // more arriving (e.g. a turn's final chunk) - play it
+                    // rather than strand it
+                    if (bufferedBytes > 0 &&
+                        System.nanoTime() - preBufferArmedAtNs > PRE_BUFFER_FLUSH_TIMEOUT_NS
+                    ) {
+                        isPreBuffered = true
+                    } else {
+                        return 0
+                    }
+                }
             }
 
             val toRead = minOf(dest.size, bufferedBytes)
@@ -106,6 +132,11 @@ class JitterBuffer(
                 if (availableAfterWait > 0) {
                     return copyOut(dest, availableAfterWait)
                 }
+                // True underrun: re-arm pre-buffering so playback resumes with
+                // a full cushion instead of chunk-by-chunk micro-gaps, which
+                // sound like clipped words
+                isPreBuffered = false
+                preBufferArmedAtNs = System.nanoTime()
                 return 0
             }
 
@@ -140,6 +171,7 @@ class JitterBuffer(
             readPos = 0
             bufferedBytes = 0
             isPreBuffered = false
+            preBufferArmedAtNs = System.nanoTime()
         }
     }
 

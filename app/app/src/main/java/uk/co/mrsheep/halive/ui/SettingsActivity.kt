@@ -33,6 +33,7 @@ import uk.co.mrsheep.halive.core.CameraConfig
 import uk.co.mrsheep.halive.core.CameraFrameRate
 import uk.co.mrsheep.halive.core.CameraResolution
 import uk.co.mrsheep.halive.core.CameraSettings
+import uk.co.mrsheep.halive.core.DebugConfig
 import kotlinx.coroutines.launch
 import android.Manifest
 import android.content.pm.PackageManager
@@ -88,6 +89,7 @@ class SettingsActivity : AppCompatActivity() {
     // Debug section
     private lateinit var viewCrashLogsButton: Button
     private lateinit var shareCrashLogsButton: Button
+    private lateinit var saveReceivedAudioSwitch: SwitchCompat
 
     // Wake word section
     private lateinit var wakeWordSection: LinearLayout
@@ -221,6 +223,12 @@ class SettingsActivity : AppCompatActivity() {
 
         shareCrashLogsButton.setOnClickListener {
             shareCrashLogs()
+        }
+
+        saveReceivedAudioSwitch = findViewById(R.id.saveReceivedAudioSwitch)
+        saveReceivedAudioSwitch.isChecked = DebugConfig.isSaveReceivedAudioEnabled(this)
+        saveReceivedAudioSwitch.setOnCheckedChangeListener { _, isChecked ->
+            DebugConfig.setSaveReceivedAudioEnabled(this, isChecked)
         }
 
         // Wake word section

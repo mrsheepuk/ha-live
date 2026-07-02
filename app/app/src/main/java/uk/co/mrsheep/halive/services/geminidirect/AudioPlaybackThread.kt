@@ -26,14 +26,18 @@ import android.util.Log
  * @param jitterBuffer The buffer to read audio from
  * @param chunkSizeBytes Size of each read/write chunk
  * @param onAudioLevel Callback for audio level updates (called on main thread)
- * @param onUnderrun Callback when buffer underrun occurs
+ * @param onUnderrun Callback when playback transitions into starvation (fired
+ *                   once per starved period, not per empty read)
+ * @param onPlaybackResumed Callback when data flows again after starvation,
+ *                          with the starved gap duration in milliseconds
  */
 class AudioPlaybackThread(
     private val audioTrack: AudioTrack,
     private val jitterBuffer: JitterBuffer,
     private val chunkSizeBytes: Int,
     private val onAudioLevel: ((Float) -> Unit)?,
-    private val onUnderrun: (() -> Unit)? = null
+    private val onUnderrun: (() -> Unit)? = null,
+    private val onPlaybackResumed: ((gapMs: Long) -> Unit)? = null
 ) : Thread("AudioPlayback") {
 
     companion object {
@@ -59,6 +63,10 @@ class AudioPlaybackThread(
 
     // Track if AudioTrack has been started
     private var trackStarted = false
+
+    // When playback entered starvation (0 = currently fed). Used to report
+    // starved gap durations, which are audible as pauses/glitches.
+    private var starvedSinceMs = 0L
 
     init {
         priority = Thread.MAX_PRIORITY
@@ -98,6 +106,14 @@ class AudioPlaybackThread(
                     Log.d(TAG, "AudioTrack started after pre-buffering")
                 }
 
+                // Report recovery from a starved period (gap duration is a key
+                // diagnostic - short gaps mid-turn are audible glitches)
+                if (starvedSinceMs != 0L) {
+                    val gapMs = android.os.SystemClock.elapsedRealtime() - starvedSinceMs
+                    starvedSinceMs = 0L
+                    onPlaybackResumed?.invoke(gapMs)
+                }
+
                 // 4. Write to AudioTrack - TIME CRITICAL
                 //    This may block waiting for hardware buffer space (which is fine)
                 val written = writeAudioWithRetry(bytesRead)
@@ -109,8 +125,11 @@ class AudioPlaybackThread(
                     pendingLevel = sampleRmsLevel(writeBuffer, written)
                 }
             } else {
-                // No data available - potential underrun
-                if (trackStarted) {
+                // No data available - potential underrun. Only report the
+                // transition into starvation, not every empty read (the buffer
+                // is legitimately empty between turns).
+                if (trackStarted && starvedSinceMs == 0L) {
+                    starvedSinceMs = android.os.SystemClock.elapsedRealtime()
                     onUnderrun?.invoke()
                     Log.w(TAG, "Buffer underrun - jitter buffer empty")
                 }

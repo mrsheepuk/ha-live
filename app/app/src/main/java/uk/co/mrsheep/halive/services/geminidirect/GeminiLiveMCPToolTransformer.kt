@@ -51,13 +51,18 @@ object GeminiLiveMCPToolTransformer {
         )
     }
 
+    // Guards against cyclic or pathologically deep $ref/anyOf chains
+    private const val MAX_RESOLUTION_DEPTH = 16
+
     /**
      * Transforms an MCP input schema into a protocol Schema.
      */
     private fun transformMcpInputSchemaToProtocolSchema(mcpSchema: McpInputSchema): Schema {
+        val defs = mcpSchema.defs.orEmpty()
+
         // Transform properties: Map<String, McpProperty> -> Map<String, JsonElement>
         val transformedProperties = mcpSchema.properties.mapValues { (_, mcpProp) ->
-            transformMcpPropertyToJsonElement(mcpProp)
+            transformMcpPropertyToJsonElement(mcpProp, defs)
         }
 
         return Schema(
@@ -71,26 +76,43 @@ object GeminiLiveMCPToolTransformer {
     /**
      * Transforms an MCP property into a JsonElement schema representation.
      * This is used as the value in the properties map.
+     *
+     * Gemini's function declaration schema is a limited OpenAPI subset with no
+     * $ref or anyOf support, so references are resolved inline against [defs]
+     * and unions are collapsed to their first concrete option.
      */
-    private fun transformMcpPropertyToJsonElement(mcpProp: McpProperty): JsonElement {
-        // Handle 'anyOf' union types
-        if (mcpProp.anyOf != null && mcpProp.anyOf.isNotEmpty()) {
-            val firstOption = mcpProp.anyOf.first()
-            return buildPropertyJsonElement(
-                type = firstOption.type,
-                description = mcpProp.description,
-                enum = firstOption.enum,
-                minimum = firstOption.minimum,
-                maximum = firstOption.maximum
-            )
+    private fun transformMcpPropertyToJsonElement(
+        mcpProp: McpProperty,
+        defs: Map<String, McpProperty>,
+        depth: Int = 0
+    ): JsonElement {
+        if (depth > MAX_RESOLUTION_DEPTH) {
+            Log.w(TAG, "Schema nesting exceeds $MAX_RESOLUTION_DEPTH levels, falling back to string")
+            return buildPropertyJsonElement(type = "string", description = mcpProp.description)
         }
 
-        // Handle array types
-        if (mcpProp.type == "array" && mcpProp.items != null) {
-            val itemSchema = buildPropertyJsonElement(
-                type = mcpProp.items.type,
-                enum = mcpProp.items.enum
-            )
+        // Resolve {"$ref": "#/$defs/Name"} against the schema's $defs
+        if (mcpProp.ref != null) {
+            val resolved = defs[mcpProp.ref.removePrefix("#/\$defs/")]
+            if (resolved == null) {
+                Log.w(TAG, "Unresolvable \$ref '${mcpProp.ref}', falling back to string")
+                return buildPropertyJsonElement(type = "string", description = mcpProp.description)
+            }
+            return transformMcpPropertyToJsonElement(withDescription(resolved, mcpProp.description), defs, depth + 1)
+        }
+
+        // Handle 'anyOf' union types: prefer the first non-null-typed option
+        if (!mcpProp.anyOf.isNullOrEmpty()) {
+            val option = mcpProp.anyOf.firstOrNull { it.type != "null" } ?: mcpProp.anyOf.first()
+            return transformMcpPropertyToJsonElement(withDescription(option, mcpProp.description), defs, depth + 1)
+        }
+
+        // Handle array types (items default to string if unspecified - Gemini
+        // requires an item schema for arrays)
+        if (mcpProp.type == "array") {
+            val itemSchema = mcpProp.items?.let {
+                transformMcpPropertyToJsonElement(it, defs, depth + 1)
+            } ?: buildPropertyJsonElement(type = "string")
             return buildPropertyJsonElement(
                 type = "array",
                 description = mcpProp.description,
@@ -98,15 +120,38 @@ object GeminiLiveMCPToolTransformer {
             )
         }
 
-        // Handle simple types
+        // Handle nested object types
+        if (mcpProp.type == "object" && !mcpProp.properties.isNullOrEmpty()) {
+            val nestedProperties = mcpProp.properties.mapValues { (_, nested) ->
+                transformMcpPropertyToJsonElement(nested, defs, depth + 1)
+            }
+            val mapBuilder = mutableMapOf<String, JsonElement>(
+                "type" to JsonPrimitive("object"),
+                "properties" to JsonObject(nestedProperties)
+            )
+            if (!mcpProp.description.isNullOrBlank()) {
+                mapBuilder["description"] = JsonPrimitive(mcpProp.description)
+            }
+            mcpProp.required?.takeIf { it.isNotEmpty() }?.let { required ->
+                mapBuilder["required"] = JsonArray(required.map { JsonPrimitive(it) })
+            }
+            return JsonObject(mapBuilder)
+        }
+
+        // Handle simple types. HA emits enum-only nodes with no "type" - treat
+        // those (and anything else typeless) as string.
         return buildPropertyJsonElement(
-            type = mcpProp.type,
+            type = mcpProp.type ?: "string",
             description = mcpProp.description,
             enum = mcpProp.enum,
             minimum = mcpProp.minimum,
             maximum = mcpProp.maximum
         )
     }
+
+    /** Carries an outer node's description onto a resolved/collapsed node that lacks one. */
+    private fun withDescription(prop: McpProperty, description: String?): McpProperty =
+        if (prop.description == null && description != null) prop.copy(description = description) else prop
 
     /**
      * Builds a JsonElement schema object from individual schema properties.
@@ -115,8 +160,8 @@ object GeminiLiveMCPToolTransformer {
         type: String?,
         description: String? = null,
         enum: List<String>? = null,
-        minimum: Int? = null,
-        maximum: Int? = null,
+        minimum: Double? = null,
+        maximum: Double? = null,
         items: JsonElement? = null
     ): JsonElement {
         val mapBuilder = mutableMapOf<String, JsonElement>()
@@ -138,12 +183,12 @@ object GeminiLiveMCPToolTransformer {
 
         // Add minimum if present
         if (minimum != null) {
-            mapBuilder["minimum"] = JsonPrimitive(minimum)
+            mapBuilder["minimum"] = numberPrimitive(minimum)
         }
 
         // Add maximum if present
         if (maximum != null) {
-            mapBuilder["maximum"] = JsonPrimitive(maximum)
+            mapBuilder["maximum"] = numberPrimitive(maximum)
         }
 
         // Add items for arrays
@@ -153,4 +198,8 @@ object GeminiLiveMCPToolTransformer {
 
         return JsonObject(mapBuilder)
     }
+
+    /** Emits whole numbers without a decimal point (5 rather than 5.0). */
+    private fun numberPrimitive(value: Double): JsonPrimitive =
+        if (value % 1.0 == 0.0) JsonPrimitive(value.toLong()) else JsonPrimitive(value)
 }
